@@ -6,6 +6,7 @@ import { wait } from '../../core/utils';
 import { ClientEvent } from '../../shared/event';
 import { VehicleSeat, VehicleVolatileState } from '../../shared/vehicle/vehicle';
 import { NuiMenu } from '../nui/nui.menu';
+import { PhoneService } from '../phone/phone.service';
 import { VehicleStateService } from './vehicle.state.service';
 
 export const createVehicleChangeCallback = (
@@ -36,6 +37,9 @@ export class VehicleStateProvider {
 
     @Inject(NuiMenu)
     private nuiMenu: NuiMenu;
+
+    @Inject(PhoneService)
+    private phoneService: PhoneService;
 
     @Once(OnceStep.Start)
     public initStateSelector() {
@@ -93,13 +97,26 @@ export class VehicleStateProvider {
 
                     SetVehicleMaxSpeed(vehicle, speedLimit / 3.6 - 0.25);
                 } else {
-                    const maxSpeed = GetVehicleHandlingFloat(vehicle, 'CHandlingData', 'fInitialDriveMaxFlatVel');
-                    SetVehicleMaxSpeed(vehicle, maxSpeed);
-
-                    const passengerCount = Math.max(0, GetVehicleNumberOfPassengers(vehicle) - 1);
-                    ModifyVehicleTopSpeed(vehicle, 1 - passengerCount * 0.02);
+                    SetVehicleMaxSpeed(vehicle, 0);
                 }
             })
+        );
+
+        this.vehicleStateService.addVehicleStateSelector(
+            [(state: VehicleVolatileState) => state.plate],
+            createVehicleChangeCallback((vehicle: number, plate: string) => {
+                if (plate) {
+                    SetVehicleNumberPlateText(vehicle, plate);
+                }
+            }, false)
+        );
+        this.vehicleStateService.addVehicleStateSelector(
+            [(state: VehicleVolatileState) => state.fakeplate],
+            createVehicleChangeCallback((vehicle: number, fakeplate: string) => {
+                if (fakeplate) {
+                    SetVehicleNumberPlateText(vehicle, fakeplate);
+                }
+            }, false)
         );
     }
 
@@ -155,6 +172,10 @@ export class VehicleStateProvider {
         }
 
         if (GetPedInVehicleSeat(vehicle, VehicleSeat.Driver) !== ped) {
+            return;
+        }
+
+        if (this.phoneService.isPhoneVisible()) {
             return;
         }
 

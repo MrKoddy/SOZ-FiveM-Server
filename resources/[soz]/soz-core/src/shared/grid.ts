@@ -1,6 +1,6 @@
 import { Vector2, Vector3, Vector4 } from './polyzone/vector';
 
-const ZONE_RADIUS = 256;
+const ZONE_RADIUS = 128;
 
 const DELTAS = [
     [-1, -1],
@@ -30,7 +30,7 @@ export const getGridChunks = (position: Vector2 | Vector3 | Vector4): number[] =
     chunks.push(getChunkId(position)); // Get current chunk
 
     for (const delta of DELTAS) {
-        const chunkSize = [position[0] + delta[0] * 128, position[1] + delta[1] * 128] as Vector2;
+        const chunkSize = [position[0] + delta[0] * ZONE_RADIUS, position[1] + delta[1] * ZONE_RADIUS] as Vector2;
         const chunkId = getChunkId(chunkSize);
 
         if (!chunks.includes(chunkId)) {

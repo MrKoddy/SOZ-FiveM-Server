@@ -1,6 +1,7 @@
 import { Inject, Injectable } from '@core/decorators/injectable';
 import { PlayerListStateService } from '@public/server/player/player.list.state.service';
 import { ClientEvent } from '@public/shared/event';
+import { getDefaultRadioState } from '@public/shared/voip';
 
 import { PlayerClientState, PlayerServerState } from '../../shared/player';
 import { PlayerService } from './player.service';
@@ -13,12 +14,22 @@ export class PlayerStateService {
     @Inject(PlayerListStateService)
     private playerListStateService: PlayerListStateService;
 
+    private resetStateHour = new Date().setHours(6, 0, 0, 0);
+
     private serverStateByCitizenId: Record<string, PlayerServerState> = {};
 
     private clientStateByCitizenId: Record<string, PlayerClientState> = {};
 
-    public getServerStateByCitizenId(citizenId: string) {
+    public getServerStateByCitizenId(citizenId: string, playerState?: PlayerServerState) {
         if (!this.serverStateByCitizenId[citizenId]) {
+            this.serverStateByCitizenId[citizenId] = playerState ?? this.getDefaultPlayerServerState();
+        }
+
+        if (
+            this.serverStateByCitizenId[citizenId].lastStrengthUpdate < this.resetStateHour ||
+            this.serverStateByCitizenId[citizenId].lastMaxStaminaUpdate < this.resetStateHour ||
+            this.serverStateByCitizenId[citizenId].lastStressLevelUpdate < this.resetStateHour
+        ) {
             this.serverStateByCitizenId[citizenId] = this.getDefaultPlayerServerState();
         }
 
@@ -66,7 +77,7 @@ export class PlayerStateService {
             return this.getDefaultPlayerServerState();
         }
 
-        return this.getServerStateByCitizenId(player.citizenid);
+        return this.getServerStateByCitizenId(player.citizenid, player.metadata.gym_state);
     }
 
     public getClientState(source: number): PlayerClientState {
@@ -115,6 +126,15 @@ export class PlayerStateService {
         return this.clientStateByCitizenId[player.citizenid];
     }
 
+    public setAllClientsState(state: Partial<PlayerClientState>) {
+        for (const citizenId in this.clientStateByCitizenId) {
+            const playerSource = this.playerService.getPlayerByCitizenId(citizenId)?.source;
+            if (!playerSource) continue;
+
+            this.setClientState(playerSource, state);
+        }
+    }
+
     private getDefaultPlayerServerState(): PlayerServerState {
         return {
             exercise: { chinUp: false, pushUp: false, sitUp: false, freeWeight: false, completed: 0 },
@@ -123,9 +143,9 @@ export class PlayerStateService {
             lostStrength: 0,
             runTime: 0,
             yoga: false,
-            lastStrengthUpdate: new Date(),
-            lastMaxStaminaUpdate: new Date(),
-            lastStressLevelUpdate: new Date(),
+            lastStrengthUpdate: new Date().getTime(),
+            lastMaxStaminaUpdate: new Date().getTime(),
+            lastStressLevelUpdate: new Date().getTime(),
         };
     }
 
@@ -136,9 +156,12 @@ export class PlayerStateService {
             isEscorted: false,
             isEscorting: false,
             isHandcuffed: false,
+            isKnockedOut: false,
             isInventoryBusy: false,
             isInShop: false,
             isInHub: false,
+            isInGame: false,
+            isInGameHub: false,
             hasPrisonerClothes: false,
             isInHospital: false,
             isWearingPatientOutfit: false,
@@ -146,6 +169,12 @@ export class PlayerStateService {
             isLooted: false,
             isZipped: false,
             carryBox: false,
+            halloweenRole: null,
+            inCyberHeist: false,
+            nbArmorPlates: 0,
+            maxArmorPlates: 0,
+            usedArmorPlates: 0,
+            radioShortRange: getDefaultRadioState(),
         };
     }
 

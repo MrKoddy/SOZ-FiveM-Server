@@ -1,297 +1,199 @@
+import { Feature } from '@public/shared/features';
+
 import { Once, OnceStep } from '../../core/decorators/event';
 import { Inject } from '../../core/decorators/injectable';
 import { Provider } from '../../core/decorators/provider';
-import { uuidv4 } from '../../core/utils';
 import { JobType } from '../../shared/job';
-import { Zone } from '../../shared/polyzone/box.zone';
+import { Vector3 } from '../../shared/polyzone/vector';
 import { AnimationService } from '../animation/animation.service';
-import { TargetFactory } from '../target/target.factory';
+import { FeatureProvider } from '../feature/feature.provider';
+import { PhoneAppSocietyProvider } from '../phone/apps/phone.app.society.provider';
+import { InteractionProvider } from '../quick-interaction/interaction.provider';
 
 type BellProps = {
+    coords: Vector3;
     job: JobType;
     number: string;
     location?: string;
 };
 
-const BELL_ZONES: Zone<BellProps>[] = [
+const BELL_ZONES: BellProps[] = [
+    // MISSION ROW
     {
-        center: [633.66, 7.62, 82.63],
-        length: 0.2,
-        width: 0.4,
-        heading: 326,
-        minZ: 82.5,
-        maxZ: 83.0,
-        data: {
-            job: JobType.LSPD,
-            number: '555-LSPD',
-        },
+        coords: [439.15, -980.38, 30.9],
+        job: JobType.LSPD,
+        number: '555-LSPD',
+        location: 'Mission Row',
+    },
+    // VINEWOOD
+    {
+        coords: [633.66, 7.62, 82.85],
+        job: JobType.LSPD,
+        number: '555-LSPD',
+        location: 'Vinewood',
+    },
+    // MIRROR PARK
+    {
+        coords: [1130.18, -489.1, 65.16],
+        job: JobType.LSPD,
+        number: '555-LSPD',
+        location: 'Mirror Park',
+    },
+
+    {
+        coords: [1853.08, 3687.48, 34.42],
+        job: JobType.BCSO,
+        number: '555-BCSO',
     },
     {
-        center: [1853.08, 3687.48, 34.27],
-        length: 0.4,
-        width: 0.2,
-        heading: 292,
-        minZ: 34.0,
-        maxZ: 34.5,
-        data: {
-            job: JobType.BCSO,
-            number: '555-BCSO',
-        },
+        coords: [-617.79, -1621.45, 33.05],
+        job: JobType.Garbage,
+        number: '555-BLUEBIRD',
     },
     {
-        center: [-616.73, -1621.55, 33.01],
-        length: 0.25,
-        width: 0.35,
-        heading: 355,
-        minZ: 33.0,
-        maxZ: 33.1,
-        data: {
-            job: JobType.Garbage,
-            number: '555-BLUEBIRD',
-        },
+        coords: [-586.9, -933.61, 24.1],
+        job: JobType.News,
+        number: '555-NEWS',
     },
     {
-        center: [-586.9, -933.61, 23.82],
-        length: 0.25,
-        width: 0.35,
-        heading: 33,
-        minZ: 24.0,
-        maxZ: 24.1,
-        data: {
-            job: JobType.News,
-            number: '555-NEWS',
-        },
+        coords: [-1084.25, -247.99, 37.9],
+        job: JobType.YouNews,
+        number: '555-YOUN',
     },
     {
-        center: [-1082.59, -246.58, 37.76],
-        length: 1.6,
-        width: 5.2,
-        heading: 27.89,
-        minZ: 36.76,
-        maxZ: 38.76,
-        data: {
-            job: JobType.YouNews,
-            number: '555-YOUN',
-        },
+        coords: [-1885.13, 2058.63, 140.87],
+        job: JobType.Food,
+        number: '555-MARIUS',
     },
     {
-        center: [-1884.4, 2063.0, 159.0],
-        length: 0.5,
-        width: 0.5,
-        heading: 159.0,
-        minZ: 141.0,
-        maxZ: 141.25,
-        data: {
-            job: JobType.Food,
-            number: '555-MARIUS',
-        },
+        coords: [-241.41, 6088.71, 31.45],
+        job: JobType.Oil,
+        number: '555-MTP',
     },
     {
-        center: [-241.39, 6088.71, 31.39],
-        length: 0.35,
-        width: 0.25,
-        heading: 315.0,
-        minZ: 30.39,
-        maxZ: 33.39,
-        data: {
-            job: JobType.Oil,
-            number: '555-MTP',
-        },
+        coords: [363.8, -1416.03, 32.56],
+        job: JobType.LSMC,
+        number: '555-LSMC',
+        location: 'Hopital',
     },
     {
-        center: [363.8, -1416.03, 32.46],
-        length: 0.3,
-        width: 0.4,
-        heading: 51.56,
-        minZ: 32.46,
-        maxZ: 32.56,
-        data: {
-            job: JobType.LSMC,
-            number: '555-LSMC',
-            location: 'Hopital',
-        },
+        coords: [1829.47, 3674.55, 34.62],
+        job: JobType.LSMC,
+        number: '555-LSMC',
+        location: 'Clinique',
     },
     {
-        center: [1829.47, 3674.55, 34.28],
-        length: 0.25,
-        width: 0.35,
-        heading: 16.44,
-        minZ: 34.48,
-        maxZ: 34.68,
-        data: {
-            job: JobType.LSMC,
-            number: '555-LSMC',
-            location: 'Clinique',
-        },
+        coords: [7.18, -692.9, 46.27],
+        job: JobType.CashTransfer,
+        number: '555-STONK',
     },
     {
-        center: [7.18, -692.9, 46.22],
-        length: 0.4,
-        width: 0.4,
-        heading: 0,
-        minZ: 46.12,
-        maxZ: 46.32,
-        data: {
-            job: JobType.CashTransfer,
-            number: '555-STONK',
-        },
+        coords: [619.76, 2728.02, 41.85],
+        job: JobType.Upw,
+        number: '555-UPW',
     },
     {
-        center: [619.76, 2728.02, 41.86],
-        length: 0.2,
-        width: 0.3,
-        heading: 4,
-        minZ: 41.71,
-        maxZ: 41.91,
-        data: {
-            job: JobType.Upw,
-            number: '555-UPW',
-        },
+        coords: [-540.28, 5299.97, 76.25],
+        job: JobType.Pawl,
+        number: '555-PAWL',
     },
     {
-        center: [-540.28, 5299.97, 76.37],
-        length: 0.2,
-        width: 0.3,
-        heading: 326,
-        minZ: 76.07,
-        maxZ: 76.27,
-        data: {
-            job: JobType.Pawl,
-            number: '555-PAWL',
-        },
+        coords: [-1393.51, -600.42, 30.47],
+        job: JobType.Baun,
+        number: '555-BAUN',
+        location: 'Bahama',
     },
     {
-        center: [-1393.51, -600.42, 30.32],
-        length: 0.35,
-        width: 0.25,
-        heading: 120,
-        minZ: 30.32,
-        maxZ: 30.47,
-        data: {
-            job: JobType.Baun,
-            number: '555-BAUN',
-            location: 'Bahama',
-        },
+        coords: [130.04, -1287.28, 29.39],
+        job: JobType.Baun,
+        number: '555-BAUN',
+        location: 'Unicorn',
     },
     {
-        center: [130.04, -1287.28, 29.28],
-        length: 0.25,
-        width: 0.35,
-        heading: 325,
-        minZ: 29.28,
-        maxZ: 29.43,
-        data: {
-            job: JobType.Baun,
-            number: '555-BAUN',
-            location: 'Unicorn',
-        },
+        coords: [719.65, -963.63, 30.45],
+        job: JobType.Ffs,
+        number: '555-FFS',
     },
     {
-        center: [719.65, -963.63, 30.38],
-        length: 0.3,
-        width: 0.2,
-        heading: 63,
-        minZ: 30.4,
-        maxZ: 30.5,
-        data: {
-            job: JobType.Ffs,
-            number: '555-FFS',
-        },
+        coords: [-555.79, -186.76, 38.35],
+        job: JobType.MDR,
+        number: '555-MDR',
     },
     {
-        center: [-555.79, -186.76, 38.26],
-        length: 0.25,
-        width: 0.35,
-        heading: 33,
-        minZ: 38.11,
-        maxZ: 38.42,
-        data: {
-            job: JobType.MDR,
-            number: '555-MDR',
-        },
+        coords: [903.72, -158.02, 74.32],
+        job: JobType.Taxi,
+        number: '555-CARLJR',
     },
     {
-        center: [903.72, -158.02, 74.17],
-        length: 0.2,
-        width: 0.4,
-        heading: 37,
-        minZ: 73.97,
-        maxZ: 74.37,
-        data: {
-            job: JobType.Taxi,
-            number: '555-CARLJR',
-        },
+        coords: [-549.67, -611.97, 34.98],
+        job: JobType.Gouv,
+        number: '555-GOUV',
     },
     {
-        center: [-549.67, -611.97, 34.78],
-        length: 0.2,
-        width: 0.4,
-        heading: 160,
-        minZ: 34.58,
-        maxZ: 34.98,
-        data: {
-            job: JobType.Gouv,
-            number: '555-GOUV',
-        },
+        coords: [2449.5, 4968.37, 46.48],
+        job: JobType.FDF,
+        number: '555-FDF',
     },
     {
-        center: [2449.5, 4968.37, 46.57],
-        length: 0.3,
-        width: 0.4,
-        heading: 251.91,
-        minZ: 46.37,
-        maxZ: 46.57,
-        data: {
-            job: JobType.FDF,
-            number: '555-FDF',
-        },
+        coords: [1078.02, -1980.91, 31.52],
+        job: JobType.DMC,
+        number: '555-DMC',
     },
+];
+
+const BELL_ZONES_WHAT_IF: BellProps[] = [
     {
-        center: [1078.02, -1980.91, 31.37],
-        length: 0.55,
-        width: 0.5,
-        heading: 338,
-        minZ: 31.72,
-        maxZ: 31.87,
-        data: {
-            job: JobType.DMC,
-            number: '555-DMC',
-        },
+        coords: [633.66, 7.62, 82.85],
+        job: JobType.LSPD,
+        number: '555-SASP',
     },
 ];
 
 @Provider()
 export class JobBellProvider {
-    @Inject(TargetFactory)
-    private targetFactory: TargetFactory;
+    @Inject(InteractionProvider)
+    private readonly interactionProvider: InteractionProvider;
 
     @Inject(AnimationService)
-    private animationService: AnimationService;
+    private readonly animationService: AnimationService;
+
+    @Inject(PhoneAppSocietyProvider)
+    private readonly phoneSocietyProvider: PhoneAppSocietyProvider;
+
+    @Inject(FeatureProvider)
+    private readonly featureProvider: FeatureProvider;
 
     private lastCall = GetGameTimer();
 
     @Once(OnceStep.PlayerLoaded)
     public loadJobBell() {
-        for (const index in BELL_ZONES) {
-            const zone = BELL_ZONES[index];
+        for (let bell of BELL_ZONES) {
+            if (this.featureProvider.isFeatureEnabled(Feature.WhatIfFirstEpisode)) {
+                const overide = BELL_ZONES_WHAT_IF.find(elem => elem.job === bell.job);
+                if (overide) {
+                    bell = overide;
+                }
+            }
 
-            this.targetFactory.createForBoxZone(`bell:${zone.data.job}:${index}`, zone, [
+            this.interactionProvider.createInteractionForCoords(
+                bell.coords,
                 {
                     label: 'Biper',
-                    icon: 'c:jobs/biper.png',
                     blackoutGlobal: true,
                     canInteract: () => {
                         return GetGameTimer() - this.lastCall > 15000;
                     },
                     action: () => {
-                        this.callSociety(zone.data.number, zone.data?.location);
+                        this.callSociety(bell.number, bell?.location);
                     },
                 },
-            ]);
+                1,
+                5.0
+            );
         }
     }
 
-    private callSociety(number: string, location: string = undefined) {
+    private async callSociety(number: string, location: string = undefined) {
         this.lastCall = GetGameTimer();
         this.animationService.playAnimation({
             base: {
@@ -310,7 +212,7 @@ export class JobBellProvider {
             message += ` - ${location}`;
         }
 
-        TriggerServerEvent('phone:sendSocietyMessage', 'phone:sendSocietyMessage:' + uuidv4(), {
+        await this.phoneSocietyProvider.sendMessage({
             anonymous: false,
             number,
             message: message,

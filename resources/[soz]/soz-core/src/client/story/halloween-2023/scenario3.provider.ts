@@ -14,7 +14,7 @@ import { Provider } from '@public/core/decorators/provider';
 import { Tick, TickInterval } from '@public/core/decorators/tick';
 import { wait } from '@public/core/utils';
 import { ServerEvent } from '@public/shared/event';
-import { Feature, isFeatureEnabled } from '@public/shared/features';
+import { Feature } from '@public/shared/features';
 import { PlayerData } from '@public/shared/player';
 import { BoxZone } from '@public/shared/polyzone/box.zone';
 import { toVector4Object } from '@public/shared/polyzone/vector';
@@ -30,8 +30,9 @@ import {
     Halloween2023Scenario3TPSubmarine,
     Halloween2023Scenario3TPWhiteBox,
 } from '@public/shared/story/halloween-2023/scenario3';
+import { TaxType } from '@public/shared/tax';
 
-import { TaxType } from '../../../shared/bank';
+import { FeatureProvider } from '../../feature/feature.provider';
 import { StoryProvider } from '../story.provider';
 
 @Provider()
@@ -69,12 +70,15 @@ export class Halloween2023Scenario3Provider {
     @Inject(Notifier)
     private notifier: Notifier;
 
+    @Inject(FeatureProvider)
+    private featureProvider: FeatureProvider;
+
     private electricity = false;
     private doorUnlock = false;
 
     @Once(OnceStep.PlayerLoaded)
     public async onPlayerLoaded() {
-        if (!isFeatureEnabled(Feature.Halloween2023Scenario3)) {
+        if (!this.featureProvider.isFeatureEnabled(Feature.Halloween2023Scenario3)) {
             return;
         }
 
@@ -85,7 +89,7 @@ export class Halloween2023Scenario3Provider {
     }
 
     public createBlip(player: PlayerData) {
-        if (!isFeatureEnabled(Feature.Halloween2023Scenario3)) {
+        if (!this.featureProvider.isFeatureEnabled(Feature.Halloween2023Scenario3)) {
             return;
         }
 
@@ -120,7 +124,8 @@ export class Halloween2023Scenario3Provider {
                 options: [
                     {
                         label: 'Parler',
-                        icon: 'fas fa-comment',
+                        icon: 'global/comment',
+                        category: 'citizen',
                         canInteract: () => this.storyService.canInteractForPart('halloween2023', 'scenario3', 0),
                         action: async entity => {
                             TriggerServerEvent(ServerEvent.STORY_HALLOWEEN_2023_SCENARIO_3, 1);
@@ -145,8 +150,9 @@ export class Halloween2023Scenario3Provider {
                     ),
                     {
                         label: 'Donner',
-                        icon: 'c:pole/livrer.png',
+                        icon: 'pole/livrer',
                         item: 'halloween_beef_with_bone',
+                        category: 'citizen',
                         canInteract: () => {
                             return this.storyService.canInteractForPart('halloween2023', 'scenario3', 1);
                         },
@@ -173,7 +179,8 @@ export class Halloween2023Scenario3Provider {
                     ),
                     {
                         label: 'Téléportation',
-                        icon: 'c:halloween/teleportation.png',
+                        icon: 'halloween/teleportation',
+                        category: 'citizen',
                         canInteract: () => {
                             return this.storyService.canInteractForPart('halloween2023', 'scenario3', 2);
                         },
@@ -204,18 +211,19 @@ export class Halloween2023Scenario3Provider {
                 options: [
                     {
                         label: 'Horny’s Burgers',
-                        icon: 'fas fa-shopping-cart',
+                        icon: 'magasin/cart',
+                        category: 'citizen',
                         action: () => {
                             const products = [
                                 {
                                     ...this.itemService.getItem('halloween_beef_with_bone'),
                                     price: 100,
-                                    amount: 2000,
+                                    amount: 0,
                                     slot: 1,
                                 },
                             ];
 
-                            this.inventoryManager.openShopInventory(products, 'menu_shop_supermarket', TaxType.FOOD);
+                            this.inventoryManager.openShopInventory(products, 'Superette', TaxType.FOOD);
                         },
                     },
                 ],
@@ -230,6 +238,7 @@ export class Halloween2023Scenario3Provider {
                 {
                     label: zone.label,
                     icon: zone.icon,
+                    category: 'citizen',
                     canInteract: () => this.storyService.canInteractForPart('halloween2023', 'scenario3', zone.part),
                     action: async () => {
                         const { completed } = await this.progressService.progress(
@@ -244,9 +253,7 @@ export class Halloween2023Scenario3Provider {
                                     repeat: true,
                                 },
                             },
-                            {
-                                useAnimationService: true,
-                            }
+                            {}
                         );
 
                         if (completed) {
@@ -269,7 +276,8 @@ export class Halloween2023Scenario3Provider {
             [
                 {
                     label: 'Sortir',
-                    icon: 'c:housing/enter.png',
+                    icon: 'housing/enter',
+                    category: 'citizen',
                     canInteract: () => this.storyService.canInteractForPart('halloween2023', 'scenario3', 2),
                     action: async () => {
                         if (!this.electricity) {
@@ -295,7 +303,8 @@ export class Halloween2023Scenario3Provider {
             [
                 {
                     label: 'Alimenter',
-                    icon: 'c:upw/deposer.png',
+                    icon: 'upw/deposer',
+                    category: 'citizen',
                     canInteract: () =>
                         this.storyService.canInteractForPart('halloween2023', 'scenario3', 2) && !this.electricity,
                     action: async () => {
@@ -311,9 +320,7 @@ export class Halloween2023Scenario3Provider {
                                     repeat: true,
                                 },
                             },
-                            {
-                                useAnimationService: true,
-                            }
+                            {}
                         );
 
                         if (!completed) {
@@ -339,7 +346,8 @@ export class Halloween2023Scenario3Provider {
             [
                 {
                     label: 'Fouiller',
-                    icon: 'fas fa-search',
+                    icon: 'global/search',
+                    category: 'citizen',
                     canInteract: () => this.storyService.canInteractForPart('halloween2023', 'scenario3', 2),
                     action: async () => {
                         this.notifier.notify('Des livres d’histoires sur des MJs.. Je préfère voir ça en Live.');
@@ -359,7 +367,8 @@ export class Halloween2023Scenario3Provider {
             [
                 {
                     label: 'Fouiller',
-                    icon: 'fas fa-search',
+                    icon: 'global/search',
+                    category: 'citizen',
                     canInteract: () => this.storyService.canInteractForPart('halloween2023', 'scenario3', 2),
                     action: async () => {
                         this.notifier.notify('Des photos d’une charmante jeune femme, pas autant que l’Admin..');
@@ -379,7 +388,8 @@ export class Halloween2023Scenario3Provider {
             [
                 {
                     label: 'Fouiller',
-                    icon: 'fas fa-search',
+                    icon: 'global/search',
+                    category: 'citizen',
                     canInteract: () => this.storyService.canInteractForPart('halloween2023', 'scenario3', 2),
                     action: async () => {
                         this.notifier.notify('Un sarcophage ? Barker a dû connaître cette époque..');
@@ -399,7 +409,8 @@ export class Halloween2023Scenario3Provider {
             [
                 {
                     label: 'Fouiller',
-                    icon: 'fas fa-search',
+                    icon: 'global/search',
+                    category: 'citizen',
                     canInteract: () => this.storyService.canInteractForPart('halloween2023', 'scenario3', 2),
                     action: async () => {
                         this.notifier.notify("Des bouteilles d'alcool et aucune bière en vue, étrange..");
@@ -419,7 +430,8 @@ export class Halloween2023Scenario3Provider {
             [
                 {
                     label: 'Fouiller',
-                    icon: 'fas fa-search',
+                    icon: 'global/search',
+                    category: 'citizen',
                     canInteract: () => this.storyService.canInteractForPart('halloween2023', 'scenario3', 2),
                     action: async () => {
                         this.notifier.notify('Il y a tellement de papiers que ça ressemble à un Discord HRP..');
@@ -439,7 +451,8 @@ export class Halloween2023Scenario3Provider {
             [
                 {
                     label: 'Fouiller',
-                    icon: 'fas fa-search',
+                    icon: 'global/search',
+                    category: 'citizen',
                     canInteract: () =>
                         this.storyService.canInteractForPart('halloween2023', 'scenario3', 2) && !this.doorUnlock,
                     action: async () => {
@@ -463,7 +476,8 @@ export class Halloween2023Scenario3Provider {
             [
                 {
                     label: 'Fouiller',
-                    icon: 'fas fa-search',
+                    icon: 'global/search',
+                    category: 'citizen',
                     canInteract: () => this.storyService.canInteractForPart('halloween2023', 'scenario3', 2),
                     action: async () => {
                         this.notifier.notify('Star Citizen ? Même la Haute Criminalité sortira avant.');
@@ -483,7 +497,8 @@ export class Halloween2023Scenario3Provider {
             [
                 {
                     label: 'Sortir',
-                    icon: 'c:housing/enter.png',
+                    icon: 'housing/enter',
+                    category: 'citizen',
                     canInteract: () =>
                         this.storyService.canInteractForPart('halloween2023', 'scenario3', 2) && this.doorUnlock,
                     action: async () => {
@@ -507,7 +522,8 @@ export class Halloween2023Scenario3Provider {
             [
                 {
                     label: 'Ascenseur',
-                    icon: 'c:elevators/descendre.png',
+                    icon: 'elevators/descendre',
+                    category: 'citizen',
                     canInteract: () => this.storyService.canInteractForPart('halloween2023', 'scenario3', 3),
                     action: async () => this.exitFBI(),
                 },
@@ -526,7 +542,8 @@ export class Halloween2023Scenario3Provider {
             [
                 {
                     label: 'Sortir',
-                    icon: 'c:housing/enter.png',
+                    icon: 'housing/enter',
+                    category: 'citizen',
                     canInteract: () => this.storyService.canInteractForPart('halloween2023', 'scenario3', 3),
                     action: async () => this.exitFBI(),
                 },
@@ -545,7 +562,8 @@ export class Halloween2023Scenario3Provider {
             [
                 {
                     label: 'Ascenseur',
-                    icon: 'c:elevators/descendre.png',
+                    icon: 'elevators/descendre',
+                    category: 'citizen',
                     canInteract: () => this.storyService.canInteractForPart('halloween2023', 'scenario3', 4),
                     action: async () => {
                         this.audioService.playAudio('audio/halloween-2023/scenario3/teleportation.mp3', 0.2);
@@ -604,7 +622,8 @@ export class Halloween2023Scenario3Provider {
             [
                 {
                     label: 'Sortir',
-                    icon: 'c:housing/enter.png',
+                    icon: 'housing/enter',
+                    category: 'citizen',
                     canInteract: () => this.storyService.canInteractForPart('halloween2023', 'scenario3', 5),
                     action: async () => {
                         this.audioService.playAudio('audio/halloween-2023/scenario3/teleportation.mp3', 0.2);

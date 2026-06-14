@@ -43,7 +43,7 @@ export abstract class RepositoryLegacy<T> {
 export abstract class Repository<
     T extends keyof RepositoryConfig,
     K extends keyof RepositoryConfig[T] = keyof RepositoryConfig[T],
-    V extends RepositoryConfig[T][K] = RepositoryConfig[T][K]
+    V extends RepositoryConfig[T][K] = RepositoryConfig[T][K],
 > {
     public abstract type: RepositoryType;
 
@@ -92,6 +92,16 @@ export abstract class Repository<
         }
 
         this.data[id] = value;
+    }
+
+    public async mset(data: Record<K, V>): Promise<void> {
+        if (this.loadPromise) {
+            await this.loadPromise;
+        }
+
+        for (const [id, value] of Object.entries(data)) {
+            this.data[id as K] = value as V;
+        }
     }
 
     public async find(id: K): Promise<V | null> {

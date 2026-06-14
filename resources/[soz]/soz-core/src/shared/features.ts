@@ -15,11 +15,23 @@ export enum Feature {
     Easter = 'Easter',
     EasterFood = 'EasterFood',
     NewHorizon = 'NewHorizon',
+    Bunkers = 'Bunkers',
+    SummerHeat = 'SummerHeat',
+    SummerDisabling = 'SummerDisabling',
+    Summer = 'Summer',
+    Vampire = 'Vampire',
+    Winter = 'Winter',
+    Christmas = 'Christmas',
+    PoliceAlert = 'PoliceAlert',
+    WhatIfFirstEpisode = 'WhatIfFirstEpisode',
+    WhatIfSecondEpisode = 'WhatIfSecondEpisode',
+    Ceremony = 'Ceremony',
 }
 
+export type FeaturesConfig = Record<Feature, { [P in Environment]?: boolean }>;
 export type Environment = 'development' | 'production' | 'test';
 
-const FeatureConfig: Record<Feature, { [P in Environment]?: boolean }> = {
+export const DefaultFeatureConfig: FeaturesConfig = {
     [Feature.ChainsOfJustice]: {
         production: true,
         development: true,
@@ -90,6 +102,11 @@ const FeatureConfig: Record<Feature, { [P in Environment]?: boolean }> = {
         development: false,
         test: false,
     },
+    [Feature.Bunkers]: {
+        production: false,
+        development: false,
+        test: false,
+    },
     [Feature.EasterFood]: {
         production: false,
         development: false,
@@ -100,10 +117,54 @@ const FeatureConfig: Record<Feature, { [P in Environment]?: boolean }> = {
         development: true,
         test: true,
     },
-};
-
-export const isFeatureEnabled = (feature: Feature): boolean => {
-    const environment = GetConvar('soz_core_environment', 'development') as Environment;
-
-    return !!FeatureConfig[feature][environment];
+    [Feature.SummerHeat]: {
+        production: false,
+        development: false,
+        test: false,
+    },
+    [Feature.SummerDisabling]: {
+        production: false,
+        development: false,
+        test: false,
+    },
+    [Feature.Summer]: {
+        production: false,
+        development: false,
+        test: false,
+    },
+    [Feature.Vampire]: {
+        production: false,
+        development: false,
+        test: false,
+    },
+    [Feature.Winter]: {
+        production: false,
+        development: false,
+        test: false,
+    },
+    [Feature.Christmas]: {
+        production: false,
+        development: false,
+        test: false,
+    },
+    [Feature.PoliceAlert]: {
+        production: true,
+        development: true,
+        test: true,
+    },
+    [Feature.WhatIfFirstEpisode]: {
+        production: false,
+        development: false,
+        test: false,
+    },
+    [Feature.WhatIfSecondEpisode]: {
+        production: false,
+        development: false,
+        test: false,
+    },
+    [Feature.Ceremony]: {
+        production: false,
+        development: false,
+        test: false,
+    },
 };

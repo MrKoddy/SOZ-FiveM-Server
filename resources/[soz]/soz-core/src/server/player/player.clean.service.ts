@@ -17,7 +17,8 @@ export class PlayerCleanService {
                       INNER JOIN soz_fivem.housing_apartment h ON h.owner = p.citizenId
                       INNER JOIN soz_api.account_identities i ON i.identityId = p.license
                       INNER JOIN soz_api.accounts a ON i.accountId = a.id
-             WHERE p.last_updated < DATE_SUB(CURDATE(),INTERVAL 30 DAY) and a.role NOT IN ('STAFF', 'ADMIN')`
+             WHERE p.last_updated < DATE_SUB(CURDATE(), INTERVAL 30 DAY)
+               and a.role NOT IN ('STAFF', 'ADMIN')`
         )) as { citizenId: string }[];
 
         const ids = [];
@@ -29,8 +30,8 @@ export class PlayerCleanService {
         const deletedPlayersToClean = (await this.prismaService.$queryRawUnsafe(
             `SELECT p.citizenId
              FROM soz_fivem.player p
-                LEFT JOIN soz_api.account_identities ai ON p.license = ai.identityId AND ai.identityType = 'STEAM'
-                INNER JOIN soz_fivem.housing_apartment h ON h.owner = p.citizenId
+                      LEFT JOIN soz_api.account_identities ai ON p.license = ai.identityId AND ai.identityType = 'STEAM'
+                      INNER JOIN soz_fivem.housing_apartment h ON h.owner = p.citizenId
              WHERE ai.identityType IS NULL`
         )) as { citizenId: string }[];
 
@@ -46,6 +47,7 @@ export class PlayerCleanService {
         const housingOwnerIdentifiers = await this.prismaService.housing_apartment.findMany({
             select: {
                 identifier: true,
+                id: true,
             },
             where: {
                 owner: {
@@ -62,20 +64,45 @@ export class PlayerCleanService {
             },
             data: {
                 owner: null,
+                tenant: null,
                 roommate: null,
                 tier: null,
+                park_tier: null,
+                money_tier: null,
+                cloth_tier: null,
                 has_parking_place: null,
             },
         });
 
-        await this.prismaService.storages.updateMany({
+        await this.prismaService.apartment_fourniture.deleteMany({
             where: {
-                owner: {
+                apartment_id: {
+                    in: housingOwnerIdentifiers.map(h => h.id),
+                },
+            },
+        });
+
+        await this.prismaService.inventories.deleteMany({
+            where: {
+                id: {
                     in: housingOwnerIdentifiers.map(h => h.identifier),
                 },
             },
-            data: {
-                inventory: null,
+        });
+
+        await this.prismaService.inventories.deleteMany({
+            where: {
+                id: {
+                    in: housingOwnerIdentifiers.map(h => `house_stash_${h.identifier}`),
+                },
+            },
+        });
+
+        await this.prismaService.inventories.deleteMany({
+            where: {
+                id: {
+                    in: housingOwnerIdentifiers.map(h => `house_fridge_${h.identifier}`),
+                },
             },
         });
 
@@ -92,9 +119,10 @@ export class PlayerCleanService {
 
         await this.prismaService.bank_accounts.updateMany({
             where: {
-                houseid: {
+                accountid: {
                     in: housingOwnerIdentifiers.map(h => h.identifier),
                 },
+                account_type: 'housestorages',
             },
             data: {
                 money: 0,
@@ -113,14 +141,11 @@ export class PlayerCleanService {
             },
         });
 
-        this.monitor.publish(
-            'house_owner_cleanup',
-            {},
-            {
-                cititzenIds: JSON.stringify(disabledCitizenIds),
-                house: JSON.stringify(housingOwnerIdentifiers.map(h => h.identifier)),
-            }
-        );
+        for (const house of housingOwnerIdentifiers) {
+            this.monitor.traceEvent('house_owner_cleanup', {
+                house_id: house.identifier,
+            });
+        }
 
         return [housingOwnerUpdated.count, housingRoommateUpdated.count];
     }

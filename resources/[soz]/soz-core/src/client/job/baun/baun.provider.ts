@@ -1,5 +1,7 @@
+import { FeatureProvider } from '@public/client/feature/feature.provider';
 import { emitRpc } from '@public/core/rpc';
 import { CraftsList } from '@public/shared/craft/craft';
+import { Feature } from '@public/shared/features';
 import { JobType } from '@public/shared/job';
 import { RpcServerEvent } from '@public/shared/rpc';
 
@@ -12,6 +14,7 @@ import { BlipFactory } from '../../blip';
 import { NuiMenu } from '../../nui/nui.menu';
 import { PlayerService } from '../../player/player.service';
 import { TargetFactory } from '../../target/target.factory';
+import { BEER_SHOP_CONFIG } from './baun.harvest.provider';
 
 @Provider()
 export class BaunProvider {
@@ -26,6 +29,9 @@ export class BaunProvider {
 
     @Inject(TargetFactory)
     private targetFactory: TargetFactory;
+
+    @Inject(FeatureProvider)
+    private featureProvider: FeatureProvider;
 
     private state = {
         displayLiquorBlip: false,
@@ -58,11 +64,14 @@ export class BaunProvider {
         this.nuiMenu.openMenu(MenuType.BahamaUnicornJobMenu, {
             recipes: crafting.categories,
             state: this.state,
-            onDuty: this.playerService.isOnDuty(),
         });
     }
 
     private createBlips() {
+        if (this.featureProvider.isFeatureEnabled(Feature.WhatIfFirstEpisode)) {
+            return;
+        }
+
         this.blipFactory.create('displayLiquorBlip', {
             name: "Point de récolte d'alcools",
             coords: { x: 1410.96, y: 1147.6, z: 114.33 },
@@ -89,6 +98,15 @@ export class BaunProvider {
             scale: 0.9,
         });
         this.blipFactory.hide('displayFurnitureBlip', true);
+
+        this.blipFactory.create('displayBeerBlip', {
+            name: 'Point de récolte des bières',
+            coords: BEER_SHOP_CONFIG.coords,
+            sprite: 478,
+            color: 28,
+            scale: 0.9,
+        });
+        this.blipFactory.hide('displayBeerBlip', true);
 
         this.blipFactory.create('displaySnackBlip', {
             name: 'Point de récolte de snacks',

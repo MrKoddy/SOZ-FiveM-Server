@@ -3,12 +3,19 @@ import { fetchNui } from '@public/nui/fetch';
 import { NuiEvent } from '@public/shared/event';
 import { MenuType } from '@public/shared/nui/menu';
 import { TattooShopCategory, TattooShopItem } from '@public/shared/shop';
+import { TaxType } from '@public/shared/tax';
 import { FunctionComponent } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
 
-import { TaxType } from '../../../shared/bank';
 import { useGetPrice } from '../../hook/price';
-import { MainMenu, Menu, MenuContent, MenuItemButton, MenuTitle, SubMenu } from '../Styleguide/Menu';
+import {
+    MainMenu,
+    Menu,
+    MenuContent,
+    MenuItemButton,
+    MenuItemSubMenuLink,
+    MenuTitle,
+    SubMenu,
+} from '../Styleguide/Menu';
 
 type MenuTattooShopStateProps = {
     data: {
@@ -20,24 +27,16 @@ type MenuTattooShopStateProps = {
 
 export const TattooShopMenu: FunctionComponent<MenuTattooShopStateProps> = ({ data }) => {
     const config = BrandsConfig[data.brand] as BrandConfig;
-    const navigate = useNavigate();
-    const location = useLocation();
     const getPrice = useGetPrice();
 
     if (!data.products || data.products.length === 0 || !data.brand || !config) {
         return null;
     }
 
-    const selectCategory = (category: string) => {
-        navigate(`/${MenuType.TattooShop}/${category}`, {
-            state: location.state,
-        });
-    };
-
     return (
         <Menu type={MenuType.TattooShop}>
             <MainMenu>
-                <MenuTitle banner={config.banner}> Tatoueur </MenuTitle>
+                <MenuTitle title={config.label} />
                 <MenuContent>
                     <MenuItemButton
                         onConfirm={async () => {
@@ -48,22 +47,21 @@ export const TattooShopMenu: FunctionComponent<MenuTattooShopStateProps> = ({ da
                         ⚠️ Se faire retirer les tatouages
                     </MenuItemButton>
                     {Object.keys(data.categories).map(category => (
-                        <MenuItemButton
-                            key={category}
-                            onConfirm={async () => {
+                        <MenuItemSubMenuLink
+                            id={category}
+                            onSelected={async () => {
                                 await fetchNui(NuiEvent.TattooShopSelectCategory, category);
-                                selectCategory(category);
                             }}
                         >
                             {data.categories[category].label}
-                        </MenuItemButton>
+                        </MenuItemSubMenuLink>
                     ))}
                 </MenuContent>
             </MainMenu>
             {Object.keys(data.categories).map(category => (
                 <SubMenu key={category} id={category}>
-                    <MenuTitle banner={config.banner}> {data.categories[category].label} </MenuTitle>
-                    <MenuContent>
+                    <MenuTitle title={config.label} />
+                    <MenuContent subtitle={data.categories[category].label}>
                         {Object.values(data.products)
                             .filter(product => product.Zone === category)
                             .map((product, id) => (

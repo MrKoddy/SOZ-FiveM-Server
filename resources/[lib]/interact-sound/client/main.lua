@@ -37,6 +37,16 @@ AddEventHandler('InteractSound_CL:PlayOnOne', function(soundFile, soundVolume)
     end
 end)
 
+RegisterNetEvent('InteractSound_CL:StopOnOne')
+AddEventHandler('InteractSound_CL:StopOnOne', function(soundFile)
+    if hasPlayerLoaded then
+        SendNUIMessage({
+            transactionType = 'stopSound',
+            transactionFile  = soundFile,
+        })
+    end
+end)
+
 ------
 -- RegisterNetEvent LIFE_CL:Sound:PlayOnAll
 --
@@ -91,9 +101,9 @@ AddEventHandler('InteractSound_CL:PlayWithinDistance', function(otherPlayerCoord
 	end
 end)
 
-local loop
+local loop = {}
 RegisterNetEvent('InteractSound_CL:PlayWithinDistanceRatioLoop')
-AddEventHandler('InteractSound_CL:PlayWithinDistanceRatioLoop', function(location, maxDistance, soundFile, soundVolume)
+AddEventHandler('InteractSound_CL:PlayWithinDistanceRatioLoop', function(id, location, maxDistance, soundFile, soundVolume)
 	if hasPlayerLoaded then
         local locationCoords = vector3(location[1], location[2], location[3])
 		local myCoords = GetEntityCoords(PlayerPedId())
@@ -108,12 +118,13 @@ AddEventHandler('InteractSound_CL:PlayWithinDistanceRatioLoop', function(locatio
             transactionType = 'playLoopSound',
             transactionFile  = soundFile,
             transactionVolume = volume,
+            id = id,
         })
 
-        loop = true
+        loop[id] = true
 
         CreateThread(function()
-            while loop do
+            while loop[id] do
                 Wait(1000)
                 local myCoords = GetEntityCoords(PlayerPedId())
                 local distance = #(myCoords - locationCoords)
@@ -126,17 +137,34 @@ AddEventHandler('InteractSound_CL:PlayWithinDistanceRatioLoop', function(locatio
                 SendNUIMessage({
                     transactionType = 'updatevolume',
                     transactionVolume = volume,
+                    id = id,
                 })
             end
         end)
 	end
 end)
 
+
+RegisterNetEvent('InteractSound_CL:PlayLoop')
+AddEventHandler('InteractSound_CL:PlayLoop', function(id, soundFile, soundVolume)
+	if hasPlayerLoaded then
+        local volume = soundVolume or standardVolumeOutput
+
+        SendNUIMessage({
+            transactionType = 'playLoopSound',
+            transactionFile  = soundFile,
+            transactionVolume = volume,
+            id = id,
+        })
+	end
+end)
+
 RegisterNetEvent('InteractSound_CL:Stoploop')
-AddEventHandler('InteractSound_CL:Stoploop', function()
-    loop = false
+AddEventHandler('InteractSound_CL:Stoploop', function(id)
+    loop[id] = false
     SendNUIMessage({
-        transactionType = 'stopLoopSound'
+        transactionType = 'stopLoopSound',
+        id = id
     })
 end)
 

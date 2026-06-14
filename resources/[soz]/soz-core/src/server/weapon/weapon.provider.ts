@@ -1,23 +1,34 @@
+import { On, Once, OnceStep, OnEvent } from '@core/decorators/event';
+import { Inject } from '@core/decorators/injectable';
+import { Provider } from '@core/decorators/provider';
+import { Rpc } from '@core/decorators/rpc';
 import { PoliceClueDBProvider } from '@private/server/police/police.cluedb.provider';
 import { PoliceScientistProvider } from '@private/server/police/police.scientist.provider';
 import { uuidv4 } from '@public/core/utils';
+import { InventoryFactory } from '@public/server/inventory/inventory.factory';
+import { PhoneAppSocietyProvider } from '@public/server/phone/apps/phone.app.society.provider';
+import { Feature } from '@public/shared/features';
 import { joaat } from '@public/shared/joaat';
-import { toVector3Object, Vector3, Vector4 } from '@public/shared/polyzone/vector';
+import { getDistance, Vector3, Vector4 } from '@public/shared/polyzone/vector';
 
-import { On, Once, OnceStep, OnEvent } from '../../core/decorators/event';
-import { Inject } from '../../core/decorators/injectable';
-import { Provider } from '../../core/decorators/provider';
-import { Rpc } from '../../core/decorators/rpc';
 import { ClientEvent, ServerEvent } from '../../shared/event';
-import { InventoryItem } from '../../shared/item';
+import { InventoryItem, isInventoryItemExpired } from '../../shared/inventory';
 import { RpcServerEvent } from '../../shared/rpc';
-import { excludeExplosionAlert, GlobalWeaponConfig, WeaponConfig, Weapons } from '../../shared/weapons/weapon';
-import { InventoryManager } from '../inventory/inventory.manager';
+import {
+    excludeExplosionAlert,
+    ExplosionType,
+    GlobalWeaponConfig,
+    WeaponConfig,
+    WeaponName,
+    Weapons,
+} from '../../shared/weapons/weapon';
+import { FeatureProvider } from '../feature/feature.provider';
 import { ItemService } from '../item/item.service';
 import { Notifier } from '../notifier';
 import { PlayerService } from '../player/player.service';
 import { PlayerStateService } from '../player/player.state.service';
 import { Store } from '../store/store';
+import { VehicleConditionProvider } from '../vehicle/vehicle.condition.provider';
 
 @Provider()
 export class WeaponProvider {
@@ -27,8 +38,8 @@ export class WeaponProvider {
     @Inject(Notifier)
     private notifier: Notifier;
 
-    @Inject(InventoryManager)
-    private inventoryManager: InventoryManager;
+    @Inject(InventoryFactory)
+    private inventoryFactory: InventoryFactory;
 
     @Inject(PlayerStateService)
     private playerStateService: PlayerStateService;
@@ -42,10 +53,21 @@ export class WeaponProvider {
     @Inject(PoliceScientistProvider)
     private policeScientistProvider: PoliceScientistProvider;
 
+    @Inject(FeatureProvider)
+    public featureProvider: FeatureProvider;
+
+    @Inject(PhoneAppSocietyProvider)
+    private readonly phoneSocietyProvider: PhoneAppSocietyProvider;
+
+    @Inject(VehicleConditionProvider)
+    private readonly vehicleConditionProvider: VehicleConditionProvider;
+
     @Inject('Store')
     private store: Store;
 
     private lastAlertByZone: Record<string, number> = {};
+    private disableExplosionAlert = false;
+    private mutedExplosionLocations: Vector3[] = [];
 
     @OnEvent(ServerEvent.FIVEM_WEAPON_DAMAGE_EVENT)
     public onWeaponDamageEvent(source: number, sender: number, data: any) {
@@ -55,7 +77,17 @@ export class WeaponProvider {
             return;
         }
         const targetData = this.playerService.getPlayer(NetworkGetEntityOwner(target));
-        if (!targetData || targetData.metadata.armor.current > 0 || data.weaponType == joaat('weapon_snowball')) {
+        if (data.weaponType === joaat(WeaponName.STICKYBOMB) && targetData.metadata.cloth_type === 'MINE') {
+            CancelEvent();
+            return;
+        }
+
+        if (
+            !targetData ||
+            targetData.metadata.armor.current > 0 ||
+            data.weaponType == joaat('weapon_snowball') ||
+            data.weaponType == joaat('weapon_snowlauncher')
+        ) {
             return;
         }
         const positionVictim = GetEntityCoords(target) as Vector4;
@@ -96,24 +128,31 @@ export class WeaponProvider {
     @OnEvent(ServerEvent.WEAPON_SHOOTING)
     async onWeaponShooting(
         source: number,
-        weaponSlot: number,
+        weaponSerial: string,
         weaponGroup: number,
         playerAmmo: number,
         isWearingGloves: boolean
     ) {
-        const weapon = this.inventoryManager.getSlot(source, weaponSlot);
+        const playerInventory = await this.inventoryFactory.getPlayerInventory(source);
+
+        if (!playerInventory) {
+            return;
+        }
+
+        const weapon = playerInventory.findItem(item => item.metadata?.serial == weaponSerial);
+
         if (!weapon) {
             return;
         }
 
         if (weaponGroup == GetHashKey('GROUP_THROWN') && weapon.metadata.ammo <= 1) {
-            this.inventoryManager.removeItemFromInventory(source, weapon.name, 1, weapon.metadata, weaponSlot);
+            playerInventory.removeAtSlot(weapon.slot, 1);
         } else if (weaponGroup == GetHashKey('GROUP_FIREEXTINGUISHER')) {
-            this.inventoryManager.updateMetadata(source, weapon.slot, {
+            playerInventory.updateMetadataAtSlot(weapon.slot, {
                 ammo: playerAmmo || 0,
             });
         } else {
-            this.inventoryManager.updateMetadata(source, weapon.slot, {
+            playerInventory.updateMetadataAtSlot(weapon.slot, {
                 ammo: weapon.metadata.ammo > 0 ? weapon.metadata.ammo - 1 : 0,
                 health: weapon.metadata.health > 0 ? weapon.metadata.health - 1 : 0,
             });
@@ -125,6 +164,7 @@ export class WeaponProvider {
             weaponGroup == GetHashKey('GROUP_PETROLCAN') ||
             weaponGroup == GetHashKey('GROUP_STUNGUN') ||
             weapon.name == 'weapon_snowball' ||
+            weapon.name == 'weapon_snowlauncher' ||
             weapon.name == 'weapon_ammo'
         ) {
             return;
@@ -147,7 +187,7 @@ export class WeaponProvider {
                 '11': 0,
                 '12': position[0],
                 '13': position[1],
-                '14': position[2],
+                '14': position[2] - 0.9,
                 '15': 1,
             },
             {
@@ -165,7 +205,7 @@ export class WeaponProvider {
                 '11': 0,
                 '12': position[0],
                 '13': position[1],
-                '14': position[2],
+                '14': position[2] - 0.9,
                 '15': 1,
             },
             {
@@ -183,7 +223,7 @@ export class WeaponProvider {
                 '11': 0,
                 '12': position[0],
                 '13': position[1],
-                '14': position[2],
+                '14': position[2] - 0.9,
                 '15': 1,
             },
             {
@@ -201,7 +241,7 @@ export class WeaponProvider {
                 '11': 0,
                 '12': position[0],
                 '13': position[1],
-                '14': position[2],
+                '14': position[2] - 0.9,
                 '15': 1,
             },
         ];
@@ -233,16 +273,23 @@ export class WeaponProvider {
         if (!playerData) {
             return;
         }
+
+        const weaponItem = this.item.getItem(weapon.name);
+
         if (!isWearingGloves) {
             this.policeScientistProvider.setPlayerPowder(source, {
                 last_identified_shot: Date.now(),
-                last_weapon_used: weapon.label,
+                last_weapon_used: weaponItem?.label ?? weapon.name,
             });
         }
     }
 
     @OnEvent(ServerEvent.WEAPON_SHOOTING_ALERT)
     async onWeaponShootingAlert(source: number, alertMessage: string, htmlMessage: string, zoneID: string) {
+        if (!this.featureProvider.isFeatureEnabled(Feature.PoliceAlert)) {
+            return;
+        }
+
         //No longer used
         if (this.lastAlertByZone[zoneID] && this.lastAlertByZone[zoneID] + 60000 > Date.now()) {
             return;
@@ -250,14 +297,15 @@ export class WeaponProvider {
 
         const coords = GetEntityCoords(GetPlayerPed(source)) as Vector3;
 
-        exports['soz-phone'].sendSocietyMessage({
+        await this.phoneSocietyProvider.sendMessage(source, {
             anonymous: true,
+            position: false,
             number: '555-POLICE',
             message: alertMessage,
             htmlMessage: htmlMessage,
-            info: { type: 'shooting' },
+            type: 'shooting',
             overrideIdentifier: 'System',
-            pedPosition: JSON.stringify(toVector3Object(coords)),
+            pedPosition: { coords },
         });
 
         this.lastAlertByZone[zoneID] = Date.now();
@@ -275,16 +323,24 @@ export class WeaponProvider {
     @Rpc(RpcServerEvent.WEAPON_USE_AMMO)
     async onUseAmmo(
         source: number,
-        weaponSlot: number,
+        weaponSerial: string,
         ammoName: string,
         ammoInClip: number
     ): Promise<InventoryItem | null> {
-        const weapon = this.inventoryManager.getSlot(source, weaponSlot);
+        const inventory = await this.inventoryFactory.getPlayerInventory(source);
+
+        if (!inventory) {
+            return;
+        }
+
+        const weapon = inventory.findItem(item => item.metadata?.serial == weaponSerial);
+
         if (!weapon) {
             return;
         }
 
-        const ammo = this.inventoryManager.getItem(source, ammoName);
+        const ammo = inventory.findItem(item => item.name == ammoName && !isInventoryItemExpired(item));
+
         if (!ammo) {
             return;
         }
@@ -299,34 +355,45 @@ export class WeaponProvider {
             return;
         }
 
-        if (!this.inventoryManager.removeItemFromInventory(source, ammo.name, 1, ammo.metadata, ammo.slot)) {
+        if (!inventory.removeAtSlot(ammo.slot, 1)) {
             return;
         }
 
-        this.inventoryManager.updateMetadata(source, weaponSlot, {
+        inventory.updateMetadataAtSlot(weapon.slot, {
             ammo: (weapon.metadata.ammo || 0) + ammoInClip,
         });
-        return this.inventoryManager.getSlot(source, weaponSlot);
+
+        return inventory.getItemAtSlot(weapon.slot);
     }
 
     @OnEvent(ServerEvent.WEAPON_GET_SNOW)
-    public snow(source: number) {
+    public async snow(source: number, curWeapon: InventoryItem) {
         if (!this.store.getState().global.snow) {
             this.notifier.notify(source, 'Où tu as vu de la neige ???', 'error');
             return;
         }
 
-        const weapon = this.inventoryManager.getFirstItemInventory(source, 'weapon_snowball');
+        const inventory = await this.inventoryFactory.getPlayerInventory(source);
+
+        if (!inventory) {
+            return;
+        }
+
+        //Updating ammo of equipped weapon is pain as display is not updated, so create a new one instead
+        const weapon = inventory.findItem(
+            item => item.name === 'weapon_snowball' && (!curWeapon || item.slot != curWeapon.slot)
+        );
+
         if (weapon) {
             if (weapon.metadata.ammo >= 10) {
                 this.notifier.notify(source, 'Tu as trop de boules de neige sur toi !', 'error');
                 return;
             }
-            this.inventoryManager.updateMetadata(source, weapon.slot, {
+            inventory.updateMetadataAtSlot(weapon.slot, {
                 ammo: weapon.metadata.ammo + 1,
             });
         } else {
-            this.inventoryManager.addItemToInventory(source, 'weapon_snowball', 1, { ammo: 1 });
+            inventory.add('weapon_snowball', 1, { ammo: 1 });
         }
         this.notifier.notify(source, 'Tu as ramassé une boule de neige');
     }
@@ -350,6 +417,8 @@ export class WeaponProvider {
         this.item.setItemUseCallback('ammo_15', this.useAmmo.bind(this));
         this.item.setItemUseCallback('ammo_16', this.useAmmo.bind(this));
         this.item.setItemUseCallback('ammo_17', this.useAmmo.bind(this));
+        this.item.setItemUseCallback('ammo_18', this.useAmmo.bind(this));
+        this.item.setItemUseCallback('ammo_19', this.useAmmo.bind(this));
     }
 
     private getWeaponConfig(weaponName: string): WeaponConfig | null {
@@ -358,11 +427,39 @@ export class WeaponProvider {
 
     @On('explosionEvent')
     public onExplosion(unk: any, source: number, explosionData) {
-        if (excludeExplosionAlert.includes(explosionData.explosionType)) {
+        if (explosionData.explosionType == ExplosionType.FLASHGRENADE) {
+            TriggerClientEvent(ClientEvent.WEAPON_FLASH, -1, [
+                explosionData.posX,
+                explosionData.posY,
+                explosionData.posZ,
+            ]);
+        }
+
+        if (excludeExplosionAlert.includes(explosionData.explosionType) || this.disableExplosionAlert) {
             return;
         }
 
-        if (!explosionData.f208) {
+        const mutedIndex = this.mutedExplosionLocations.findIndex(
+            elem => getDistance(elem, [explosionData.posX, explosionData.posY, explosionData.posZ]) < 0.05
+        );
+        if (mutedIndex >= 0) {
+            this.mutedExplosionLocations.splice(mutedIndex, 1);
+            return;
+        }
+
+        const netId = explosionData.f208 || explosionData.f210;
+        if (netId) {
+            const entity = NetworkGetEntityFromNetworkId(netId);
+            if (entity) {
+                const coords = GetEntityCoords(entity);
+                explosionData.posX += coords[0];
+                explosionData.posY += coords[1];
+                explosionData.posZ += coords[2];
+            }
+        }
+
+        if (!netId) {
+            //No explosion alert for entities
             TriggerClientEvent(
                 ClientEvent.WEAPON_EXPLOSION,
                 source,
@@ -372,5 +469,17 @@ export class WeaponProvider {
                 explosionData.explosionType
             );
         }
+
+        if (explosionData.f208) {
+            this.vehicleConditionProvider.onVehicleDead(source, explosionData.f208, 'explosion');
+        }
+    }
+
+    public addMutedExplosion(location: Vector3) {
+        this.mutedExplosionLocations.push(location);
+    }
+
+    public setDisableExplosionAlert(value: boolean) {
+        this.disableExplosionAlert = value;
     }
 }

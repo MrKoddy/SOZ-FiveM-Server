@@ -1,18 +1,11 @@
+import { usePlayer } from '@public/nui/hook/data';
 import { FunctionComponent, useEffect, useState } from 'react';
 
 import { NuiEvent } from '../../../shared/event';
+import { JobLabel } from '../../../shared/job';
 import { MenuType } from '../../../shared/nui/menu';
 import { fetchNui } from '../../fetch';
-import {
-    MainMenu,
-    Menu,
-    MenuContent,
-    MenuItemCheckbox,
-    MenuItemSelect,
-    MenuItemSelectOption,
-    MenuItemText,
-    MenuTitle,
-} from '../Styleguide/Menu';
+import { MainMenu, Menu, MenuContent, MenuItemCheckbox, MenuItemText, MenuTitle } from '../Styleguide/Menu';
 
 type FightForStyleStateProps = {
     data: {
@@ -23,15 +16,12 @@ type FightForStyleStateProps = {
             displayResellMediumBagBlip: boolean;
             displayResellSmallBagBlip: boolean;
         };
-        onDuty: boolean;
     };
 };
 
 export const StonkJobMenu: FunctionComponent<FightForStyleStateProps> = ({ data }) => {
-    const banner = 'https://nui-img/soz/menu_job_carrier';
     const [blips, setBlips] = useState(null);
-
-    const propsList = [{ label: 'Cône de circulation', item: 'cone', props: 'prop_roadcone02a' }];
+    const player = usePlayer();
 
     useEffect(() => {
         if (data && data.state) {
@@ -48,11 +38,11 @@ export const StonkJobMenu: FunctionComponent<FightForStyleStateProps> = ({ data 
         await fetchNui(NuiEvent.StonkDisplayBlip, { blip, value });
     };
 
-    if (!data.onDuty) {
+    if (!player.job.onduty) {
         return (
             <Menu type={MenuType.StonkJobMenu}>
                 <MainMenu>
-                    <MenuTitle banner={banner}></MenuTitle>
+                    <MenuTitle title={JobLabel['cash-transfer']} />
                     <MenuContent>
                         <MenuItemText>Vous n'êtes pas en service.</MenuItemText>
                     </MenuContent>
@@ -64,7 +54,7 @@ export const StonkJobMenu: FunctionComponent<FightForStyleStateProps> = ({ data 
     return (
         <Menu type={MenuType.StonkJobMenu}>
             <MainMenu>
-                <MenuTitle banner={banner}></MenuTitle>
+                <MenuTitle title={JobLabel['cash-transfer']} />
                 <MenuContent>
                     <MenuItemCheckbox
                         checked={blips['displaySecureContainerTake']}
@@ -96,17 +86,6 @@ export const StonkJobMenu: FunctionComponent<FightForStyleStateProps> = ({ data 
                     >
                         Afficher la revente de petits sacs d'argent
                     </MenuItemCheckbox>
-
-                    <MenuItemSelect
-                        title="🚧 Poser un objet"
-                        onConfirm={async selectedIndex => {
-                            await fetchNui(NuiEvent.ObjectPlace, propsList[selectedIndex]);
-                        }}
-                    >
-                        {propsList.map(prop => (
-                            <MenuItemSelectOption key={prop.item}>{prop.label}</MenuItemSelectOption>
-                        ))}
-                    </MenuItemSelect>
                 </MenuContent>
             </MainMenu>
         </Menu>

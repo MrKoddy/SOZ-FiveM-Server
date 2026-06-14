@@ -50,6 +50,15 @@ export class NuiProvider {
         return true;
     }
 
+    @OnNuiEvent(NuiEvent.SetShowCursor)
+    public async onShowCursor({ showCursor }: { showCursor: boolean | null }) {
+        if (showCursor === null) {
+            return;
+        }
+
+        SetMouseCursorVisibleInMenus(showCursor);
+    }
+
     @Tick(100)
     public async checkPauseMenu() {
         this.dispatcher.dispatch('global', 'PauseMenuActive', IsPauseMenuActive());
@@ -80,14 +89,14 @@ export class NuiProvider {
     private computeFocusInput() {
         this.keyboard = false;
         this.cursor = false;
-        this.keepInput = false;
+        this.keepInput = Object.values(this.state).length > 0;
         this.disabledControls = {};
         this.disabledAllControls = false;
 
         for (const focus of Object.values(this.state)) {
             this.keyboard = this.keyboard || focus.keyboard;
             this.cursor = this.cursor || focus.cursor;
-            this.keepInput = this.keepInput || focus.keepInput;
+            this.keepInput = this.keepInput && (focus.keepInput || (!focus.keyboard && !focus.cursor));
 
             for (const control of focus.disableKeepInputControls || []) {
                 this.disabledControls[control] = true;

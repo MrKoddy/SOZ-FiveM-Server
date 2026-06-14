@@ -1,14 +1,15 @@
+import { TaxType } from '@public/shared/tax';
 import React, { FunctionComponent, useMemo, useState } from 'react';
 import { useSelector } from 'react-redux';
 
-import { TaxType } from '../../../shared/bank';
 import { NuiEvent } from '../../../shared/event';
-import { InventoryItem } from '../../../shared/item';
+import { InventoryItem } from '../../../shared/inventory';
 import { MenuType } from '../../../shared/nui/menu';
 import { WEAPON_CUSTOM_PRICE, WeaponAttachment, WeaponComponentType } from '../../../shared/weapons/attachment';
 import { WeaponTintColor, WeaponTintColorChoiceItem } from '../../../shared/weapons/tint';
 import { WeaponConfiguration, WeaponsMenuData } from '../../../shared/weapons/weapon';
 import { fetchNui } from '../../fetch';
+import { useItems } from '../../hook/data';
 import { useGetPrice } from '../../hook/price';
 import { RootState } from '../../store';
 import {
@@ -31,11 +32,11 @@ type MenuGunSmithStateProps = {
 
 const GunSmithWeaponSubMenu: FunctionComponent<{
     submenu_id: number;
-    banner: string;
     weapon: InventoryItem;
     tint: Record<WeaponTintColor, WeaponTintColorChoiceItem>;
     attachments: WeaponAttachment[];
-}> = ({ submenu_id, banner, weapon, tint, attachments }) => {
+    admin: boolean;
+}> = ({ submenu_id, weapon, tint, attachments, admin }) => {
     const [configuration, setConfiguration] = useState<WeaponConfiguration>({});
     const getPrice = useGetPrice();
 
@@ -61,7 +62,10 @@ const GunSmithWeaponSubMenu: FunctionComponent<{
                 Math.floor(100 - ((weapon.metadata.health / weapon.metadata.maxHealth) * 100 || 0));
         }
 
-        if (configuration.tint && configuration.tint !== weapon.metadata.tint) {
+        if (
+            configuration.tint !== weapon.metadata.tint &&
+            (configuration.tint !== 0 || weapon.metadata.tint !== undefined)
+        ) {
             price += WEAPON_CUSTOM_PRICE.tint;
         }
 
@@ -70,10 +74,8 @@ const GunSmithWeaponSubMenu: FunctionComponent<{
 
     return (
         <SubMenu id={`gunsmith_${submenu_id}`}>
-            <MenuTitle banner={banner}>
-                Modifier l'arme {configuration.label ? `(${configuration.label})` : ''}
-            </MenuTitle>
-            <MenuContent>
+            <MenuTitle title="Armurier" />
+            <MenuContent subtitle={`Modifier l'arme ${configuration.label ? `(${configuration.label})` : ''}`}>
                 <MenuItemCheckbox
                     onChange={label => {
                         setConfiguration(s => ({ ...s, label }));
@@ -160,12 +162,13 @@ const GunSmithWeaponSubMenu: FunctionComponent<{
                         fetchNui(NuiEvent.GunSmithApplyConfiguration, {
                             slot: weapon.slot,
                             ...configuration,
+                            admin,
                         });
                     }}
                 >
                     <div className="flex w-full justify-between items-center">
-                        <span>Confirmer les changements</span>
-                        <span>${getPrice(price, TaxType.WEAPON).toFixed(0)}</span>
+                        <span>✅ Confirmer les changements</span>
+                        {!admin && <span>${getPrice(price, TaxType.WEAPON).toLocaleString('fr-FR')}</span>}
                     </div>
                 </MenuItemButton>
             </MenuContent>
@@ -211,29 +214,35 @@ const MenuWeaponComponentSelect: FunctionComponent<{
     );
 };
 
-export const MenuGunSmith: FunctionComponent<MenuGunSmithStateProps> = ({ data: { weapons, tints, attachments } }) => {
-    const banner = 'https://nui-img/soz/menu_job_gunsmith';
+export const MenuGunSmith: FunctionComponent<MenuGunSmithStateProps> = ({
+    data: { weapons, tints, attachments, admin },
+}) => {
+    const items = useItems();
 
     return (
         <Menu type={MenuType.GunSmith}>
             <MainMenu>
-                <MenuTitle banner={banner}></MenuTitle>
+                <MenuTitle title="Armurier" />
                 <MenuContent>
-                    {weapons.map((weapon, id) => (
-                        <MenuItemSubMenuLink key={`gunsmith_${id}`} id={`gunsmith_${id}`}>
-                            {weapon.metadata.label ? weapon.metadata.label + ` (${weapon.label})` : weapon.label}
-                        </MenuItemSubMenuLink>
-                    ))}
+                    {weapons.map((weapon, id) => {
+                        const item = items.find(i => i.name === weapon.name);
+
+                        return (
+                            <MenuItemSubMenuLink key={`gunsmith_${id}`} id={`gunsmith_${id}`}>
+                                {weapon.metadata.label ? weapon.metadata.label + ` (${item?.label})` : item?.label}
+                            </MenuItemSubMenuLink>
+                        );
+                    })}
                 </MenuContent>
             </MainMenu>
             {weapons.map((weapon, id) => (
                 <GunSmithWeaponSubMenu
                     key={`gunsmith_${id}`}
                     submenu_id={id}
-                    banner={banner}
                     weapon={weapon}
                     tint={tints.find(t => t.slot === weapon.slot).tints}
                     attachments={attachments?.find(t => t.slot === weapon.slot)?.attachments || []}
+                    admin={admin}
                 />
             ))}
         </Menu>

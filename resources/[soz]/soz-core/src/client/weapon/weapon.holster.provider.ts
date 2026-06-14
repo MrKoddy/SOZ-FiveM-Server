@@ -1,27 +1,35 @@
-import { On } from '@core/decorators/event';
 import { Inject } from '@core/decorators/injectable';
 import { Provider } from '@core/decorators/provider';
 import { wait } from '@core/utils';
 import { Tick } from '@public/core/decorators/tick';
 import { Component } from '@public/shared/cloth';
 import { JobType } from '@public/shared/job';
+import { PlayerData, PlayerPedHash } from '@public/shared/player';
 
 import { AnimationService } from '../animation/animation.service';
 import { PlayerService } from '../player/player.service';
 
 const holsterableWeaponGroups = [GetHashKey('GROUP_PISTOL'), GetHashKey('GROUP_STUNGUN')];
+const objectWeapons = [0, GetHashKey('WEAPON_BRIEFCASE'), 966099553 /*WEAPON_OBJECT*/];
 const excludeWeapon = [
     0,
     GetHashKey('WEAPON_BRIEFCASE'),
     GetHashKey('WEAPON_UVFLASHLIGHT'),
-    966099553 /*WEAPON_OBJECT*/,
+    GetHashKey('WEAPON_GADGETPISTOL'),
 ];
+const switchblade = GetHashKey('weapon_switchblade');
+const unarmed = GetHashKey('WEAPON_UNARMED');
 
 const AllowedJob = [JobType.FBI, JobType.BCSO, JobType.LSPD, JobType.SASP, JobType.LSCS];
 
-const hosterDrawable = {
-    [GetHashKey('mp_m_freemode_01')]: 130,
-    [GetHashKey('mp_f_freemode_01')]: 160,
+const UndershirtHolster: Record<PlayerPedHash, number> = {
+    [PlayerPedHash.Male]: 130,
+    [PlayerPedHash.Female]: 160,
+};
+
+const AccessoriesHolster: Record<PlayerPedHash, number> = {
+    [PlayerPedHash.Male]: 4,
+    [PlayerPedHash.Female]: 4,
 };
 
 @Provider()
@@ -33,12 +41,26 @@ export class WeaponHolsterProvider {
     private playerService: PlayerService;
 
     private inAnimation = false;
-    private currWeapon = GetHashKey('WEAPON_UNARMED');
+    private currWeapon = unarmed;
 
-    @On('weapons:ResetHolster')
-    public resetHolster() {
-        this.inAnimation = false;
-        this.currWeapon = GetHashKey('WEAPON_UNARMED');
+    private isFastAllowed(player: PlayerData, ped: number) {
+        if (AllowedJob.includes(player.job.id) && player.cloth_config.JobClothSet) {
+            return true;
+        }
+
+        if (UndershirtHolster[GetEntityModel(ped)] == GetPedDrawableVariation(ped, Component.Undershirt)) {
+            return true;
+        }
+
+        if (
+            AccessoriesHolster[GetEntityModel(ped)] ==
+                GetPedDrawableVariationCollectionLocalIndex(ped, Component.Accessories) &&
+            GetPedDrawableVariationCollectionName(ped, Component.Accessories) == 'soz_bcso'
+        ) {
+            return true;
+        }
+
+        return false;
     }
 
     @Tick(5)
@@ -57,31 +79,22 @@ export class WeaponHolsterProvider {
             const newWeap = GetSelectedPedWeapon(ped);
             if (
                 this.currWeapon != newWeap &&
-                !excludeWeapon.includes(newWeap) &&
-                !excludeWeapon.includes(this.currWeapon)
+                !objectWeapons.includes(newWeap) &&
+                !objectWeapons.includes(this.currWeapon)
             ) {
                 this.inAnimation = true;
                 SetCurrentPedWeapon(ped, this.currWeapon, true);
 
-                if (this.currWeapon != GetHashKey('WEAPON_UNARMED')) {
-                    if (
-                        this.isWeaponHolsterable(this.currWeapon) &&
-                        ((AllowedJob.includes(player.job.id) && player.cloth_config.JobClothSet) ||
-                            hosterDrawable[GetEntityModel(ped)] == GetPedDrawableVariation(ped, Component.Undershirt))
-                    ) {
-                        await this.putWeaponInHolster();
-                    } else {
-                        await this.putWeaponBehind();
-                    }
-                    SetCurrentPedWeapon(ped, GetHashKey('WEAPON_UNARMED'), true);
-                }
+                await this.storeWeapon(player, ped);
 
-                if (newWeap != GetHashKey('WEAPON_UNARMED')) {
-                    if (
-                        this.isWeaponHolsterable(newWeap) &&
-                        ((AllowedJob.includes(player.job.id) && player.cloth_config.JobClothSet) ||
-                            hosterDrawable[GetEntityModel(ped)] == GetPedDrawableVariation(ped, Component.Undershirt))
-                    ) {
+                if (newWeap != unarmed) {
+                    ClearPedTasks(ped);
+                    if (newWeap === switchblade) {
+                        SetCurrentPedWeapon(ped, switchblade, false);
+                        await wait(800);
+                    } else if (excludeWeapon.includes(newWeap)) {
+                        SetCurrentPedWeapon(ped, newWeap, false);
+                    } else if (this.isWeaponHolsterable(newWeap) && this.isFastAllowed(player, ped)) {
                         await this.drawWeaponFromHolster(ped, newWeap);
                     } else {
                         await this.drawWeaponFromBehind(ped, newWeap);
@@ -97,6 +110,30 @@ export class WeaponHolsterProvider {
         }
     }
 
+    public async storeWeapon(player: PlayerData, ped: number) {
+        if (this.currWeapon == unarmed || objectWeapons.includes(this.currWeapon)) {
+            return;
+        }
+
+        const inAnimation = this.inAnimation;
+        this.inAnimation = true;
+
+        if (this.currWeapon === switchblade) {
+            SetCurrentPedWeapon(ped, unarmed, false);
+            await wait(1300);
+        } else if (this.isWeaponHolsterable(this.currWeapon) && this.isFastAllowed(player, ped)) {
+            await this.putWeaponInHolster();
+        } else if (!excludeWeapon.includes(this.currWeapon)) {
+            await this.putWeaponBehind();
+        }
+        SetCurrentPedWeapon(ped, unarmed, true);
+        this.currWeapon = unarmed;
+
+        if (!inAnimation) {
+            this.inAnimation = false;
+        }
+    }
+
     @Tick(0)
     public async blockFireLoop() {
         if (this.inAnimation) {
@@ -104,14 +141,6 @@ export class WeaponHolsterProvider {
             DisablePlayerFiring(PlayerPedId(), true);
         } else {
             await wait(250);
-        }
-    }
-
-    @Tick(0)
-    public async holsterToAim() {
-        const player = PlayerPedId();
-        if (IsControlPressed(0, 25) && IsEntityPlayingAnim(player, 'move_m@intimidation@cop@unarmed', 'idle', 3)) {
-            ClearPedSecondaryTask(player);
         }
     }
 

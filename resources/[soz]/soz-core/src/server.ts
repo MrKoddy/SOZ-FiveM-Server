@@ -6,15 +6,24 @@ import { Application } from './core/application';
 import { setService, setServiceInstance, unloadContainer } from './core/container';
 import { ProviderServerLoader } from './core/loader/provider.server.loader';
 import { ChainMiddlewareEventServerFactory } from './core/middleware/middleware.event.server';
+import { SendMiddlewareEventServer } from './core/middleware/middleware.event.server.send';
+import { SendMiddlewareStatebagServer } from './core/middleware/middleware.statebag';
 import { ChainMiddlewareTickServerFactory } from './core/middleware/middleware.tick.server';
 import { AdminModule } from './server/admin/admin.module';
 import { AfkModule } from './server/afk/afk.module';
+import { AnimalModule } from './server/animal/animal.module';
 import { ApiModule } from './server/api/api.module';
 import { BankModule } from './server/bank/bank.module';
+import { BillboardModule } from './server/billboard/billboard.module';
+import { CameraModule } from './server/camera/camera.module';
+import { ClickhouseModule } from './server/clickhouse/clickhouse.module';
 import { CraftModule } from './server/craft/craft.module';
 import { DatabaseModule } from './server/database/database.module';
+import { DoorModule } from './server/door/door.module';
 import { DrivingSchoolModule } from './server/driving-school/ds.module';
-import { FieldModule } from './server/farm/field.module';
+import { FeatureModule } from './server/feature/feature.module';
+import { FieldModule } from './server/field/field.module';
+import { GamesModule } from './server/games/games.module';
 import { HousingModule } from './server/housing/housing.module';
 import { InventoryModule } from './server/inventory/inventory.module';
 import { ItemModule } from './server/item/item.module';
@@ -38,11 +47,13 @@ import { TaxiModule } from './server/job/taxi/taxi.module';
 import { UpwModule } from './server/job/upw/upw.module';
 import { MonitorModule } from './server/monitor/monitor.module';
 import { ObjectModule } from './server/object/object.module';
+import { PhoneModule } from './server/phone/phone.module';
 import { PlayerModule } from './server/player/player.module';
 import { PropsModule } from './server/props/props.module';
 import { RaceModule } from './server/race/race.module';
 import { RebootModule } from './server/reboot/reboot.module';
 import { RepositoryModule } from './server/repository/repository.module';
+import { SceneModule } from './server/scene/scene.module';
 import { ShopModule } from './server/shop/shop.module';
 import { SoundModule } from './server/sound/sound.module';
 import { store } from './server/store/store';
@@ -54,15 +65,17 @@ import { VehicleModule } from './server/vehicle/vehicle.module';
 import { VoipModule } from './server/voip/voip.module';
 import { WeaponModule } from './server/weapon/weapon.module';
 import { WeatherModule } from './server/weather/weather.module';
-import { ZEventModule } from './server/zevent/zevent.module';
+import { WorldModule } from './server/world/world.module';
 
 async function bootstrap() {
     setServiceInstance('Store', store);
     setService('MiddlewareFactory', ChainMiddlewareEventServerFactory);
     setService('MiddlewareTickFactory', ChainMiddlewareTickServerFactory);
+    setService('MiddlewareSendEventFactory', SendMiddlewareEventServer);
+    setService('MiddlewareStatebagFactory', SendMiddlewareStatebagServer);
 
     try {
-        setMaxEventListeners(20);
+        setMaxEventListeners(100);
     } catch {
         /* empty */
     }
@@ -72,6 +85,7 @@ async function bootstrap() {
         MonitorModule,
         StoreModule,
         DatabaseModule,
+        ClickhouseModule,
         RepositoryModule,
         ApiModule,
         ObjectModule,
@@ -84,7 +98,6 @@ async function bootstrap() {
         FoodModule,
         BaunModule,
         StreamModule,
-        ZEventModule,
         AdminModule,
         VoipModule,
         JobModule,
@@ -116,6 +129,15 @@ async function bootstrap() {
         UtilsModule,
         GouvModule,
         GarbageModule,
+        DoorModule,
+        SceneModule,
+        WorldModule,
+        FeatureModule,
+        PhoneModule,
+        GamesModule,
+        CameraModule,
+        BillboardModule,
+        AnimalModule,
         ...PrivateModules
     );
 

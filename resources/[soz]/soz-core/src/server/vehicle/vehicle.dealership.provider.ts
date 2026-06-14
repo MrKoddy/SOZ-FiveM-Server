@@ -1,16 +1,18 @@
-import { On, Once, OnceStep, OnEvent } from '@public/core/decorators/event';
+import { On, OnEvent } from '@public/core/decorators/event';
 import { Logger } from '@public/core/logger';
+import { InventoryFactory } from '@public/server/inventory/inventory.factory';
 import { ServerEvent } from '@public/shared/event';
 import { PlayerData } from '@public/shared/player';
+import { TaxType } from '@public/shared/tax';
 import { formatDuration } from '@public/shared/utils/timeformat';
 import { add, addSeconds } from 'date-fns';
 
-import { AuctionZones, DealershipConfigItem, DealershipType } from '../../config/dealership';
+import { AuctionZones, DealershipConfig, DealershipType } from '../../config/dealership';
 import { GarageList } from '../../config/garage';
 import { Inject } from '../../core/decorators/injectable';
 import { Provider } from '../../core/decorators/provider';
 import { Rpc } from '../../core/decorators/rpc';
-import { TaxType } from '../../shared/bank';
+import { Feature } from '../../shared/features';
 import { JobType } from '../../shared/job';
 import { Zone } from '../../shared/polyzone/box.zone';
 import { Vector4 } from '../../shared/polyzone/vector';
@@ -19,13 +21,10 @@ import { RpcServerEvent } from '../../shared/rpc';
 import { AuctionVehicle } from '../../shared/vehicle/auction';
 import { getDefaultVehicleConfiguration, VehicleConfiguration } from '../../shared/vehicle/modification';
 import { PlayerVehicleState } from '../../shared/vehicle/player.vehicle';
-import {
-    getDefaultVehicleCondition,
-    isVehicleModelElectric,
-    Vehicle,
-    VehicleClassFuelStorageMultiplier,
-} from '../../shared/vehicle/vehicle';
+import { getDefaultVehicleCondition, isVehicleModelElectric, Vehicle } from '../../shared/vehicle/vehicle';
+import { BankService } from '../bank/bank.service';
 import { PrismaService } from '../database/prisma.service';
+import { FeatureProvider } from '../feature/feature.provider';
 import { LockService } from '../lock.service';
 import { Monitor } from '../monitor/monitor';
 import { Notifier } from '../notifier';
@@ -67,6 +66,15 @@ export class VehicleDealershipProvider {
     @Inject(Logger)
     private logger: Logger;
 
+    @Inject(BankService)
+    private bankService: BankService;
+
+    @Inject(FeatureProvider)
+    private featureProvider: FeatureProvider;
+
+    @Inject(InventoryFactory)
+    private inventoryFactory: InventoryFactory;
+
     private auctions: Record<string, AuctionVehicle> = {};
 
     private auctionTimeStart: Date;
@@ -74,7 +82,6 @@ export class VehicleDealershipProvider {
 
     private activeGuard: Record<number, number> = {};
 
-    @Once(OnceStep.DatabaseConnected)
     public async initAuction() {
         const vehicles = await this.prismaService.vehicle.findMany({
             where: {
@@ -92,14 +99,9 @@ export class VehicleDealershipProvider {
 
         const selectedVehicles = getRandomItems(vehicles, 2);
 
-        this.monitor.publish(
-            'vehicle_luxury_selected',
-            {},
-            {
-                model1: selectedVehicles[0].name,
-                model2: selectedVehicles[1].name,
-            }
-        );
+        this.monitor.traceEvent('vehicle_luxury_selected', {
+            vehicle_name: selectedVehicles[0].name + ', ' + selectedVehicles[1].name,
+        });
 
         for (const index in AuctionZones) {
             const auctionZone = AuctionZones[index];
@@ -112,6 +114,7 @@ export class VehicleDealershipProvider {
             const vehicle = {
                 ...selectedVehicle,
                 jobName: JSON.parse(selectedVehicle.jobName),
+                handling: selectedVehicle.handling ? JSON.parse(selectedVehicle.handling) : null,
             };
 
             this.auctions[selectedVehicle.model] = {
@@ -134,9 +137,7 @@ export class VehicleDealershipProvider {
                 turbo: true,
             };
 
-            const condition = getDefaultVehicleCondition();
-            condition.fuelLevel =
-                condition.fuelLevel * (VehicleClassFuelStorageMultiplier[vehicle?.requiredLicence] || 1.0);
+            const condition = getDefaultVehicleCondition(vehicle);
 
             await this.prismaService.playerVehicle.upsert({
                 create: {
@@ -161,7 +162,7 @@ export class VehicleDealershipProvider {
                     garage: 'bennys_luxury',
                     state: PlayerVehicleState.InGarage,
                     mods: JSON.stringify(configuration),
-                    condition: JSON.stringify(getDefaultVehicleCondition()),
+                    condition: JSON.stringify(condition),
                 },
                 where: {
                     plate,
@@ -247,7 +248,16 @@ export class VehicleDealershipProvider {
                     return false;
                 }
 
-                if (!(await this.playerMoneyService.transfer(player.charinfo.account, 'luxury_dealership', price))) {
+                if (
+                    !(await this.bankService.transferFarmMoney(
+                        source,
+                        'luxury_dealership',
+                        player.charinfo.account,
+                        price,
+                        'money',
+                        true
+                    ))
+                ) {
                     this.notifier.notify(source, "Vous n'avez pas assez d'argent.", 'error');
 
                     return false;
@@ -255,7 +265,8 @@ export class VehicleDealershipProvider {
 
                 if (
                     auction.bestBid &&
-                    !(await this.playerMoneyService.transfer(
+                    !(await this.bankService.transferFarmMoney(
+                        source,
                         'luxury_dealership',
                         auction.bestBid.account,
                         auction.bestBid.price
@@ -311,10 +322,8 @@ export class VehicleDealershipProvider {
             const plate = await this.vehicleService.generatePlate();
             const nowInSeconds = Math.round(Date.now() / 1000);
 
-            const condition = getDefaultVehicleCondition();
             const vehicle = await this.vehicleRepository.findByModel(auction.vehicle.model);
-            condition.fuelLevel =
-                condition.fuelLevel * (VehicleClassFuelStorageMultiplier[vehicle?.requiredLicence] || 1.0);
+            const condition = getDefaultVehicleCondition(vehicle);
 
             await this.prismaService.playerVehicle.create({
                 data: {
@@ -344,6 +353,8 @@ export class VehicleDealershipProvider {
                     date: nowInSeconds,
                 },
             });
+
+            auction.bestBid = null;
         }
     }
 
@@ -359,6 +370,7 @@ export class VehicleDealershipProvider {
             return {
                 ...vehicle,
                 jobName: JSON.parse(vehicle.jobName),
+                handling: vehicle.handling ? JSON.parse(vehicle.handling) : null,
             };
         });
     }
@@ -391,6 +403,7 @@ export class VehicleDealershipProvider {
                 // Use price for job
                 price: jobVehicle.price,
                 name: jobName && jobName[job] ? jobName[job] : vehicle.name,
+                handling: vehicle.handling ? JSON.parse(vehicle.handling) : null,
             };
         });
     }
@@ -403,13 +416,15 @@ export class VehicleDealershipProvider {
                 state: {
                     not: PlayerVehicleState.Destroyed,
                 },
+                crimiImport: false,
             },
         });
 
         let playerVehicleCount = 0;
         for (const veh of playerVehicles) {
             const vehDef = await this.vehicleRepository.findByModel(veh.vehicle);
-            if (vehDef.dealershipId && vehDef.dealershipId !== DealershipType.Cycle) {
+
+            if (vehDef && vehDef.dealershipId && vehDef.dealershipId !== DealershipType.Cycle) {
                 playerVehicleCount++;
             }
         }
@@ -431,22 +446,27 @@ export class VehicleDealershipProvider {
         source: number,
         vehicle: Vehicle,
         dealershipId: DealershipType,
-        dealership?: DealershipConfigItem,
         parkingPlace?: Zone
     ): Promise<boolean> {
         const player = this.playerService.getPlayer(source);
+        const dealership = DealershipConfig[dealershipId];
 
         if (!player) {
             return false;
         }
 
-        if (dealershipId !== DealershipType.Job && dealershipId !== DealershipType.Cycle) {
+        if (
+            dealershipId !== DealershipType.Job &&
+            dealershipId !== DealershipType.Cycle &&
+            dealershipId !== DealershipType.WhatIf
+        ) {
             if (!(await this.vehicleCountCheck(player))) {
                 return;
             }
         }
 
         if (
+            dealershipId !== DealershipType.WhatIf &&
             vehicle.requiredLicence &&
             (!player.metadata.licences[vehicle.requiredLicence] ||
                 player.metadata.licences[vehicle.requiredLicence] <= 0)
@@ -496,7 +516,10 @@ export class VehicleDealershipProvider {
                         },
                     });
 
-                    if (refreshedVehicle.stock <= 0) {
+                    if (
+                        ![DealershipType.WhatIf, DealershipType.Casino].includes(dealershipId) &&
+                        refreshedVehicle.stock <= 0
+                    ) {
                         this.notifier.notify(source, "Ce véhicule n'est plus disponible.", 'error');
 
                         return false;
@@ -505,10 +528,20 @@ export class VehicleDealershipProvider {
 
                 const taxType = isVehicleModelElectric(vehicle.hash) ? TaxType.GREEN : TaxType.VEHICLE;
 
-                if (!(await this.playerMoneyService.buy(source, vehicle.price, taxType))) {
-                    this.notifier.notify(source, `Tu n'as pas assez d'argent.`, 'error');
+                if (dealershipId === DealershipType.WhatIf) {
+                    const inventory = await this.inventoryFactory.getPlayerInventory(source);
+                    if (!inventory) return;
 
-                    return false;
+                    if (!inventory.remove('whatif_parts', vehicle.price)) {
+                        this.notifier.error(source, `Tu n'as pas de quoi payer...`);
+                        return false;
+                    }
+                } else {
+                    if (!(await this.playerMoneyService.buy(source, vehicle.price, taxType))) {
+                        this.notifier.notify(source, `Tu n'as pas assez d'argent.`, 'error');
+
+                        return false;
+                    }
                 }
 
                 let livery = 0;
@@ -547,9 +580,11 @@ export class VehicleDealershipProvider {
                     configuration.color = null;
                 }
 
-                const condition = getDefaultVehicleCondition();
-                condition.fuelLevel =
-                    condition.fuelLevel * (VehicleClassFuelStorageMultiplier[vehicle?.requiredLicence] || 1.0);
+                if (dealershipId === DealershipType.WhatIf) {
+                    garage = 'whatif_garage_' + player.metadata.whatif_guild;
+                }
+
+                const condition = getDefaultVehicleCondition(vehicle);
 
                 const playerVehicle = await this.prismaService.playerVehicle.create({
                     data: {
@@ -570,18 +605,13 @@ export class VehicleDealershipProvider {
                     },
                 });
 
-                this.monitor.publish(
-                    'vehicle_buy',
-                    {
-                        player_source: source,
-                        buy_type: dealershipId === DealershipType.Job ? 'job' : 'citizen',
-                    },
-                    {
-                        price: vehicle.price,
-                        vehicle_model: vehicle.model,
-                        vehicle_plate: playerVehicle.plate,
-                    }
-                );
+                this.monitor.traceEvent('vehicle_buy', {
+                    player_source: source,
+                    buy_type: dealershipId === DealershipType.Job ? 'job' : 'citizen',
+                    money: vehicle.price,
+                    vehicle_model: vehicle.model,
+                    vehicle_plate: playerVehicle.plate,
+                });
 
                 await this.prismaService.player_purchases.create({
                     data: {
@@ -594,7 +624,11 @@ export class VehicleDealershipProvider {
                     },
                 });
 
-                if (dealershipId !== DealershipType.Job) {
+                if (
+                    dealershipId !== DealershipType.Job &&
+                    !this.featureProvider.isFeatureEnabled(Feature.WhatIfFirstEpisode) &&
+                    !this.featureProvider.isFeatureEnabled(Feature.WhatIfSecondEpisode)
+                ) {
                     await this.prismaService.vehicle.update({
                         where: {
                             model: vehicle.model,

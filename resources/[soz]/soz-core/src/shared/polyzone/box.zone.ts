@@ -5,7 +5,6 @@ import { Point3D, rotatePoint, Vector2, Vector3, Vector4 } from './vector';
 
 type BoxZoneOptions<T> = PolygonZoneOptions<T> & {
     heading?: number;
-    debugPoly?: boolean;
 };
 
 export type Zone<T = never> = {
@@ -15,7 +14,6 @@ export type Zone<T = never> = {
     heading?: number;
     minZ?: number;
     maxZ?: number;
-    debugPoly?: boolean;
     data?: T;
 };
 
@@ -32,12 +30,55 @@ export type LegacyHousingZone = {
 
 export enum ZoneType {
     NoStress = 'NoStress',
+    VehBizSpawn = 'VehBizSpawn',
+    VehBizDelivery = 'VehBizDelivery',
+    VehBizResell = 'VehBizResell',
+    VehBizGarage = 'VehBizGarage',
+    SmugglingBizStorage = 'SmugglingBizStorage',
+    SmugglingBizContainer = 'SmugglingBizContainer',
+    SmugglingBizExport = 'SmugglingBizExport',
+    SmugglingBizConvoy = 'SmugglingBizConvoy',
+    NoHackCam = 'NoHackCam',
+    CyberHeistEntry = 'CyberHeistEntry',
 }
+
+export const ZoneTypeLabel: Record<ZoneType, string> = {
+    NoStress: 'No stress zone',
+    VehBizSpawn: 'VehBiz Spawn de véhicule',
+    VehBizDelivery: 'VehBiz Conteneur de livraison',
+    VehBizResell: 'VehBiz Revente de caisse',
+    VehBizGarage: 'VehBiz Garage',
+    SmugglingBizStorage: "Entrée d'entrepot de contrebande",
+    SmugglingBizContainer: 'Contrebande import',
+    SmugglingBizExport: 'Contrebande Export',
+    SmugglingBizConvoy: 'Contrebande Convoi',
+    NoHackCam: 'Protection Hack Caméra',
+    CyberHeistEntry: 'Entrée de braquage cyber',
+};
+
+export const ZoneTypeBlipColor: Record<ZoneType, number> = {
+    NoStress: 0,
+    VehBizSpawn: 1,
+    VehBizDelivery: 2,
+    VehBizResell: 3,
+    VehBizGarage: 5,
+    SmugglingBizStorage: 6,
+    SmugglingBizContainer: 7,
+    SmugglingBizExport: 8,
+    SmugglingBizConvoy: 9,
+    NoHackCam: 10,
+    CyberHeistEntry: 11,
+};
+
+export type ZoneExtra = {
+    date?: number;
+};
 
 export type ZoneTyped = Zone<{
     id: number;
     type: ZoneType;
     name: string;
+    extra?: ZoneExtra;
 }>;
 
 export const createZoneFromLegacyData = (data: LegacyHousingZone): Zone | null => {
@@ -77,7 +118,6 @@ export class BoxZone<T = never> extends PolygonZone<T> {
     public readonly length: number;
     public readonly width: number;
     public readonly heading: number;
-    public readonly debugPoly: boolean;
 
     public static fromZone<T>(zone: Zone<T>): BoxZone<T> {
         return new BoxZone(zone.center, zone.length || 1, zone.width || 1, {
@@ -119,7 +159,6 @@ export class BoxZone<T = never> extends PolygonZone<T> {
         this.length = length;
         this.width = width;
         this.heading = heading;
-        this.debugPoly = options?.debugPoly;
     }
 
     public draw(wallColor: RGBAColor | RGBColor, alpha?: number, text?: string) {
@@ -201,7 +240,6 @@ export class BoxZone<T = never> extends PolygonZone<T> {
             heading: this.heading,
             minZ: this.minZ,
             maxZ: this.maxZ,
-            debugPoly: this.debugPoly,
             data: this.data,
         };
     }

@@ -1,22 +1,26 @@
 import { Inject } from '@core/decorators/injectable';
 import { Provider } from '@core/decorators/provider';
-import { uuidv4, wait } from '@core/utils';
+import { wait } from '@core/utils';
 import { PlayerTalentService } from '@private/client/player/player.talent.service';
+import { PoliceSwatProvider } from '@private/client/police/police.swat.provider';
 import { AnimationService } from '@public/client/animation/animation.service';
 import { BlipFactory } from '@public/client/blip';
+import { GamesProvider } from '@public/client/games/games.provider';
 import { Monitor } from '@public/client/monitor/monitor';
 import { Notifier } from '@public/client/notifier';
 import { InputService } from '@public/client/nui/input.service';
 import { NuiMenu } from '@public/client/nui/nui.menu';
 import { PhoneService } from '@public/client/phone/phone.service';
+import { PlayerHeatProvider } from '@public/client/player/player.heat.provider';
 import { PlayerInOutService } from '@public/client/player/player.inout.service';
 import { PlayerService } from '@public/client/player/player.service';
 import { PlayerSnowProvider } from '@public/client/player/player.snow.provider';
 import { PlayerWalkstyleProvider } from '@public/client/player/player.walkstyle.provider';
 import { SoundService } from '@public/client/sound.service';
+import { BlurService } from '@public/client/utils/blur.service';
 import { VehicleSeatbeltProvider } from '@public/client/vehicle/vehicle.seatbelt.provider';
 import { WeaponDrawingProvider } from '@public/client/weapon/weapon.drawing.provider';
-import { OnEvent } from '@public/core/decorators/event';
+import { Once, OnceStep, OnEvent } from '@public/core/decorators/event';
 import { Tick, TickInterval } from '@public/core/decorators/tick';
 import { emitRpc } from '@public/core/rpc';
 import { ClientEvent, ServerEvent } from '@public/shared/event';
@@ -35,6 +39,12 @@ import { RpcServerEvent } from '@public/shared/rpc';
 import { VehicleSeat } from '@public/shared/vehicle/vehicle';
 
 import { Animation } from '../../../shared/animation';
+import { Feature } from '../../../shared/features';
+import { getRandomInt } from '../../../shared/random';
+import { WhatIf2RespawnPoints } from '../../../shared/whatif';
+import { FeatureProvider } from '../../feature/feature.provider';
+import { NuiDispatch } from '../../nui/nui.dispatch';
+import { PhoneAppSocietyProvider } from '../../phone/apps/phone.app.society.provider';
 import { PlayerZombieProvider } from '../../player/player.zombie.provider';
 import { VoipService } from '../../voip/voip.service';
 
@@ -193,10 +203,39 @@ export class LSMCDeathProvider {
     @Inject(PlayerSnowProvider)
     private playerSnowProvider: PlayerSnowProvider;
 
+    @Inject(PlayerHeatProvider)
+    private playerHeatProvider: PlayerHeatProvider;
+
+    @Inject(BlurService)
+    private blurService: BlurService;
+
+    @Inject(GamesProvider)
+    private readonly gamesProvider: GamesProvider;
+
+    @Inject(NuiDispatch)
+    private nuiDispatch: NuiDispatch;
+
+    @Inject(PhoneAppSocietyProvider)
+    private readonly phoneSocietyProvider: PhoneAppSocietyProvider;
+
+    @Inject(FeatureProvider)
+    private featureProvider: FeatureProvider;
+
+    @Inject(PoliceSwatProvider)
+    private readonly policeSwatProvider: PoliceSwatProvider;
+
     private IsDead = false;
     private doFeeze = false;
     private hungerThristDeath = false;
     private radioactiveBeerEffect = false;
+    private loginTime = Date.now();
+
+    @Once(OnceStep.PlayerLoaded)
+    public init() {
+        this.loginTime = Date.now();
+
+        AddRelationshipGroup('PLAYER_DEAD');
+    }
 
     @Tick(10)
     public async deathLoop() {
@@ -236,8 +275,16 @@ export class LSMCDeathProvider {
         if (!this.IsDead) {
             this.IsDead = true;
 
-            this.nuiMenu.closeAll(false);
+            this.nuiDispatch.closeEverything();
             await this.voipService.mutePlayer(true);
+
+            // Skip death process during games if needed
+            if (this.gamesProvider.areAnyGameRunning()) {
+                const shouldSkipDeath = await this.gamesProvider.handleOnDeath();
+                if (shouldSkipDeath) {
+                    return;
+                }
+            }
 
             // Skip death process if player is zombie
             if (this.playerZombieProvider.isZombie() || this.playerZombieProvider.isTransforming()) {
@@ -248,7 +295,19 @@ export class LSMCDeathProvider {
                 return;
             }
 
-            TriggerScreenblurFadeIn(5);
+            if (this.policeSwatProvider.isUsingShield()) {
+                await this.policeSwatProvider.disableShield();
+            }
+
+            if (this.playerService.getState()?.isInGameHub) {
+                TriggerEvent(ClientEvent.LASER_GAME_DEATH_IN_HUB);
+            }
+
+            if (this.playerService.getState()?.inCyberHeist) {
+                TriggerServerEvent(ServerEvent.GANG_CYBER_EXIT_HEIST);
+            }
+
+            this.blurService.add('dead', 5);
             StartScreenEffect('DeathFailOut', 0, true);
 
             const playerid = PlayerId();
@@ -303,7 +362,8 @@ export class LSMCDeathProvider {
                 killerveh: killVehData,
                 ejection: Date.now() - this.vehicleSeatbeltProvider.getLastEjectTime() < 10000,
                 hungerThristDeath: this.hungerThristDeath,
-                frozenDeath: this.playerSnowProvider.isFrozenDeath(),
+                frozenDeath: this.playerSnowProvider.isFrozenDeath() || this.playerHeatProvider.isHeatDeath(),
+                loginDuration: Date.now() - this.loginTime,
             };
             this.hungerThristDeath = false;
 
@@ -328,10 +388,10 @@ export class LSMCDeathProvider {
             const veh = GetVehiclePedIsIn(player, false);
             if (veh) {
                 const seat = this.getPedVehicleSeat(player);
-                NetworkResurrectLocalPlayer(pos[0], pos[1], pos[2], heading, true, false);
+                NetworkResurrectLocalPlayer(pos[0], pos[1], pos[2], heading, 1, false);
                 SetPedIntoVehicle(player, veh, seat);
             } else {
-                NetworkResurrectLocalPlayer(pos[0], pos[1], pos[2] + 0.5, heading, true, false);
+                NetworkResurrectLocalPlayer(pos[0], pos[1], pos[2] + 0.5, heading, 1, false);
             }
 
             this.animationService.stop();
@@ -339,6 +399,7 @@ export class LSMCDeathProvider {
             SetEntityInvincible(player, true);
             SetBlockingOfNonTemporaryEvents(player, true);
             SetEntityHealth(player, GetEntityMaxHealth(player));
+            SetPedRelationshipGroupHash(player, GetHashKey('PLAYER_DEAD'));
 
             this.playerService.updateState({
                 isInventoryBusy: false,
@@ -356,12 +417,14 @@ export class LSMCDeathProvider {
                     ? 'de ton décès'
                     : 'du coma';
 
-            this.inputService
-                .askInput({
-                    title: `Explique la raison ${status}, celle-ci sera lue par les médecins lorsqu'ils te prendront en charge :`,
-                    maxCharacters: 200,
-                })
-                .then(reason => TriggerServerEvent(ServerEvent.LSMC_SET_DEATH_REASON, reason));
+            if (!this.featureProvider.isFeatureEnabled(Feature.WhatIfSecondEpisode)) {
+                this.inputService
+                    .askInput({
+                        title: `Explique la raison ${status}, celle-ci sera lue par les médecins lorsqu'ils te prendront en charge :`,
+                        maxCharacters: 200,
+                    })
+                    .then(reason => TriggerServerEvent(ServerEvent.LSMC_SET_DEATH_REASON, reason));
+            }
 
             if (this.phoneService.isPhoneVisible()) {
                 this.phoneService.setPhoneFocus(true);
@@ -401,6 +464,11 @@ export class LSMCDeathProvider {
         EnableControlAction(0, 200, true);
     }
 
+    @OnEvent(ClientEvent.LSMC_SET_DEATH)
+    public async setDeath(isDead: boolean) {
+        this.IsDead = isDead;
+    }
+
     @OnEvent(ClientEvent.LSMC_REVIVE)
     public async revive(skipanim: boolean, uniteHU: boolean, uniteHUBed: number, rpDeath: boolean) {
         const player = PlayerPedId();
@@ -419,7 +487,7 @@ export class LSMCDeathProvider {
             if (IsEntityDead(player)) {
                 const pos = GetEntityCoords(player);
                 const heading = GetEntityHeading(player);
-                NetworkResurrectLocalPlayer(pos[0], pos[1], pos[2], heading, true, false);
+                NetworkResurrectLocalPlayer(pos[0], pos[1], pos[2], heading, 1, false);
             }
 
             if (!skipanim) {
@@ -427,18 +495,19 @@ export class LSMCDeathProvider {
             }
         }
 
+        this.blurService.remove('dead', 1000);
         if (rpDeath) {
             this.IsDead = true;
-            TriggerScreenblurFadeOut(1000);
         } else {
             this.notifier.notify('Vous êtes réanimé!');
-            await this.voipService.mutePlayer(false);
+            this.voipService.mutePlayer(false);
         }
 
         FreezeEntityPosition(PlayerPedId(), false);
         SetEntityHealth(player, 200);
         ClearPedBloodDamage(player);
         SetPlayerSprint(PlayerId(), true);
+        SetPedRelationshipGroupHash(player, GetHashKey('PLAYER'));
 
         this.playerWalkstyleProvider.updateWalkStyle('injury', null);
 
@@ -451,49 +520,63 @@ export class LSMCDeathProvider {
         const ped = PlayerPedId();
         const player = this.playerService.getPlayer();
 
-        this.monitor.publish('lsmx_uhu', {}, {});
+        if (!this.featureProvider.isFeatureEnabled(Feature.WhatIfSecondEpisode)) {
+            this.monitor.traceEvent('lsmx_uhu', {});
 
-        this.playerService.setTempClothes(PatientClothes[player.skin.Model.Hash]['Patient']);
+            this.playerService.setTempClothes(PatientClothes[player.skin.Model.Hash]['Patient']);
+        }
+
         this.weaponDrawingProvider.refreshDrawWeapons();
         FreezeEntityPosition(ped, true);
 
-        if (uniteHUBed == -1) {
-            ClearPedTasksImmediately(ped);
-            await emitRpc(RpcServerEvent.PLAYER_TELEPORT, FailoverLocationName);
-        } else {
-            await emitRpc(RpcServerEvent.PLAYER_TELEPORT, getBedName(uniteHUBed));
-
-            this.playerInOutService.add(
-                'UniteHU',
-                new BoxZone(BedLocations[uniteHUBed], 3, 3, { heading: 320 }),
-                isInside => {
-                    if (isInside === false) {
-                        TriggerServerEvent(ServerEvent.LSMC_FREE_BED);
-                        this.playerInOutService.remove('UniteHU');
-                    }
-                }
+        if (this.featureProvider.isFeatureEnabled(Feature.WhatIfSecondEpisode)) {
+            await emitRpc(
+                RpcServerEvent.PLAYER_TELEPORT,
+                'UHU_WHAT_IF_REPAWN_' +
+                    player.metadata.whatif_guild +
+                    '_' +
+                    getRandomInt(0, WhatIf2RespawnPoints[player.metadata.whatif_guild].length - 1)
             );
+        } else {
+            if (uniteHUBed == -1) {
+                ClearPedTasksImmediately(ped);
+                await emitRpc(RpcServerEvent.PLAYER_TELEPORT, FailoverLocationName);
+            } else {
+                await emitRpc(RpcServerEvent.PLAYER_TELEPORT, getBedName(uniteHUBed));
 
-            await wait(2000);
+                this.playerInOutService.add(
+                    'UniteHU',
+                    new BoxZone(BedLocations[uniteHUBed], 3, 3, { heading: 320 }),
+                    isInside => {
+                        if (isInside === false) {
+                            TriggerServerEvent(ServerEvent.LSMC_FREE_BED);
+                            this.playerInOutService.remove('UniteHU');
+                        }
+                    }
+                );
 
-            this.animationService.playAnimation(
-                {
-                    base: {
-                        dictionary: 'anim@gangops@morgue@table@',
-                        name: 'body_search',
-                        blendInSpeed: 8.0,
-                        blendOutSpeed: 8.0,
-                        options: {
-                            cancellable: true,
-                            repeat: true,
+                await wait(2000);
+
+                this.animationService.playAnimation(
+                    {
+                        base: {
+                            dictionary: 'anim@gangops@morgue@table@',
+                            name: 'body_search',
+                            blendInSpeed: 8.0,
+                            blendOutSpeed: 8.0,
+                            options: {
+                                cancellable: true,
+                                repeat: true,
+                            },
                         },
                     },
-                },
-                {
-                    clearTasksBefore: true,
-                }
-            );
+                    {
+                        clearTasksBefore: true,
+                    }
+                );
+            }
         }
+
         await wait(2000);
 
         FreezeEntityPosition(ped, false);
@@ -518,15 +601,6 @@ export class LSMCDeathProvider {
             false,
             bloodbag
         );
-        this.monitor.publish(
-            bloodbag ? 'job_lsmc_revive_bloodbag' : 'job_lsmc_revive_defibrillator',
-            {},
-            {
-                target_source: GetPlayerServerId(NetworkGetPlayerIndexFromPed(target)),
-                position: GetEntityCoords(target),
-            },
-            true
-        );
     }
 
     @OnEvent(ClientEvent.LSMC_REVIVE_DOC)
@@ -535,7 +609,7 @@ export class LSMCDeathProvider {
     }
 
     @OnEvent(ClientEvent.LSMC_CALL, false)
-    public call() {
+    public async call() {
         const playerPed = PlayerPedId();
         const coords = GetEntityCoords(playerPed);
         const [street, street2] = GetStreetNameAtCoord(coords[0], coords[1], coords[2]);
@@ -545,9 +619,9 @@ export class LSMCDeathProvider {
             ? `${GetStreetNameFromHashKey(street)}${street2 ? ` et ${GetStreetNameFromHashKey(street2)}` : ''}`
             : GetLabelText(zoneID);
 
-        TriggerServerEvent('phone:sendSocietyMessage', 'phone:sendSocietyMessage:' + uuidv4(), {
+        await this.phoneSocietyProvider.sendMessage({
             anonymous: true,
-            number: '555-LSMC',
+            number: this.featureProvider.isFeatureEnabled(Feature.WhatIfFirstEpisode) ? '555-SASP' : '555-LSMC',
             message: `Besoin d'aide vers ${name}`,
             position: true,
         });

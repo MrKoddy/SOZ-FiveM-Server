@@ -1,4 +1,5 @@
 import { Once } from '@public/core/decorators/event';
+import { Exportable } from '@public/core/decorators/exports';
 import { Provider } from '@public/core/decorators/provider';
 import { Rpc } from '@public/core/decorators/rpc';
 import { ClientEvent } from '@public/shared/event/client';
@@ -16,6 +17,11 @@ export class PlayerPositionProvider {
     @Once()
     public onStart() {
         this.registerZone(this.AIRPORT, [-1037.47, -2737.59, 20.17, 330.0]);
+    }
+
+    @Exportable('GetLastKnownPosition')
+    public getPlayerPosition(source: number): Vector3 | null {
+        return this.players[source] || null;
     }
 
     public updatePosition(source: number, coord: Vector3) {

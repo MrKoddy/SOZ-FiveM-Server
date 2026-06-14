@@ -2,7 +2,7 @@ import { Inject, Injectable } from '@core/decorators/injectable';
 import { ServerStateService } from '@public/server/server.state.service';
 import { ClothConfig } from '@public/shared/cloth';
 import { DrivingSchoolLicense } from '@public/shared/driving-school';
-import { Apartment, Property } from '@public/shared/housing/housing';
+import { ApartementTiers, Apartment, Property } from '@public/shared/housing/housing';
 import { JobType } from '@public/shared/job';
 import { SenatePartyMember } from '@public/shared/senate';
 
@@ -24,6 +24,8 @@ export class PlayerService {
     private prismaService: PrismaService;
 
     private names: Record<string, string> = {};
+    private namesByAccountId: Record<string, string> = {};
+    private bankAccountByCitizenId: Record<string, string> = {};
 
     public getPlayerByCitizenId(citizenId: string): PlayerData | null {
         const player = this.QBCore.getPlayerByCitizenId(citizenId);
@@ -37,6 +39,16 @@ export class PlayerService {
 
     public getPlayerByPhone(phoneNumber: string): PlayerData | null {
         const player = this.QBCore.getPlayerByPhone(phoneNumber);
+
+        if (player) {
+            return player.PlayerData;
+        }
+
+        return null;
+    }
+
+    public getPlayerByBankAccount(accountId: string): PlayerData | null {
+        const player = this.QBCore.getPlayerByBankAccount(accountId);
 
         if (player) {
             return player.PlayerData;
@@ -69,14 +81,14 @@ export class PlayerService {
         }
     }
 
-    public setPlayerApartmentTier(source: number, tier: number): void {
+    public setPlayerApartmentTier(source: number, apartmentTier: Partial<ApartementTiers>): void {
         const player = this.QBCore.getPlayer(source);
 
         if (!player) {
             return;
         }
 
-        player.Functions.SetApartmentTier(tier);
+        player.Functions.SetApartmentTier(apartmentTier);
     }
 
     public setPlayerApartmentHasParking(source: number, hasParkingPlace: boolean): void {
@@ -106,6 +118,9 @@ export class PlayerService {
                 price: apartment.price,
                 owner: apartment.owner,
                 tier: apartment.tier,
+                money_tier: apartment.money_tier,
+                park_tier: apartment.park_tier,
+                cloth_tier: apartment.cloth_tier,
             });
         }
     }
@@ -115,6 +130,14 @@ export class PlayerService {
 
         if (player) {
             player.Functions.SetPartyMember(partyMember);
+        }
+    }
+
+    public setPlayerGang(source: number, gangId: number, isboss: boolean): void {
+        const player = this.QBCore.getPlayer(source);
+
+        if (player) {
+            player.Functions.SetGang(gangId, isboss);
         }
     }
 
@@ -135,6 +158,14 @@ export class PlayerService {
             if (datas.strength) {
                 player.Functions.UpdateMaxWeight();
             }
+        }
+    }
+
+    public setPlayerValidated(source: number, validated: boolean) {
+        const player = this.QBCore.getPlayer(source);
+
+        if (player) {
+            player.Functions.SetValidated(validated);
         }
     }
 
@@ -296,7 +327,10 @@ export class PlayerService {
     }
 
     public async getNameFromCitizenId(citizenId: string) {
-        if (!this.names[citizenId]) {
+        const player = this.getPlayerByCitizenId(citizenId);
+        if (player) {
+            this.names[citizenId] = player.charinfo.firstname + ' ' + player.charinfo.lastname;
+        } else if (!this.names[citizenId]) {
             const dbInfo = await this.prismaService.player.findFirst({
                 where: {
                     citizenid: citizenId,
@@ -316,5 +350,105 @@ export class PlayerService {
         }
 
         return this.names[citizenId];
+    }
+
+    public async getNameFromBankAccount(accountId: string) {
+        if (!this.namesByAccountId[accountId]) {
+            const dbInfo = await this.prismaService.player.findFirst({
+                where: {
+                    charinfo: {
+                        contains: accountId,
+                    },
+                },
+                select: {
+                    charinfo: true,
+                },
+            });
+
+            if (!dbInfo) {
+                return 'Inconnu';
+            }
+
+            const charInfo = JSON.parse(dbInfo.charinfo) as PlayerCharInfo;
+
+            this.namesByAccountId[accountId] = charInfo.firstname + ' ' + charInfo.lastname;
+        }
+
+        return this.namesByAccountId[accountId];
+    }
+
+    public async getBankAccountFromCitizenId(citizenId: string) {
+        if (!this.bankAccountByCitizenId[citizenId]) {
+            const dbInfo = await this.prismaService.player.findFirst({
+                where: {
+                    citizenid: citizenId,
+                },
+                select: {
+                    charinfo: true,
+                },
+            });
+
+            if (!dbInfo) {
+                return null;
+            }
+
+            const charInfo = JSON.parse(dbInfo.charinfo) as PlayerCharInfo;
+
+            this.bankAccountByCitizenId[citizenId] = charInfo.account;
+        }
+
+        return this.bankAccountByCitizenId[citizenId];
+    }
+
+    public async findCitizenIdFromNames(firstname: string, lastname: string) {
+        const playerInfo = await this.prismaService.$queryRaw<
+            any[]
+        >`SELECT citizenId FROM player WHERE JSON_EXTRACT(charinfo, "$.firstname") = ${firstname} AND JSON_EXTRACT(charinfo, "$.lastname") = ${lastname} AND is_default=1`;
+
+        if (playerInfo.length == 0) {
+            return null;
+        }
+
+        return playerInfo[0].citizenId;
+    }
+
+    public async findCitizenIdFromPhone(phone: string) {
+        const playerInfo = await this.prismaService.$queryRaw<
+            any[]
+        >`SELECT citizenId FROM player WHERE JSON_EXTRACT(charinfo, "$.phone") = ${phone} AND is_default=1`;
+
+        if (playerInfo.length == 0) {
+            return null;
+        }
+
+        return playerInfo[0].citizenId;
+    }
+
+    public async findCitizenIdFromPlate(plate: string) {
+        const playerInfo = await this.prismaService.playerVehicle.findMany({
+            where: {
+                plate,
+            },
+        });
+
+        if (playerInfo.length == 0) {
+            return null;
+        }
+
+        return playerInfo[0].citizenid;
+    }
+
+    public async findCitizenIdFromAddress(address: string) {
+        const playerInfo = await this.prismaService.housing_apartment.findMany({
+            where: {
+                label: address,
+            },
+        });
+
+        if (playerInfo.length == 0) {
+            return null;
+        }
+
+        return playerInfo[0].tenant;
     }
 }

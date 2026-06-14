@@ -1,4 +1,5 @@
 import { OnEvent } from '@public/core/decorators/event';
+import { InventoryFactory } from '@public/server/inventory/inventory.factory';
 import { ServerEvent } from '@public/shared/event';
 import { Job, JobPermission, JobType } from '@public/shared/job';
 
@@ -6,16 +7,17 @@ import { Exportable } from '../../core/decorators/exports';
 import { Inject } from '../../core/decorators/injectable';
 import { Provider } from '../../core/decorators/provider';
 import { Rpc } from '../../core/decorators/rpc';
+import { Feature } from '../../shared/features';
 import { toVector3Object, Vector3 } from '../../shared/polyzone/vector';
 import { RpcServerEvent } from '../../shared/rpc';
-import { InventoryManager } from '../inventory/inventory.manager';
+import { FeatureProvider } from '../feature/feature.provider';
 import { JobService } from '../job.service';
 import { Monitor } from '../monitor/monitor';
 
 @Provider()
 export class JobProvider {
-    @Inject(InventoryManager)
-    private inventoryManager: InventoryManager;
+    @Inject(InventoryFactory)
+    private inventoryFactory: InventoryFactory;
 
     @Inject(Monitor)
     private monitor: Monitor;
@@ -23,22 +25,30 @@ export class JobProvider {
     @Inject(JobService)
     private jobService: JobService;
 
+    @Inject(FeatureProvider)
+    private featureProvider: FeatureProvider;
+
     @Rpc(RpcServerEvent.JOBS_USE_WORK_CLOTHES)
     public async useWorkClothes(source: number, storageId: string) {
-        return this.inventoryManager.removeItemFromInventory(storageId, 'work_clothes', 1);
+        if (this.featureProvider.isFeatureEnabled(Feature.WhatIfFirstEpisode)) {
+            return true;
+        }
+
+        const inventory = await this.inventoryFactory.get(storageId);
+
+        if (!inventory) {
+            return;
+        }
+
+        return inventory.remove('work_clothes', 1);
     }
 
     @OnEvent(ServerEvent.QBCORE_SET_DUTY, false)
     public onToggleDuty(jobid: JobType, onDuty: boolean, source: number) {
-        this.monitor.publish(
-            onDuty ? 'job_onduty' : 'job_offduty',
-            {
-                player_source: source,
-            },
-            {
-                position: toVector3Object(GetEntityCoords(GetPlayerPed(source)) as Vector3),
-            }
-        );
+        this.monitor.traceEvent(onDuty ? 'job_onduty' : 'job_offduty', {
+            player_source: source,
+            position: toVector3Object(GetEntityCoords(GetPlayerPed(source)) as Vector3),
+        });
     }
 
     @Exportable('HasJobPermission')

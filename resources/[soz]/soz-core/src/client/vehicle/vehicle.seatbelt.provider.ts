@@ -1,11 +1,13 @@
+import { Command } from '@core/decorators/command';
+import { OnEvent } from '@core/decorators/event';
+import { Inject } from '@core/decorators/injectable';
+import { Provider } from '@core/decorators/provider';
+import { Tick } from '@core/decorators/tick';
+import { wait } from '@core/utils';
+import { POLICE_MINESWEEPER_ROBOT_CAR_MODEL } from '@private/shared/police';
+import { PhoneService } from '@public/client/phone/phone.service';
 import { Control } from '@public/shared/input';
 
-import { Command } from '../../core/decorators/command';
-import { OnEvent } from '../../core/decorators/event';
-import { Inject } from '../../core/decorators/injectable';
-import { Provider } from '../../core/decorators/provider';
-import { Tick } from '../../core/decorators/tick';
-import { wait } from '../../core/utils';
 import { ClientEvent, ServerEvent } from '../../shared/event';
 import { toVectorNorm, Vector3 } from '../../shared/polyzone/vector';
 import { VehicleClass, VehicleSeat } from '../../shared/vehicle/vehicle';
@@ -25,6 +27,9 @@ export class VehicleSeatbeltProvider {
 
     @Inject(VehicleService)
     private vehicleService: VehicleService;
+
+    @Inject(PhoneService)
+    private phoneService: PhoneService;
 
     @Inject(Notifier)
     private notifier: Notifier;
@@ -90,7 +95,7 @@ export class VehicleSeatbeltProvider {
             return;
         }
 
-        if (exports['soz-phone'].isPhoneVisible()) {
+        if (this.phoneService.isPhoneVisible()) {
             return;
         }
 
@@ -100,6 +105,8 @@ export class VehicleSeatbeltProvider {
         if (!vehicle) {
             return;
         }
+
+        if (GetEntityModel(vehicle) === GetHashKey(POLICE_MINESWEEPER_ROBOT_CAR_MODEL)) return;
 
         const vehicleEntering = GetVehiclePedIsEntering(ped);
 
@@ -113,7 +120,7 @@ export class VehicleSeatbeltProvider {
             return;
         }
 
-        if (GetEntitySpeed(vehicle) * 3.6 > 75) {
+        if (GetEntitySpeed(vehicle) * 3.6 > 75 && !this.isSeatbeltOn) {
             this.notifier.notify('Vous allez trop vite pour faire ça.', 'error');
 
             return;
@@ -288,6 +295,7 @@ export class VehicleSeatbeltProvider {
     private async ejectPlayer(ped: number, vehicle: number, velocity: Vector3) {
         const position = GetOffsetFromEntityInWorldCoords(vehicle, 1.0, 0.0, 1.0);
         SetEntityCoords(ped, position[0], position[1], position[2], false, false, false, false);
+        SmashVehicleWindow(vehicle, 6);
 
         await wait(0);
 
@@ -295,6 +303,10 @@ export class VehicleSeatbeltProvider {
         SetEntityVelocity(ped, velocity[0], velocity[1], velocity[2]);
 
         this.isSeatbeltOn = false;
+    }
+
+    public forceSeatBell() {
+        this.isSeatbeltOn = true;
     }
 
     public getLastEjectTime(): number {

@@ -2,12 +2,13 @@ import { OnEvent } from '@public/core/decorators/event';
 import { Inject } from '@public/core/decorators/injectable';
 import { Provider } from '@public/core/decorators/provider';
 import { Rpc } from '@public/core/decorators/rpc';
-import { ClientEvent, ServerEvent } from '@public/shared/event';
+import { ServerEvent } from '@public/shared/event';
 import { Race, RaceRanking, RaceRankingInfo } from '@public/shared/race';
 import { RpcServerEvent } from '@public/shared/rpc';
 
 import { PrismaService } from '../database/prisma.service';
 import { Notifier } from '../notifier';
+import { ObjectAttachedProvider } from '../object/object.attached.provider';
 import { PlayerService } from '../player/player.service';
 import { RaceRepository } from '../repository/race.repository';
 
@@ -25,6 +26,9 @@ export class RaceProvider {
     @Inject(Notifier)
     private notifier: Notifier;
 
+    @Inject(ObjectAttachedProvider)
+    private objectAttachedProvider: ObjectAttachedProvider;
+
     @OnEvent(ServerEvent.RACE_ADD)
     public async onRaceAdd(source: number, race: Race) {
         const dbRace = await this.prismaService.race.create({
@@ -41,19 +45,32 @@ export class RaceProvider {
             },
         });
 
-        const races = await this.raceRepository.get();
         race.id = dbRace.id;
-        races[dbRace.id] = race;
+        this.raceRepository.set(race.id, race);
 
         this.raceRepository.setupTp(race);
 
         this.notifier.notify(source, `Course ~g~${race.name}~s~ créée`, 'success');
-
-        TriggerClientEvent(ClientEvent.RACE_ADD_UPDATE, -1, race);
     }
 
     @OnEvent(ServerEvent.RACE_UPDATE)
-    public async onRaceUpdate(source: number, race: Race) {
+    public async onRaceUpdate(source: number, id: number, data: Partial<Race>) {
+        delete data.display;
+        delete data.npc;
+
+        let race = await this.raceRepository.find(id);
+        if (!race) {
+            this.notifier.notify(source, `Course ~g~${id}~s~ inconnue`, 'error');
+            return;
+        }
+
+        race = {
+            ...race,
+            ...data,
+        };
+
+        this.raceRepository.set(id, race);
+
         await this.prismaService.race.update({
             where: {
                 id: race.id,
@@ -71,17 +88,9 @@ export class RaceProvider {
             },
         });
 
-        race.display = false;
-        race.npc = null;
-
-        const races = await this.raceRepository.get();
-        races[race.id] = race;
-
         this.raceRepository.setupTp(race);
 
         this.notifier.notify(source, `Course ~g~${race.name}~s~ mise à jour`, 'success');
-
-        TriggerClientEvent(ClientEvent.RACE_ADD_UPDATE, -1, race);
     }
 
     @OnEvent(ServerEvent.RACE_DELETE)
@@ -92,12 +101,9 @@ export class RaceProvider {
             },
         });
 
-        const races = await this.raceRepository.get();
-        delete races[raceId];
+        this.raceRepository.delete(raceId);
 
         this.notifier.notify(source, `Course ~g~${dbRace.name}~s~ supprimmée`, 'success');
-
-        TriggerClientEvent(ClientEvent.RACE_DELETE, -1, raceId);
     }
 
     @OnEvent(ServerEvent.RACE_FINISH)
@@ -160,6 +166,7 @@ export class RaceProvider {
         SetRoutingBucketEntityLockdownMode(source, 'strict');
         SetPlayerRoutingBucket(String(source), source);
         SetRoutingBucketPopulationEnabled(source, false);
+        this.objectAttachedProvider.onDropped(source);
         return true;
     }
 

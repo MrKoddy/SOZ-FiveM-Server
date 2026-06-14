@@ -1,3 +1,5 @@
+import { ExtraWeaponDrawPosition } from '@public/shared/weapons/weapon';
+
 import { Vector2, Vector3, Vector4 } from './polyzone/vector';
 
 type BaseAnimationConfigItem = {
@@ -98,14 +100,17 @@ export type Vfx = {
     duration?: number[];
     delay?: number;
     net?: boolean;
+    rgb?: Vector3;
+    id?: number;
 };
 
 export type AnimationProps = {
-    model: string;
+    model: string | string[];
     bone: number;
     position: Vector3;
     rotation: Vector3;
     fx?: Vfx;
+    extraWeaponDraw?: ExtraWeaponDrawPosition[];
 };
 
 export type AnimationInfo = {
@@ -119,6 +124,7 @@ export type AnimationInfo = {
     lockY?: boolean;
     lockZ?: boolean;
     options?: AnimationOptions;
+    coords?: Vector4;
 };
 
 export type PlayOptions = {
@@ -127,6 +133,7 @@ export type PlayOptions = {
     clearTasksBefore: boolean;
     clearTasksAfter: boolean;
     cancellable: boolean;
+    useFreeCam?: boolean;
 };
 
 export type AnimationOptions = {
@@ -136,6 +143,50 @@ export type AnimationOptions = {
     onlyUpperBody?: boolean;
     enablePlayerControl?: boolean;
     cancellable?: boolean;
+    turnOffCollision?: boolean;
+    ignoreGravity?: boolean;
+    hideWeapon?: boolean;
+};
+
+type ObjectEffect = {
+    name: string;
+    fx: Vfx;
+};
+
+export const ObjectEffects: Record<string, ObjectEffect> = {
+    red_smoke: {
+        name: 'Fumée rouge',
+        fx: {
+            dictionary: 'scr_oddjobtraffickingground',
+            name: 'scr_drug_traffic_flare',
+            scale: 1.0,
+            position: [0, 0, 0],
+            rotation: [0, 0, 0],
+            rgb: [1.0, 0.0, 0.0],
+        },
+    },
+    blue_smoke: {
+        name: 'Fumée bleue',
+        fx: {
+            dictionary: 'scr_oddjobtraffickingground',
+            name: 'scr_drug_traffic_flare',
+            scale: 1.0,
+            position: [0, 0, 0],
+            rotation: [0, 0, 0],
+            rgb: [0.0, 0.0, 1.0],
+        },
+    },
+    green_smoke: {
+        name: 'Fumée verte',
+        fx: {
+            dictionary: 'scr_oddjobtraffickingground',
+            name: 'scr_drug_traffic_flare',
+            scale: 1.0,
+            position: [0, 0, 0],
+            rotation: [0, 0, 0],
+            rgb: [0.0, 1.0, 0.0],
+        },
+    },
 };
 
 export const animationFlagsToOptions = (flags: number): AnimationOptions => {
@@ -174,6 +225,18 @@ export const animationOptionsToFlags = (options: AnimationOptions): number => {
 
     if (options.cancellable) {
         flags |= 64;
+    }
+
+    if (options.turnOffCollision) {
+        flags |= 512;
+    }
+
+    if (options.ignoreGravity) {
+        flags |= 2048;
+    }
+
+    if (options.hideWeapon) {
+        flags |= 1048576;
     }
 
     return flags;

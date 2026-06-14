@@ -1,9 +1,10 @@
-import { PlayerUpdate } from '@public/core/decorators/player';
+import { Command } from '@core/decorators/command';
+import { Once, OnceStep, OnEvent, OnNuiEvent } from '@core/decorators/event';
+import { Inject } from '@core/decorators/injectable';
+import { Provider } from '@core/decorators/provider';
+import { MineSweeperRobotProvider } from '@private/client/vehicle/minesweeper.provider';
+import { PlayerInventoryUpdate } from '@public/core/decorators/player';
 
-import { Command } from '../../core/decorators/command';
-import { OnEvent, OnNuiEvent } from '../../core/decorators/event';
-import { Inject } from '../../core/decorators/injectable';
-import { Provider } from '../../core/decorators/provider';
 import { ClientEvent, NuiEvent } from '../../shared/event';
 import { Radio, RadioChannel, RadioChannelType, RadioType } from '../../shared/voip';
 import { AnimationService } from '../animation/animation.service';
@@ -34,12 +35,23 @@ export class VoipRadioProvider {
     @Inject(InventoryManager)
     private readonly inventoryManager: InventoryManager;
 
+    @Inject(MineSweeperRobotProvider)
+    private readonly mineSweeperRobotProvider: MineSweeperRobotProvider;
+
     @Inject('Store')
     private store: Store;
 
     private radioInUse = false;
 
-    @PlayerUpdate()
+    @Once(OnceStep.PlayerLoaded)
+    public async onPlayerLoaded() {
+        const { radioShortRange } = this.playerService.getState();
+        if (!radioShortRange) return;
+
+        this.store.dispatch.radioShortRange.set(radioShortRange);
+    }
+
+    @PlayerInventoryUpdate()
     async onPlayerUpdate(): Promise<void> {
         const hasRadio = this.inventoryManager.hasEnoughItem('radio', 1, true);
 
@@ -49,6 +61,7 @@ export class VoipRadioProvider {
 
         if (!hasRadio) {
             this.store.dispatch.radioShortRange.enable(false);
+            this.playerService.updateState({ radioShortRange: this.store.getState().radioShortRange });
         }
     }
 
@@ -124,6 +137,7 @@ export class VoipRadioProvider {
     @OnNuiEvent(NuiEvent.VoipEnableRadio)
     public async onEnableRadio({ enable }: { enable: boolean }) {
         this.store.dispatch.radioShortRange.enable(enable);
+        this.playerService.updateState({ radioShortRange: this.store.getState().radioShortRange });
     }
 
     @OnNuiEvent(NuiEvent.VoipCloseRadio)
@@ -135,8 +149,10 @@ export class VoipRadioProvider {
     public async onUpdateRadioChannel({ channel, type }: { channel: Partial<RadioChannel>; type: RadioChannelType }) {
         if (type === RadioChannelType.Primary) {
             this.store.dispatch.radioShortRange.updatePrimary(channel);
+            this.playerService.updateState({ radioShortRange: this.store.getState().radioShortRange });
         } else {
             this.store.dispatch.radioShortRange.updateSecondary(channel);
+            this.playerService.updateState({ radioShortRange: this.store.getState().radioShortRange });
         }
     }
 
@@ -174,7 +190,12 @@ export class VoipRadioProvider {
             this.closeRadioInterface();
         } else {
             const playerState = this.playerService.getState();
-            if (!IsNuiFocused() && !playerState.carryBox && !playerState.isInventoryBusy) {
+            if (
+                !IsNuiFocused() &&
+                !playerState.carryBox &&
+                !playerState.isInventoryBusy &&
+                !this.mineSweeperRobotProvider.isUsingRobot()
+            ) {
                 this.openRadioInterface();
             }
         }

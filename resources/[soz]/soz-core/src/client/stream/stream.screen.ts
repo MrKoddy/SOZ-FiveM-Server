@@ -1,24 +1,7 @@
 import { BLACK_SCREEN_URL } from '../../shared/global';
 import { BoxZone } from '../../shared/polyzone/box.zone';
 import { Vector3 } from '../../shared/polyzone/vector';
-
-const createNamedRenderTargetForModel = (name, model): number => {
-    let handle = 0;
-
-    if (!IsNamedRendertargetRegistered(name)) {
-        RegisterNamedRendertarget(name, false);
-    }
-
-    if (!IsNamedRendertargetLinked(model)) {
-        LinkNamedRendertarget(model);
-    }
-
-    if (IsNamedRendertargetRegistered(name)) {
-        handle = GetNamedRendertargetRenderId(name);
-    }
-
-    return handle;
-};
+import { createNamedRenderTargetForModel, releaseNamedRenderTarget } from '../render.target';
 
 export class StreamScreen {
     private readonly duiObject: number;
@@ -37,13 +20,16 @@ export class StreamScreen {
 
     private zone: BoxZone;
 
+    private volume: number;
+
     public constructor(
         zone: BoxZone,
         name: string,
         model: string,
         renderTarget = 'cinscreen',
         width = 4096,
-        height = 2048
+        height = 2048,
+        volume = 0.5
     ) {
         this.textureDictionary = name + '_dict';
         this.textureName = 'video';
@@ -51,6 +37,7 @@ export class StreamScreen {
         this.renderTarget = renderTarget;
         this.model = model;
         this.handle = null;
+        this.volume = volume;
 
         this.duiObject = CreateDui(this.playingUrl, width, height);
 
@@ -65,7 +52,7 @@ export class StreamScreen {
         this.handle = createNamedRenderTargetForModel(this.renderTarget, GetHashKey(this.model));
     }
 
-    public update(position: Vector3, url: string) {
+    public update(position: Vector3, url: string, volume: number) {
         const inside = this.zone.isPointInside(position);
 
         if (!inside) {
@@ -76,9 +63,8 @@ export class StreamScreen {
 
             if (this.playingUrl !== BLACK_SCREEN_URL) {
                 this.playingUrl = BLACK_SCREEN_URL;
+                SetDuiUrl(this.duiObject, this.playingUrl);
             }
-
-            SetDuiUrl(this.duiObject, this.playingUrl);
 
             return;
         }
@@ -88,6 +74,13 @@ export class StreamScreen {
         }
 
         if (this.playingUrl === url) {
+            SendDuiMessage(
+                this.duiObject,
+                JSON.stringify({
+                    volume: volume,
+                })
+            );
+
             return;
         }
 
@@ -112,6 +105,6 @@ export class StreamScreen {
         this.handle = null;
 
         DestroyDui(this.duiObject);
-        ReleaseNamedRendertarget(this.renderTarget);
+        releaseNamedRenderTarget(this.renderTarget);
     }
 }

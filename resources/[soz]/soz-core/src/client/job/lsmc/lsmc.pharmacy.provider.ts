@@ -1,15 +1,16 @@
 import { InventoryManager } from '@public/client/inventory/inventory.manager';
 import { ItemService } from '@public/client/item/item.service';
 import { PlayerService } from '@public/client/player/player.service';
-import { Feature, isFeatureEnabled } from '@public/shared/features';
+import { Feature } from '@public/shared/features';
 import { PHARMACY_PRICES } from '@public/shared/job/lsmc';
 import { toVector4Object } from '@public/shared/polyzone/vector';
+import { TaxType } from '@public/shared/tax';
 
 import { Once, OnceStep } from '../../../core/decorators/event';
 import { Inject } from '../../../core/decorators/injectable';
 import { Provider } from '../../../core/decorators/provider';
-import { TaxType } from '../../../shared/bank';
 import { ServerEvent } from '../../../shared/event';
+import { FeatureProvider } from '../../feature/feature.provider';
 import { TargetFactory } from '../../target/target.factory';
 
 @Provider()
@@ -26,18 +27,27 @@ export class LSMCPharmacyProvider {
     @Inject(InventoryManager)
     private inventoryManager: InventoryManager;
 
+    @Inject(FeatureProvider)
+    private featureProvider: FeatureProvider;
+
     @Once(OnceStep.PlayerLoaded)
     public setupPharmacy() {
         const products = [
-            { name: 'tissue', price: PHARMACY_PRICES.tissue, amount: 2000 },
-            { name: 'antibiotic', price: PHARMACY_PRICES.antibiotic, amount: 2000 },
-            { name: 'pommade', price: PHARMACY_PRICES.pommade, amount: 2000 },
-            { name: 'painkiller', price: PHARMACY_PRICES.painkiller, amount: 2000 },
-            { name: 'antiacide', price: PHARMACY_PRICES.antiacide, amount: 2000 },
-            { name: 'health_book', price: PHARMACY_PRICES.health_book, amount: 2000 },
+            { name: 'tissue', price: PHARMACY_PRICES.tissue },
+            { name: 'antibiotic', price: PHARMACY_PRICES.antibiotic },
+            { name: 'pommade', price: PHARMACY_PRICES.pommade },
+            { name: 'painkiller', price: PHARMACY_PRICES.painkiller },
+            { name: 'antiacide', price: PHARMACY_PRICES.antiacide },
+            { name: 'health_book', price: PHARMACY_PRICES.health_book },
         ];
-        if (isFeatureEnabled(Feature.Halloween)) {
-            products.push({ name: 'horrific_lollipop', price: 15, amount: 2000 });
+
+        if (this.featureProvider.isFeatureEnabled(Feature.Halloween)) {
+            products.push({ name: 'horrific_lollipop', price: 15 });
+        }
+
+        if (this.featureProvider.isFeatureEnabled(Feature.WhatIfFirstEpisode)) {
+            products.push({ name: 'firstaid', price: 50 });
+            products.push({ name: 'defibrillator', price: 50 });
         }
 
         const getLsmcShopProduct = products => {
@@ -45,6 +55,7 @@ export class LSMCPharmacyProvider {
                 ...this.itemService.getItem(product.name),
                 ...product,
                 slot: id + 1,
+                amount: 0,
             }));
 
             return hydratedProducts;
@@ -65,25 +76,28 @@ export class LSMCPharmacyProvider {
                 options: [
                     {
                         label: 'Liste des médicaments',
-                        icon: 'c:/ems/painkiller.png',
+                        icon: 'ems/painkiller',
+                        category: 'citizen',
                         action: () => {
                             this.inventoryManager.openShopInventory(
                                 getLsmcShopProduct(products),
-                                'menu_shop_pharmacy',
+                                'Pharmacie',
                                 TaxType.SERVICE
                             );
                         },
                     },
                     {
                         label: 'Soins médicaux',
-                        icon: 'c:/ems/heal.png',
+                        icon: 'ems/heal',
+                        category: 'citizen',
                         action: () => {
                             TriggerServerEvent(ServerEvent.LSMC_NPC_HEAL);
                         },
                     },
                     {
                         label: "Lever de l'ITT",
-                        icon: 'c:ems/Rehabiliter.png',
+                        icon: 'ems/Rehabiliter',
+                        category: 'citizen',
                         canInteract: () => {
                             const player = this.playerService.getPlayer();
                             return player.metadata.itt && Date.now() > player.metadata.itt_end;

@@ -27,20 +27,15 @@ export class BennysEstimateProvider {
         this.targetFactory.createForAllVehicle([
             {
                 label: 'Estimer',
-                icon: 'c:/mechanic/estimate.png',
+                icon: 'mechanic/estimate',
                 job: JobType.Bennys,
-                color: JobType.Bennys,
+                category: 'society',
                 canInteract: () => {
-                    return (
-                        this.playerService.isOnDuty() &&
-                        this.jobService.hasPermission(JobType.Bennys, JobPermission.BennysEstimate)
-                    );
+                    return this.jobService.hasPermission(JobType.Bennys, JobPermission.BennysEstimate);
                 },
                 action: async vehicle => {
                     const networkId = NetworkGetNetworkIdFromEntity(vehicle);
-                    const configuration = this.vehicleModificationService.getVehicleConfiguration(vehicle);
-
-                    TriggerServerEvent(ServerEvent.BENNYS_ESTIMATE_VEHICLE, networkId, configuration);
+                    TriggerServerEvent(ServerEvent.BENNYS_ESTIMATE_VEHICLE, networkId);
                 },
             },
         ]);

@@ -1,7 +1,7 @@
 import { WardrobeConfig } from '../cloth';
 import { CraftCategory } from '../craft/craft';
 import { Feature } from '../features';
-import { Field } from '../field';
+import { ItemField } from '../field';
 import { JobType } from '../job';
 import { BoxZone, NamedZone } from '../polyzone/box.zone';
 
@@ -18,7 +18,6 @@ export type DmcConverterState = {
 };
 
 export type DmcJobMenuData = {
-    onDuty: boolean;
     blipState: {
         'job:dmc:iron_mine': boolean;
         'job:dmc:aluminium_mine': boolean;
@@ -162,7 +161,7 @@ export const DMC_HALLOWEEN_FIELDS_ZONES: Record<string, BoxZone[]> = {
 
 // 20 minutes to harvest full field
 // 1 hour to refill full field
-export const DMC_FIELDS: Record<string, Field> = {
+export const DMC_FIELDS: Record<string, ItemField> = {
     ['dmc_iron_field']: {
         identifier: 'dmc_iron_field',
         owner: JobType.DMC,
@@ -173,14 +172,14 @@ export const DMC_FIELDS: Record<string, Field> = {
             },
             {
                 name: 'raw_coal',
-                amount: 6,
+                amount: 8,
             },
         ],
-        capacity: 240,
-        maxCapacity: 240,
+        capacity: 2400,
+        maxCapacity: 2400,
         refill: {
             delay: 5 * 60 * 1000,
-            amount: 20,
+            amount: 200,
         },
         harvest: {
             delay: 0,
@@ -196,11 +195,11 @@ export const DMC_FIELDS: Record<string, Field> = {
                 amount: 2,
             },
         ],
-        capacity: 240,
-        maxCapacity: 240,
+        capacity: 2400,
+        maxCapacity: 2400,
         refill: {
             delay: 5 * 60 * 1000,
-            amount: 20,
+            amount: 200,
         },
         harvest: {
             delay: 0,
@@ -216,11 +215,11 @@ export const DMC_FIELDS: Record<string, Field> = {
                 amount: 2,
             },
         ],
-        capacity: 240,
-        maxCapacity: 240,
+        capacity: 2400,
+        maxCapacity: 2400,
         refill: {
             delay: 5 * 60 * 1000,
-            amount: 20,
+            amount: 200,
         },
         harvest: {
             delay: 0,
@@ -492,24 +491,24 @@ export const DmcCraftsLists: Record<string, CraftCategory> = {
         recipes: {
             handcuffs: {
                 inputs: {
-                    aluminium_ingot: { count: 2 },
+                    aluminium_ingot: { count: 8 },
                     utilitary_certificate: { count: 1 },
                 },
-                amount: 5,
+                amount: 20,
             },
             handcuffs_key: {
                 inputs: {
-                    steel_ingot: { count: 1 },
+                    steel_ingot: { count: 4 },
                     utilitary_certificate: { count: 1 },
                 },
-                amount: 5,
+                amount: 20,
             },
             spike: {
                 inputs: {
-                    iron_ingot: { count: 5 },
+                    iron_ingot: { count: 20 },
                     utilitary_certificate: { count: 1 },
                 },
-                amount: 5,
+                amount: 20,
             },
             speed_speed_sign: {
                 inputs: {
@@ -520,14 +519,22 @@ export const DmcCraftsLists: Record<string, CraftCategory> = {
             },
             cone: {
                 inputs: {
+                    aluminium_ingot: { count: 20 },
+                    utilitary_certificate: { count: 1 },
+                },
+                amount: 20,
+            },
+            police_pliers: {
+                inputs: {
                     aluminium_ingot: { count: 5 },
                     utilitary_certificate: { count: 1 },
                 },
                 amount: 5,
             },
-            police_pliers: {
+            armor_plate: {
                 inputs: {
-                    aluminium_ingot: { count: 5 },
+                    steel_ingot: { count: 5 },
+                    aluminium_ingot: { count: 2 },
                     utilitary_certificate: { count: 1 },
                 },
                 amount: 5,
@@ -568,6 +575,30 @@ export const DmcCraftsLists: Record<string, CraftCategory> = {
                 },
                 amount: 1,
             },
+            halloween_crucifix: {
+                inputs: {
+                    halloween_uranium_ingot: { count: 1 },
+                    iron_ingot: { count: 1 },
+                    steel_ingot: { count: 1 },
+                    aluminium_ingot: { count: 1 },
+                    halloween_pure_blood: { count: 1 },
+                },
+                amount: 1,
+            },
+            halloween_smartwatch_nocturnal_vein: {
+                inputs: {
+                    halloween_uranium_ingot: { count: 10 },
+                    halloween_pure_blood: { count: 1 },
+                },
+                amount: 1,
+            },
+            halloween_blood_cup_66: {
+                inputs: {
+                    halloween_uranium_ingot: { count: 10 },
+                    halloween_pure_blood: { count: 100 },
+                },
+                amount: 1,
+            },
         },
     },
 };
@@ -582,6 +613,7 @@ export const DmcCloakroom: WardrobeConfig = {
                 '5': { Drawable: 82, Texture: 0, Palette: 0 },
                 '6': { Drawable: 39, Texture: 1, Palette: 0 },
                 '8': { Drawable: 15, Texture: 0, Palette: 0 },
+                '10': { Drawable: 0, Texture: 0, Palette: 0 },
                 '11': { Drawable: 186, Texture: 0, Palette: 0 },
             },
             Props: {
@@ -595,6 +627,7 @@ export const DmcCloakroom: WardrobeConfig = {
                 '5': { Drawable: 82, Texture: 0, Palette: 0 },
                 '6': { Drawable: 71, Texture: 3, Palette: 0 },
                 '8': { Drawable: 15, Texture: 0, Palette: 0 },
+                '10': { Drawable: 0, Texture: 0, Palette: 0 },
                 '11': { Drawable: 251, Texture: 3, Palette: 0 },
             },
             Props: {
@@ -609,6 +642,7 @@ export const DmcCloakroom: WardrobeConfig = {
                 '5': { Drawable: 82, Texture: 16, Palette: 0 },
                 '6': { Drawable: 71, Texture: 22, Palette: 0 },
                 '8': { Drawable: 15, Texture: 0, Palette: 0 },
+                '10': { Drawable: 0, Texture: 0, Palette: 0 },
                 '11': { Drawable: 248, Texture: 18, Palette: 0 },
             },
             Props: {
@@ -622,7 +656,22 @@ export const DmcCloakroom: WardrobeConfig = {
                 '4': { Drawable: 20, Texture: 2, Palette: 0 },
                 '6': { Drawable: 51, Texture: 0, Palette: 0 },
                 '8': { Drawable: 15, Texture: 0, Palette: 0 },
+                '10': { Drawable: 0, Texture: 0, Palette: 0 },
                 '11': { Drawable: 322, Texture: 0, Palette: 0 },
+            },
+            Props: {
+                '0': { Drawable: 145, Texture: 0 },
+            },
+        },
+        ["Tenue d'été"]: {
+            Components: {
+                '3': { Drawable: 0, Texture: 0, Palette: 0 },
+                '4': { Drawable: 125, Texture: 4, Palette: 0 },
+                '5': { Drawable: 82, Texture: 0, Palette: 0 },
+                '6': { Drawable: 2, Texture: 0, Palette: 0 },
+                '8': { Drawable: 15, Texture: 0, Palette: 0 },
+                '10': { Drawable: 0, Texture: 0, Palette: 0 },
+                '11': { Drawable: 0, Texture: 2, Palette: 0 },
             },
             Props: {
                 '0': { Drawable: 145, Texture: 0 },
@@ -638,6 +687,7 @@ export const DmcCloakroom: WardrobeConfig = {
                 '5': { Drawable: 82, Texture: 0, Palette: 0 },
                 '6': { Drawable: 25, Texture: 0, Palette: 0 },
                 '8': { Drawable: 15, Texture: 0, Palette: 0 },
+                '10': { Drawable: 0, Texture: 0, Palette: 0 },
                 '11': { Drawable: 188, Texture: 0, Palette: 0 },
             },
             Props: {
@@ -651,6 +701,7 @@ export const DmcCloakroom: WardrobeConfig = {
                 '5': { Drawable: 82, Texture: 0, Palette: 0 },
                 '6': { Drawable: 74, Texture: 3, Palette: 0 },
                 '8': { Drawable: 15, Texture: 0, Palette: 0 },
+                '10': { Drawable: 0, Texture: 0, Palette: 0 },
                 '11': { Drawable: 259, Texture: 3, Palette: 0 },
             },
             Props: {
@@ -665,6 +716,7 @@ export const DmcCloakroom: WardrobeConfig = {
                 '5': { Drawable: 82, Texture: 16, Palette: 0 },
                 '6': { Drawable: 74, Texture: 2, Palette: 0 },
                 '8': { Drawable: 15, Texture: 0, Palette: 0 },
+                '10': { Drawable: 0, Texture: 0, Palette: 0 },
                 '11': { Drawable: 256, Texture: 18, Palette: 0 },
             },
             Props: {
@@ -678,7 +730,22 @@ export const DmcCloakroom: WardrobeConfig = {
                 '4': { Drawable: 23, Texture: 10, Palette: 0 },
                 '6': { Drawable: 115, Texture: 0, Palette: 0 },
                 '8': { Drawable: 14, Texture: 0, Palette: 0 },
+                '10': { Drawable: 0, Texture: 0, Palette: 0 },
                 '11': { Drawable: 333, Texture: 0, Palette: 0 },
+            },
+            Props: {
+                '0': { Drawable: 144, Texture: 0 },
+            },
+        },
+        ["Tenue d'été"]: {
+            Components: {
+                '3': { Drawable: 4, Texture: 0, Palette: 0 },
+                '4': { Drawable: 131, Texture: 4, Palette: 0 },
+                '5': { Drawable: 82, Texture: 0, Palette: 0 },
+                '6': { Drawable: 103, Texture: 3, Palette: 0 },
+                '8': { Drawable: 14, Texture: 0, Palette: 0 },
+                '10': { Drawable: 0, Texture: 0, Palette: 0 },
+                '11': { Drawable: 118, Texture: 1, Palette: 0 },
             },
             Props: {
                 '0': { Drawable: 144, Texture: 0 },

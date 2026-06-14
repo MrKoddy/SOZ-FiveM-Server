@@ -1,18 +1,16 @@
-import { PlayerService } from '@public/client/player/player.service';
 import { ProgressService } from '@public/client/progress.service';
 import { RaceProvider } from '@public/client/race/race.provider';
-import { TargetFactory } from '@public/client/target/target.factory';
 import { Once, OnceStep, OnEvent } from '@public/core/decorators/event';
 import { Inject } from '@public/core/decorators/injectable';
 import { Provider } from '@public/core/decorators/provider';
 import { Tick, TickInterval } from '@public/core/decorators/tick';
 import { ClientEvent, ServerEvent } from '@public/shared/event';
-import { JobType } from '@public/shared/job';
+import { ALL_FDO_JOB_TARGETS } from '@public/shared/job';
 import { getDistance, Vector3, Vector4 } from '@public/shared/polyzone/vector';
 
 import { ObjectProvider } from '../../object/object.provider';
+import { InteractionProvider } from '../../quick-interaction/interaction.provider';
 
-const jobsTarget = { [JobType.BCSO]: 0, [JobType.FBI]: 0, [JobType.SASP]: 0, [JobType.LSPD]: 0, [JobType.LSCS]: 0 };
 const spikeModel = GetHashKey('p_ld_stinger_s');
 
 @Provider()
@@ -20,93 +18,82 @@ export class PoliceSpikeProvider {
     @Inject(ProgressService)
     private progressService: ProgressService;
 
-    @Inject(TargetFactory)
-    private targetFactory: TargetFactory;
-
-    @Inject(PlayerService)
-    private playerService: PlayerService;
-
     @Inject(RaceProvider)
     private raceProvider: RaceProvider;
 
     @Inject(ObjectProvider)
     private objectProvider: ObjectProvider;
 
+    @Inject(InteractionProvider)
+    private interactionProvider: InteractionProvider;
+
     private spikes: { [id: string]: Vector4 } = {};
     private closestSpike: string | null = null;
 
     @Once(OnceStep.Start)
     public async onStart() {
-        this.targetFactory.createForModel(
+        this.interactionProvider.createInteractionForModels(
             spikeModel,
-            [
-                {
-                    label: 'Démonter',
-                    icon: 'c:jobs/demonter.png',
-                    job: jobsTarget,
-                    canInteract: () => {
-                        return this.playerService.isOnDuty();
-                    },
-                    action: async (entity: number) => {
-                        const { completed } = await this.progressService.progress(
-                            'remove_object',
-                            'Récupération de la herse en cours',
-                            2500,
-                            {
-                                dictionary: 'weapons@first_person@aim_rng@generic@projectile@thermal_charge@',
-                                name: 'plant_floor',
-                                options: {
-                                    onlyUpperBody: true,
-                                },
+            {
+                label: 'Démonter',
+                action: async (entity: number) => {
+                    const { completed } = await this.progressService.progress(
+                        'remove_object',
+                        'Récupération de la herse en cours',
+                        2500,
+                        {
+                            dictionary: 'weapons@first_person@aim_rng@generic@projectile@thermal_charge@',
+                            name: 'plant_floor',
+                            options: {
+                                onlyUpperBody: true,
                             },
-                            {
-                                useWhileDead: false,
-                                canCancel: true,
-                                disableMovement: true,
-                                disableCarMovement: true,
-                                disableMouse: false,
-                                disableCombat: true,
-                            }
-                        );
-                        if (!completed) {
-                            return;
+                        },
+                        {
+                            useWhileDead: false,
+                            canCancel: true,
+                            disableMovement: true,
+                            disableCarMovement: true,
+                            disableMouse: false,
+                            disableCombat: true,
                         }
+                    );
+                    if (!completed) {
+                        return;
+                    }
 
-                        TriggerServerEvent(ServerEvent.POLICE_REMOVE_SPIKE, ObjToNet(entity));
-                    },
+                    TriggerServerEvent(ServerEvent.POLICE_REMOVE_SPIKE, ObjToNet(entity));
                 },
-            ],
-            2.5
+                job: ALL_FDO_JOB_TARGETS,
+            },
+            undefined,
+            1.1,
+            1.4
         );
-        this.targetFactory.createForModel(
-            ['prop_barrier_work05', 'prop_air_conelight'],
-            [
+
+        [GetHashKey('prop_barrier_work05'), GetHashKey('prop_air_conelight')].map(model => {
+            this.interactionProvider.createInteractionForModels(
+                model,
                 {
                     label: 'Démonter',
-                    icon: 'c:jobs/demonter.png',
-                    job: jobsTarget,
                     canInteract: entity => {
                         const id = this.objectProvider.getIdFromEntity(entity);
-
-                        if (!id) {
-                            return false;
-                        }
-
-                        return this.playerService.isOnDuty();
+                        return !!id;
                     },
                     action: async (entity: number) => {
                         const id = this.objectProvider.getIdFromEntity(entity);
-
                         if (!id) {
                             return;
                         }
 
                         TriggerServerEvent(ServerEvent.OBJECT_COLLECT, id);
                     },
+                    job: ALL_FDO_JOB_TARGETS,
                 },
-            ],
-            2.5
-        );
+                undefined,
+                0.8,
+                1.2
+            );
+        });
 
         TriggerServerEvent(ServerEvent.POLICE_INIT_SPIKE);
     }
@@ -114,8 +101,8 @@ export class PoliceSpikeProvider {
     @OnEvent(ClientEvent.POLICE_REQUEST_ADD_SPIKE)
     public async requestAddSpike() {
         const ped = PlayerPedId();
-        const entityCoords = GetOffsetFromEntityInWorldCoords(ped, 0.0, 0.5, 0.0);
-        const entityHeading = GetEntityHeading(ped) + 90.0;
+        const entityCoords = GetOffsetFromEntityInWorldCoords(ped, 0.0, 2.25, 0.0);
+        const entityHeading = GetEntityHeading(ped);
 
         const { completed } = await this.progressService.progress(
             'spawn_object',
@@ -189,10 +176,15 @@ export class PoliceSpikeProvider {
     @Tick(TickInterval.EVERY_FRAME)
     public async checkWheels() {
         const ped = PlayerPedId();
-        const coords = GetEntityCoords(ped, true) as Vector3;
         const vehicle = GetVehiclePedIsIn(ped, false);
 
-        if (this.closestSpike && this.spikes[this.closestSpike] && vehicle) {
+        if (!vehicle) {
+            return;
+        }
+
+        const coords = GetEntityCoords(ped) as Vector3;
+
+        if (this.closestSpike && this.spikes[this.closestSpike]) {
             const spikePos = [
                 this.spikes[this.closestSpike][0],
                 this.spikes[this.closestSpike][1],

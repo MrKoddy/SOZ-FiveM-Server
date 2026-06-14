@@ -56,24 +56,13 @@ export class OilStationProvider {
             },
             [
                 {
-                    icon: 'c:fuel/remplir.png',
-                    color: 'oil',
+                    icon: 'fuel/remplir',
                     label: 'Configurateur station',
                     job: JobType.Oil,
                     blackoutGlobal: true,
                     blackoutJob: JobType.Oil,
-                    canInteract: () => {
-                        const player = this.playerService.getPlayer();
-
-                        if (!player) {
-                            return false;
-                        }
-
-                        return (
-                            player.job.onduty &&
-                            this.jobService.hasPermission(JobType.Oil, JobPermission.FuelerChangePrice)
-                        );
-                    },
+                    category: 'society',
+                    canInteract: () => this.jobService.hasPermission(JobType.Oil, JobPermission.FuelerChangePrice),
                     action: () => {
                         this.updateStationPrice();
                     },
@@ -140,7 +129,9 @@ export class OilStationProvider {
             return;
         }
 
-        TriggerServerEvent(ServerEvent.OIL_REFILL_ESSENCE_STATION, stationId, refill, vehicleNetworkId);
+        const vehicleClass = GetVehicleClass(vehicle);
+
+        TriggerServerEvent(ServerEvent.OIL_REFILL_ESSENCE_STATION, stationId, refill, vehicleNetworkId, vehicleClass);
     }
 
     @OnEvent(ClientEvent.OIL_REFILL_KEROSENE_STATION)
@@ -206,10 +197,14 @@ export class OilStationProvider {
             {
                 title: 'Nouveau prix :',
                 maxCharacters: 5,
-                defaultValue: price.toFixed(2).toString(),
+                defaultValue: price ? price.toFixed(2).toString() : null,
             },
             PositiveNumberValidator
         );
+
+        if (newPrice == null) {
+            return;
+        }
 
         TriggerServerEvent(ServerEvent.OIL_SET_STATION_PRICE, newPrice, type);
 

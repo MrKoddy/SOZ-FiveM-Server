@@ -1,3 +1,5 @@
+import { CasinoService } from '@private/client/casino/casino.service';
+
 import { Command } from '../../core/decorators/command';
 import { OnNuiEvent } from '../../core/decorators/event';
 import { Inject } from '../../core/decorators/injectable';
@@ -9,6 +11,8 @@ import { JobMenuData } from '../../shared/nui/player';
 import { InputService } from '../nui/input.service';
 import { NuiMenu } from '../nui/nui.menu';
 import { PlayerService } from '../player/player.service';
+import { Election2024CeremonyProvider } from '../story/election-2024/ceremony.provider';
+import { ParadeProvider } from '../story/parade.provider';
 import { JobService } from './job.service';
 
 @Provider()
@@ -24,6 +28,15 @@ export class JobMenuProvider {
 
     @Inject(NuiMenu)
     private nuiMenu: NuiMenu;
+
+    @Inject(Election2024CeremonyProvider)
+    private ceremonyProvider: Election2024CeremonyProvider;
+
+    @Inject(ParadeProvider)
+    private paradeProvider: ParadeProvider;
+
+    @Inject(CasinoService)
+    private readonly casinoService: CasinoService;
 
     @OnNuiEvent(NuiEvent.PlayerMenuJobGradeCreate)
     public async onPlayerMenuJobGradeCreate() {
@@ -131,6 +144,18 @@ export class JobMenuProvider {
         const job = this.jobService.getJob(player.job.id);
 
         if (!job) {
+            return;
+        }
+
+        if (this.casinoService.usingMinigame()) {
+            return;
+        }
+
+        if (this.ceremonyProvider.isRunning) {
+            return;
+        }
+
+        if (this.paradeProvider.isRunning) {
             return;
         }
 

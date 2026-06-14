@@ -1,9 +1,9 @@
 import { MenuType } from '@public/shared/nui/menu';
+import { TaxType } from '@public/shared/tax';
 
 import { Once, OnceStep, OnEvent, OnNuiEvent } from '../../core/decorators/event';
 import { Inject } from '../../core/decorators/injectable';
 import { Provider } from '../../core/decorators/provider';
-import { TaxType } from '../../shared/bank';
 import { ClientEvent, NuiEvent } from '../../shared/event';
 import { BlipFactory } from '../blip';
 import { InventoryManager } from '../inventory/inventory.manager';
@@ -62,13 +62,14 @@ export class AlbumProvider {
 
     @Once(OnceStep.Start)
     async onStart(): Promise<void> {
-        const products = [{ name: '900k_album', price: 500, amount: 200000 }];
+        const products = [{ name: '900k_album', price: 500 }];
 
         const shopProducts = products.map((product, id) => {
             return {
                 ...this.itemService.getItem(product.name),
                 ...product,
                 slot: id + 1,
+                amount: 0,
             };
         });
 
@@ -85,9 +86,10 @@ export class AlbumProvider {
                 options: [
                     {
                         label: 'Liste des Albums',
-                        icon: 'c:/magasin/album.png',
+                        icon: 'magasin/album',
+                        category: 'citizen',
                         action: () => {
-                            this.inventoryManager.openShopInventory(shopProducts, 'menu_shop_music', TaxType.SUPPLY);
+                            this.inventoryManager.openShopInventory(shopProducts, 'Musique', TaxType.SUPPLY);
                         },
                     },
                 ],
@@ -95,7 +97,7 @@ export class AlbumProvider {
             },
         });
 
-        const id = 'misic_shop';
+        const id = 'music_shop';
         if (!this.blipFactory.exist(id)) {
             this.blipFactory.create(id, {
                 coords: { x: -840.71, y: -230.52, z: 37.26 },

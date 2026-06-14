@@ -1,8 +1,17 @@
-import { On, Once } from '@public/core/decorators/event';
+import { HousingRepository } from '@public/client/repository/housing.repository';
+import { On, Once, OnEvent } from '@public/core/decorators/event';
+import { Inject } from '@public/core/decorators/injectable';
 import { Tick } from '@public/core/decorators/tick';
+import { emitRpc } from '@public/core/rpc';
+import { ClientEvent } from '@public/shared/event';
 import { Vector2 } from '@public/shared/polyzone/vector';
+import { RpcServerEvent } from '@public/shared/rpc';
+import { DefaultPedDensity, PedDensityType } from '@public/shared/utils/npc';
 
 import { Provider } from '../../core/decorators/provider';
+import { Feature } from '../../shared/features';
+import { FeatureProvider } from '../feature/feature.provider';
+import { OceanProvider } from '../world/ocean.provider';
 
 const DisableSpawn: Vector2[][] = [
     [
@@ -51,6 +60,26 @@ const DisableSpawn: Vector2[][] = [
         // Yellow Jack
         [1980.99, 3033.43],
         [2010.96, 3068.37],
+    ],
+    [
+        //meteor
+        [2093.61, 3023.75],
+        [2831.6, 3558.2],
+    ],
+    [
+        //Glory Villa
+        [-732.49, 606.55],
+        [-686.68, 665.05],
+    ],
+    [
+        //Cultist
+        [-1214.53, 4859.19],
+        [-985.82, 5001.72],
+    ],
+    [
+        //New Glory Villa
+        [-1169.23, 327.09],
+        [-1092.89, 384.92],
     ],
 ];
 
@@ -182,16 +211,19 @@ const disabledPickups = [
 
 @Provider()
 export class UtilsNPCProvider {
-    private density = {
-        parked: 1.0,
-        vehicle: 1.0,
-        multiplier: 1.0,
-        peds: 1.0,
-        scenario: 1.0, //Walking NPC Density
-    };
+    private density = DefaultPedDensity;
+
+    @Inject(OceanProvider)
+    public oceanProvider: OceanProvider;
+
+    @Inject(HousingRepository)
+    private housingRepository: HousingRepository;
+
+    @Inject(FeatureProvider)
+    private featureProvider: FeatureProvider;
 
     @Once()
-    public onStart() {
+    public async onStart() {
         const relationshipTypesLike = ['CIVMALE', 'CIVFEMALE', 'COP', 'SECURITY_GUARD', 'PRIVATE_SECURITY'];
 
         const relationshipTypesRespect = [
@@ -266,7 +298,7 @@ export class UtilsNPCProvider {
             !DoesScenarioBlockingAreaExist(
                 helipadMin[0],
                 helipadMin[1],
-                helipadMin[1],
+                helipadMin[2],
                 helipadMax[0],
                 helipadMax[1],
                 helipadMax[2]
@@ -275,7 +307,7 @@ export class UtilsNPCProvider {
             AddScenarioBlockingArea(
                 helipadMin[0],
                 helipadMin[1],
-                helipadMin[1],
+                helipadMin[2],
                 helipadMax[0],
                 helipadMax[1],
                 helipadMax[2],
@@ -286,9 +318,19 @@ export class UtilsNPCProvider {
             );
         }
 
+        //Mirror park LSPD
+        AddScenarioBlockingArea(1106.65, -505.32, 63.56, 1204.11, -413.35, 67.79, false, true, true, true);
+        AddScenarioBlockingArea(1052.66, -501.14, 60.37, 1064.44, -491.58, 67.16, false, true, true, true);
+
         SetPedPopulationBudget(3.0);
         SetVehiclePopulationBudget(3.0);
         SetAllVehicleGeneratorsActive();
+
+        //mhc tower
+        AddScenarioBlockingArea(-235.63, -1122.33, 20.0, -58.7, -961.62, 270.0, false, true, true, true);
+		
+		//Mirror Park 2
+        AddScenarioBlockingArea(1278.91, -680.21, 62.0, 1428.12, -796.53, 78.0, false, true, true, true);
 
         for (let i = 1; i <= 15; i++) {
             EnableDispatchService(i, false);
@@ -298,16 +340,42 @@ export class UtilsNPCProvider {
         for (const hash of disabledPickups) {
             ToggleUsePickupsForPlayer(playerId, hash, false);
         }
+
+        if (this.featureProvider.isFeatureEnabled(Feature.WhatIfSecondEpisode)) {
+            this.density[PedDensityType.parked] = 0.0;
+            this.density[PedDensityType.vehicle] = 0.0;
+            this.density[PedDensityType.multiplier] = 0.0;
+            this.density[PedDensityType.peds] = 0.0;
+            this.density[PedDensityType.scenario] = 0.0;
+        } else {
+            const densities = await emitRpc<Partial<Record<PedDensityType, number>>>(RpcServerEvent.GET_DISABLE_NPC);
+            for (const [type, value] of Object.entries(densities)) {
+                this.density[type] = value;
+            }
+        }
     }
 
     @Tick()
     public onDensityTick() {
-        SetParkedVehicleDensityMultiplierThisFrame(this.density['parked']);
-        SetVehicleDensityMultiplierThisFrame(this.density['vehicle']);
-        SetRandomVehicleDensityMultiplierThisFrame(this.density['multiplier']);
-        SetPedDensityMultiplierThisFrame(this.density['peds']);
-        SetAmbientPedRangeMultiplierThisFrame(this.density['peds']);
-        SetScenarioPedDensityMultiplierThisFrame(this.density['scenario'], this.density['scenario']);
+        if (this.density[PedDensityType.parked] != 1) {
+            SetParkedVehicleDensityMultiplierThisFrame(this.density[PedDensityType.parked]);
+        }
+        if (this.density[PedDensityType.vehicle] != 1) {
+            SetVehicleDensityMultiplierThisFrame(this.density[PedDensityType.vehicle]);
+        }
+        if (this.density[PedDensityType.multiplier] != 1) {
+            SetRandomVehicleDensityMultiplierThisFrame(this.density[PedDensityType.multiplier]);
+        }
+        if (this.density[PedDensityType.peds] != 1) {
+            SetPedDensityMultiplierThisFrame(this.density[PedDensityType.peds]);
+            SetAmbientPedRangeMultiplierThisFrame(this.density[PedDensityType.peds]);
+        }
+        if (this.density[PedDensityType.scenario] != 1) {
+            SetScenarioPedDensityMultiplierThisFrame(
+                this.density[PedDensityType.scenario],
+                this.density[PedDensityType.scenario]
+            );
+        }
     }
 
     @Tick()
@@ -315,12 +383,36 @@ export class UtilsNPCProvider {
         DisablePlayerVehicleRewards(PlayerId());
     }
 
-    public updateDensity(type: string, value: number) {
-        this.density[type] = value;
+    @OnEvent(ClientEvent.NPC_DENSITY_UPDATE)
+    public updateDensity(densities: Partial<Record<PedDensityType, number>>) {
+        if (this.featureProvider.isFeatureEnabled(Feature.WhatIfSecondEpisode)) {
+            this.density[PedDensityType.parked] = 0.0;
+            this.density[PedDensityType.vehicle] = 0.0;
+            this.density[PedDensityType.multiplier] = 0.0;
+            this.density[PedDensityType.peds] = 0.0;
+            this.density[PedDensityType.scenario] = 0.0;
+
+            return;
+        }
+
+        for (const [type, value] of Object.entries(densities)) {
+            this.density[type] = value;
+        }
     }
 
     @On('populationPedCreating')
     public async onPopulationPedCreating(x: number, y: number, z: number) {
+        if (this.density[PedDensityType.peds] == 0) {
+            CancelEvent();
+            return;
+        }
+
+        const waterLevel = this.oceanProvider.getCurrent();
+        if (waterLevel > 0 && 0 < z && z < this.oceanProvider.getCurrent() + 3) {
+            CancelEvent();
+            return;
+        }
+
         for (const zone of DisableSpawn) {
             const Px = {
                 min: null,
@@ -350,6 +442,12 @@ export class UtilsNPCProvider {
                 CancelEvent();
                 return;
             }
+        }
+
+        const apartment = await this.housingRepository.findApartmentFromInterior(GetInteriorFromCollision(x, y, z));
+        if (apartment) {
+            CancelEvent();
+            return;
         }
 
         Wait(500); // Give the entity some time to be created

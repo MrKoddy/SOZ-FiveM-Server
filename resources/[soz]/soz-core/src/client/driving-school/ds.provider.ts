@@ -1,21 +1,23 @@
 import { emitRpc } from '@public/core/rpc';
-import { Feature, isFeatureEnabled } from '@public/shared/features';
+import { Feature } from '@public/shared/features';
 import { RpcServerEvent } from '@public/shared/rpc';
+import { TaxType } from '@public/shared/tax';
 
 import { Once, OnceStep, OnNuiEvent } from '../../core/decorators/event';
 import { Inject } from '../../core/decorators/injectable';
 import { Provider } from '../../core/decorators/provider';
-import { TaxType } from '../../shared/bank';
 import { DrivingSchoolConfig, DrivingSchoolLicense, DrivingSchoolLicenseType } from '../../shared/driving-school';
 import { ClientEvent, NuiEvent, ServerEvent } from '../../shared/event';
 import { MenuType } from '../../shared/nui/menu';
 import { Vector3, Vector4 } from '../../shared/polyzone/vector';
+import { TargetOption } from '../../shared/target';
 import { BlipFactory } from '../blip';
+import { FeatureProvider } from '../feature/feature.provider';
 import { Notifier } from '../notifier';
 import { NuiMenu } from '../nui/nui.menu';
 import { PlayerService } from '../player/player.service';
 import { TaxRepository } from '../repository/tax.repository';
-import { TargetFactory, TargetOptions } from '../target/target.factory';
+import { TargetFactory } from '../target/target.factory';
 
 @Provider()
 export class DrivingSchoolProvider {
@@ -36,6 +38,9 @@ export class DrivingSchoolProvider {
 
     @Inject(Notifier)
     private notifier: Notifier;
+
+    @Inject(FeatureProvider)
+    private featureProvider: FeatureProvider;
 
     @Once(OnceStep.RepositoriesLoaded)
     public setupDrivingSchool() {
@@ -73,11 +78,12 @@ export class DrivingSchoolProvider {
         this.nuiMenu.closeMenu();
     }
 
-    private getTargetOptions(position: Vector3): TargetOptions[] {
-        const targetOptions: TargetOptions[] = [
+    private getTargetOptions(position: Vector3): TargetOption[] {
+        const targetOptions: TargetOption[] = [
             {
                 label: `Carte grise`,
-                icon: 'c:driving-school/voiture.png',
+                icon: 'driving-school/voiture',
+                category: 'citizen',
                 blackoutGlobal: true,
                 action: async () => {
                     const remainingSlots = await emitRpc<number>(RpcServerEvent.DRIVING_SCHOOL_CHECK_REMAINING_SLOTS);
@@ -100,17 +106,21 @@ export class DrivingSchoolProvider {
         const licensesConfig = DrivingSchoolConfig.licenses;
 
         Object.values(licensesConfig).forEach(license => {
-            if (license.licenseType == DrivingSchoolLicenseType.Boat && !isFeatureEnabled(Feature.Boat)) {
+            if (
+                license.licenseType == DrivingSchoolLicenseType.Boat &&
+                !this.featureProvider.isFeatureEnabled(Feature.Boat)
+            ) {
                 return;
             }
 
             const price = this.taxRepository.getPriceWithTax(license.price, TaxType.VEHICLE);
 
             targetOptions.push({
-                label: `${license.label} ($${price})`,
+                label: `${license.label}`,
+                subLabel: `$${price} ou 1 Bon pour des leçons de conduite`,
                 icon: license.icon,
-                event: ClientEvent.DRIVING_SCHOOL_START_EXAM,
                 blackoutGlobal: true,
+                category: 'citizen',
                 action: () => {
                     const lData: DrivingSchoolLicense = DrivingSchoolConfig.licenses[license.licenseType];
 
@@ -130,6 +140,7 @@ export class DrivingSchoolProvider {
                     }
 
                     TriggerServerEvent(ServerEvent.DRIVING_SCHOOL_PLAYER_PAY, lData.licenseType, spawnPoint);
+                    TriggerEvent(ClientEvent.DRIVING_SCHOOL_START_EXAM);
                 },
             });
         });

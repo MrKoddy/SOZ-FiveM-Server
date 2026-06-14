@@ -39,16 +39,12 @@ export class FDFTreeProvider {
             [
                 {
                     label: 'Tailler',
-                    color: JobType.FDF,
-                    icon: 'c:fdf/shear.png',
+                    icon: 'fdf/shear',
                     blackoutJob: JobType.FDF,
                     blackoutGlobal: true,
                     job: JobType.FDF,
+                    category: 'society',
                     canInteract: async entity => {
-                        if (!this.playerService.isOnDuty()) {
-                            return false;
-                        }
-
                         const [field, id] = this.getFieldId(entity);
                         if (!field) {
                             return false;
@@ -71,9 +67,7 @@ export class FDFTreeProvider {
                                     repeat: true,
                                 },
                             },
-                            {
-                                useAnimationService: true,
-                            }
+                            {}
                         );
 
                         if (!completed) {
@@ -85,16 +79,12 @@ export class FDFTreeProvider {
                 },
                 {
                     label: 'Arroser',
-                    color: JobType.FDF,
-                    icon: 'c:crimi/water.png',
+                    icon: 'crimi/water',
                     blackoutJob: JobType.FDF,
                     blackoutGlobal: true,
                     job: JobType.FDF,
+                    category: 'society',
                     canInteract: async entity => {
-                        if (!this.playerService.isOnDuty()) {
-                            return false;
-                        }
-
                         const [field, id] = this.getFieldId(entity);
                         if (!field) {
                             return false;
@@ -134,9 +124,7 @@ export class FDFTreeProvider {
                                     },
                                 ],
                             },
-                            {
-                                useAnimationService: true,
-                            }
+                            {}
                         );
 
                         if (!completed) {
@@ -148,16 +136,12 @@ export class FDFTreeProvider {
                 },
                 {
                     label: 'Récolter',
-                    color: JobType.FDF,
-                    icon: 'c:fdf/harvest.png',
+                    icon: 'fdf/harvest',
                     blackoutJob: JobType.FDF,
                     blackoutGlobal: true,
                     job: JobType.FDF,
+                    category: 'society',
                     canInteract: async entity => {
-                        if (!this.playerService.isOnDuty()) {
-                            return false;
-                        }
-
                         const [field, id] = this.getFieldId(entity);
                         if (!field) {
                             return false;
@@ -210,16 +194,12 @@ export class FDFTreeProvider {
                 },
                 {
                     label: 'Vérifier',
-                    color: JobType.FDF,
-                    icon: 'c:crimi/time.png',
+                    icon: 'crimi/time',
                     blackoutJob: JobType.FDF,
                     blackoutGlobal: true,
                     job: JobType.FDF,
+                    category: 'society',
                     canInteract: async entity => {
-                        if (!this.playerService.isOnDuty()) {
-                            return false;
-                        }
-
                         const [field, id] = this.getFieldId(entity);
                         if (!field) {
                             return false;

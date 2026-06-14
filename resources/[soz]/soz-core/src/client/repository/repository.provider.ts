@@ -3,6 +3,7 @@ import './field.repository'; // Required to load the field repository
 
 import { DrugSeedlingRepository } from '@private/client/repository/drug.seedling.repository';
 import { DrugSellLocationRepository } from '@private/client/repository/drug.sell.location.repository';
+import { Command } from '@public/core/decorators/command';
 import { Operation } from 'fast-json-patch';
 
 import { Once, OnceStep, OnEvent } from '../../core/decorators/event';
@@ -13,21 +14,18 @@ import { Logger } from '../../core/logger';
 import { ClientEvent } from '../../shared/event';
 import { NuiDispatch } from '../nui/nui.dispatch';
 import { BillboardRepository } from './billboard.repository';
+import { ElevatorRepository } from './elevator.repository';
 import { FuelStationRepository } from './fuel.station.repository';
 import { GarageRepository } from './garage.repository';
 import { RaceRepository } from './race.repository';
 import { Repository } from './repository';
 import { UnderTypesShopRepository } from './under_types.shop.repository';
 import { UpwChargerRepository } from './upw.station.repository';
-import { VehicleRepository } from './vehicle.repository';
 
 @Provider()
 export class RepositoryProvider {
     @Inject(GarageRepository)
     private garageRepository: GarageRepository;
-
-    @Inject(VehicleRepository)
-    private vehicleRepository: VehicleRepository;
 
     @Inject(FuelStationRepository)
     private fuelStationRepository: FuelStationRepository;
@@ -47,6 +45,9 @@ export class RepositoryProvider {
     @Inject(RaceRepository)
     private raceRepository: RaceRepository;
 
+    @Inject(ElevatorRepository)
+    private elevatorRepository: ElevatorRepository;
+
     @Inject(BillboardRepository)
     private billboardRepository: BillboardRepository;
 
@@ -59,19 +60,17 @@ export class RepositoryProvider {
     @Inject(NuiDispatch)
     private nuiDispatch: NuiDispatch;
 
-    @MultiInject(Logger)
+    @Inject(Logger)
     private logger: Logger;
 
     @Once(OnceStep.PlayerLoaded)
     public async onRepositoryStart() {
         await this.garageRepository.load();
-        await this.vehicleRepository.load();
         await this.fuelStationRepository.load();
         await this.upwChargerRepository.load();
         await this.underTypesShopRepository.load();
         await this.drugSeedlingRepository.load();
         await this.drugSellLocationRepository.load();
-        await this.raceRepository.load();
         await this.billboardRepository.load();
 
         for (const repository of this.repositories) {
@@ -82,6 +81,17 @@ export class RepositoryProvider {
         }
 
         this.onceLoader.trigger(OnceStep.RepositoriesLoaded);
+    }
+
+    @Command('reloadnuirepo')
+    @Once(OnceStep.NuiLoaded)
+    public async onNuiLoaded() {
+        for (const repository of this.repositories) {
+            const type = repository.type;
+            const data = repository.raw();
+
+            this.nuiDispatch.dispatch('repository', 'Set', { type, data });
+        }
     }
 
     @OnEvent(ClientEvent.REPOSITORY_PATCH_DATA)
@@ -98,11 +108,11 @@ export class RepositoryProvider {
 
         try {
             const type = repository.type;
-            const data = repository.patch(patch);
+            repository.patch(patch);
 
-            this.nuiDispatch.dispatch('repository', 'Set', { type, data });
+            this.nuiDispatch.dispatch('repository', 'Patch', { type, patch });
         } catch (e) {
-            this.logger.error(`Error while patching repository ${type}`, e, JSON.stringify(patch));
+            this.logger.error(`Error while patching repository ${type} ${e} ${JSON.stringify(patch)}`);
         }
     }
 
@@ -111,9 +121,6 @@ export class RepositoryProvider {
         switch (repositoryName) {
             case 'garage':
                 this.garageRepository.update(data);
-                break;
-            case 'vehicle':
-                this.vehicleRepository.update(data);
                 break;
             case 'fuelStation':
                 this.fuelStationRepository.update(data);

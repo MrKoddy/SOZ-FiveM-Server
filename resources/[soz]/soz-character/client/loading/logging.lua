@@ -59,18 +59,22 @@ function LogExistingPlayer(player, shutdownLoadingScreen)
     SetPedMaxHealth(playerPed, playerObject.PlayerData.metadata["max_health"])
     SetPedArmour(playerPed, playerObject.PlayerData.metadata["armor"].current)
 
+    Wait(0)
     while not HasCollisionLoadedAroundEntity(playerPed) do
         Wait(0)
     end
+    Wait(1000)
 
     -- Ensure player is on ground
-    SetEntityCoordsNoOffset(playerPed, playerObject.PlayerData.position.x, playerObject.PlayerData.position.y, playerObject.PlayerData.position.z, false, false,
-                            false, true)
+    SetEntityCoordsNoOffset(playerPed, playerObject.PlayerData.position.x, playerObject.PlayerData.position.y, playerObject.PlayerData.position.z + 0.1, false,
+                            false, false, true)
 
     -- Make player visible
     SetFocusEntity(PlayerPedId())
-    FreezeEntityPosition(PlayerPedId(), false)
-    SetEntityVisible(PlayerPedId(), true)
+    if not playerObject.PlayerData.metadata["noclip"] then
+        FreezeEntityPosition(PlayerPedId(), false)
+        SetEntityVisible(PlayerPedId(), true)
+    end
 
     -- Shutdown loading screen
     if shutdownLoadingScreen then

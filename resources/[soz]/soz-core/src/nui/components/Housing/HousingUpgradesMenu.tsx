@@ -1,11 +1,13 @@
 import { fetchNui } from '@public/nui/fetch';
+import { useAssetPath } from '@public/nui/hook/assets';
 import { NuiEvent } from '@public/shared/event';
+import { ApartementTiers } from '@public/shared/housing/housing';
 import { HousingUpgradesMenuData } from '@public/shared/housing/menu';
-import { HousingTiers } from '@public/shared/housing/upgrades';
+import { HousingTiers, MAX_TIER, MAX_TRAILER_TIER, TYPE_DESCRPTION, TYPE_LABEL } from '@public/shared/housing/upgrades';
 import { MenuType } from '@public/shared/nui/menu';
+import { TaxType } from '@public/shared/tax';
 import { FunctionComponent, useEffect, useState } from 'react';
 
-import { TaxType } from '../../../shared/bank';
 import { useGetPrice } from '../../hook/price';
 import {
     MainMenu,
@@ -13,6 +15,7 @@ import {
     MenuContent,
     MenuItemButton,
     MenuItemSelect,
+    MenuItemSelectOption,
     MenuItemSelectOptionBox,
     MenuTitle,
 } from '../Styleguide/Menu';
@@ -22,27 +25,29 @@ type HousingUpgradesMenuProps = {
 };
 
 export const HousingUpgradesMenu: FunctionComponent<HousingUpgradesMenuProps> = ({ data }) => {
-    if (!data) {
-        data = {
-            currentTier: 0,
-            hasParking: true,
-            apartmentPrice: 0,
-            enableParking: true,
+    if (!data.currentTier) {
+        data.currentTier = {
+            tier: 0,
+            cloth_tier: 0,
+            money_tier: 0,
+            park_tier: 0,
         };
+    } else {
+        for (const type of Object.keys(TYPE_LABEL)) {
+            if (data.currentTier[type] === undefined || data.currentTier[type] === null) {
+                data.currentTier[type] = 0;
+            }
+        }
     }
-    if (!data.currentTier) data.currentTier = 0;
 
-    const lastTier = parseInt(Object.keys(HousingTiers)[Object.keys(HousingTiers).length - 1]);
-    const initialTier = Math.min(data.currentTier + 1, lastTier);
+    const maxTier = data.isApartmentTrailer ? MAX_TRAILER_TIER : MAX_TIER;
 
+    const { getPath } = useAssetPath();
     const getPrice = useGetPrice();
-    const [tier, setTier] = useState(0);
+    const [tier, setTier] = useState<ApartementTiers>(data.currentTier);
     const [parking, setParking] = useState(true);
     const [tierPrice, setTierPrice] = useState(0);
-    const [zkeaPrice, setZkeaPrice] = useState(0);
     const [parkingPrice, setParkingPrice] = useState(0);
-
-    const banner = 'https://nui-img/soz/menu_housing_upgrades';
 
     useEffect(() => {
         if (data?.currentTier !== null && data?.currentTier !== undefined) {
@@ -56,29 +61,31 @@ export const HousingUpgradesMenu: FunctionComponent<HousingUpgradesMenuProps> = 
     useEffect(() => {
         const { currentTier, apartmentPrice } = data;
         let newPrice = 0;
-        let newZkeaPrice = 0;
-        for (let i = currentTier + 1; i <= tier; i++) {
-            newPrice += (apartmentPrice * HousingTiers[i].pricePercent) / 100;
-            newZkeaPrice += HousingTiers[i].zkeaPrice;
+        for (const type of Object.keys(currentTier)) {
+            for (let i = currentTier[type] + 1; i <= tier[type]; i++) {
+                newPrice += (apartmentPrice * HousingTiers[type][i].pricePercent) / 100;
+            }
         }
         setTierPrice(newPrice);
-        setZkeaPrice(newZkeaPrice);
         setParkingPrice(parking && !data.hasParking ? (apartmentPrice * 50) / 100 : 0);
     }, [tier, parking]);
 
     const onConfirm = () => {
         fetchNui(NuiEvent.HousingUpgradeApartment, {
-            tier,
+            apartmentId: data.apartmentId,
+            propertyId: data.propertyId,
+            apartmentTier: tier,
             price: tierPrice,
-            zkeaPrice,
-            enableParking: data.enableParking,
+            isApartmentTrailer: data.isApartmentTrailer,
             hasParking: parking,
             parkingPrice,
         });
     };
 
-    const onChange = (selectedTier: number) => {
-        setTier(selectedTier);
+    const onChange = (type: string, selectedTier: number) => {
+        const newTier = { ...tier };
+        newTier[type] = selectedTier;
+        setTier(newTier);
     };
 
     const onParkingChange = (selected: boolean) => {
@@ -88,55 +95,79 @@ export const HousingUpgradesMenu: FunctionComponent<HousingUpgradesMenuProps> = 
     return (
         <Menu type={MenuType.HousingUpgrades}>
             <MainMenu>
-                <MenuTitle banner={banner}></MenuTitle>
-                <MenuContent>
-                    <MenuItemSelect
-                        title={
-                            <div className="flex items-center">
-                                <img alt="engine" className="ml-2 w-8 h-8" src={`/public/images/housing/maison.webp`} />
-                                <h3 className="ml-4">Palier</h3>
-                            </div>
-                        }
-                        value={initialTier}
-                        onChange={(_, value) => onChange(value)}
-                        showAllOptions
-                        alignRight
-                    >
-                        {Object.keys(HousingTiers).map(tier => {
-                            const value = parseInt(tier);
-                            const label = value !== 0 ? value : 'Origine';
+                <MenuTitle title="Habitation" />
+                <MenuContent subtitle="Améliorations">
+                    {Object.entries(TYPE_LABEL).map(([type, label]) => {
+                        if (label !== TYPE_LABEL.park_tier || !data.isApartmentTrailer) {
                             return (
-                                <MenuItemSelectOptionBox
-                                    key={value}
-                                    value={value}
-                                    highlight={data.currentTier >= value}
+                                <MenuItemSelect
+                                    description={
+                                        <>
+                                            <p>{TYPE_DESCRPTION[type]}</p>
+                                            <p>{TYPE_DESCRPTION.all}</p>
+                                        </>
+                                    }
+                                    title={
+                                        <div className="flex items-center">
+                                            <img
+                                                alt="engine"
+                                                className="ml-2 w-8 h-8"
+                                                src={
+                                                    type === 'park_tier'
+                                                        ? getPath(`images/housing/garage.webp`)
+                                                        : getPath(`images/housing/maison.webp`)
+                                                }
+                                            />
+                                            <h3 className="ml-4">{label}</h3>
+                                        </div>
+                                    }
+                                    value={Math.min(data.currentTier[type], maxTier)}
+                                    onChange={(_, value) => onChange(type, value)}
                                 >
-                                    {label}
-                                </MenuItemSelectOptionBox>
+                                    {Array.from(Array(maxTier + 1).keys()).map(tier => {
+                                        const label = tier !== 0 ? `Niveau ${tier + 1}` : 'Origine';
+                                        return (
+                                            <MenuItemSelectOption key={tier} value={tier}>
+                                                {label}
+                                            </MenuItemSelectOption>
+                                        );
+                                    })}
+                                </MenuItemSelect>
                             );
-                        })}
-                    </MenuItemSelect>
-                    <MenuItemSelect
-                        title={
-                            <div className="flex items-center">
-                                <img alt="engine" className="ml-2 w-8 h-8" src={`/public/images/housing/garage.webp`} />
-                                <h3 className="ml-4">Garage</h3>
-                            </div>
+                        } else {
+                            return (
+                                <MenuItemSelect
+                                    description={
+                                        <>
+                                            <p>{TYPE_DESCRPTION.park_trailer}</p>
+                                            <p>{TYPE_DESCRPTION.all}</p>
+                                        </>
+                                    }
+                                    title={
+                                        <div className="flex items-center">
+                                            <img
+                                                alt="engine"
+                                                className="ml-2 w-8 h-8"
+                                                src={getPath(`images/housing/garage.webp`)}
+                                            />
+                                            <h3 className="ml-4">{TYPE_LABEL.park_tier}</h3>
+                                        </div>
+                                    }
+                                    value={data.hasParking}
+                                    onChange={(_, value) => onParkingChange(value)}
+                                    showAllOptions
+                                    alignRight
+                                >
+                                    <MenuItemSelectOptionBox value={false}>Désactivé</MenuItemSelectOptionBox>
+                                    <MenuItemSelectOptionBox value={true}>Activé</MenuItemSelectOptionBox>
+                                </MenuItemSelect>
+                            );
                         }
-                        value={data.hasParking}
-                        onChange={(_, value) => onParkingChange(value)}
-                        showAllOptions
-                        alignRight
-                    >
-                        {data.enableParking && (
-                            <MenuItemSelectOptionBox value={false}>Désactivé</MenuItemSelectOptionBox>
-                        )}
-                        <MenuItemSelectOptionBox value={true}>Activé</MenuItemSelectOptionBox>
-                    </MenuItemSelect>
+                    })}
                     <MenuItemButton className="border-t border-white/50" onConfirm={() => onConfirm()}>
                         <div className="flex w-full justify-between items-center">
                             <span>Confirmer</span>
-                            <span>${getPrice(tierPrice + parkingPrice, TaxType.HOUSING).toFixed()}</span>
+                            <span>${getPrice(tierPrice + parkingPrice, TaxType.HOUSING).toLocaleString('fr-FR')}</span>
                         </div>
                     </MenuItemButton>
                 </MenuContent>

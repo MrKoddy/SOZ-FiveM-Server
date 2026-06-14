@@ -1,18 +1,24 @@
+import { InventoryFactory } from '@public/server/inventory/inventory.factory';
+
 import { OnEvent } from '../../../core/decorators/event';
 import { Inject } from '../../../core/decorators/injectable';
 import { Provider } from '../../../core/decorators/provider';
 import { Rpc } from '../../../core/decorators/rpc';
 import { ServerEvent } from '../../../shared/event';
+import { Feature } from '../../../shared/features';
 import { FuelStation, FuelStationType, FuelType } from '../../../shared/fuel';
 import { JobPermission, JobType } from '../../../shared/job';
 import { toVector3Object, Vector3, Vector4 } from '../../../shared/polyzone/vector';
 import { RpcServerEvent } from '../../../shared/rpc';
+import { VehicleClass } from '../../../shared/vehicle/vehicle';
+import { BankService } from '../../bank/bank.service';
 import { PrismaService } from '../../database/prisma.service';
-import { InventoryManager } from '../../inventory/inventory.manager';
+import { FeatureProvider } from '../../feature/feature.provider';
 import { JobService } from '../../job.service';
 import { LockService } from '../../lock.service';
 import { Monitor } from '../../monitor/monitor';
 import { Notifier } from '../../notifier';
+import { PermissionService } from '../../permission.service';
 import { PlayerMoneyService } from '../../player/player.money.service';
 import { PlayerService } from '../../player/player.service';
 import { ProgressService } from '../../player/progress.service';
@@ -26,8 +32,8 @@ export class OilStationProvider {
     @Inject(VehicleStateService)
     private vehicleStateService: VehicleStateService;
 
-    @Inject(InventoryManager)
-    private inventoryManager: InventoryManager;
+    @Inject(InventoryFactory)
+    private inventoryFactory: InventoryFactory;
 
     @Inject(Notifier)
     private notifier: Notifier;
@@ -49,6 +55,15 @@ export class OilStationProvider {
 
     @Inject(LockService)
     private lockService: LockService;
+
+    @Inject(BankService)
+    private bankService: BankService;
+
+    @Inject(FeatureProvider)
+    private featureProvider: FeatureProvider;
+
+    @Inject(PermissionService)
+    private permissionService: PermissionService;
 
     @Rpc(RpcServerEvent.OIL_GET_STATION)
     public async getStation(source: number, stationId: number): Promise<FuelStation | null> {
@@ -81,7 +96,7 @@ export class OilStationProvider {
             model: station.model,
             position,
             zone,
-            stock: station.stock,
+            stock: this.featureProvider.isFeatureEnabled(Feature.WhatIfFirstEpisode) ? 10_000 : station.stock,
             type: station.type as FuelStationType,
             id: station.id,
             name: station.station,
@@ -118,7 +133,10 @@ export class OilStationProvider {
             return;
         }
 
-        if (!(await this.jobService.hasPermission(player, JobType.Oil, JobPermission.FuelerChangePrice))) {
+        if (
+            !this.permissionService.isAdmin(source) &&
+            !(await this.jobService.hasPermission(player, JobType.Oil, JobPermission.FuelerChangePrice))
+        ) {
             this.notifier.notify(source, "Vous n'avez pas la permission de faire ça.", 'error');
 
             return;
@@ -142,9 +160,9 @@ export class OilStationProvider {
         source: number,
         stationId: number,
         amount: number,
-        vehicleNetworkId: number
+        vehicleNetworkId: number,
+        vehicleClass: VehicleClass
     ): Promise<void> {
-        const vehicleEntityId = NetworkGetEntityFromNetworkId(vehicleNetworkId);
         const state = this.vehicleStateService.getVehicleState(vehicleNetworkId);
 
         if (!state) {
@@ -152,8 +170,13 @@ export class OilStationProvider {
         }
 
         const itemCount = Math.ceil(amount / 10);
-        const plate = state.volatile.plate || GetVehicleNumberPlateText(vehicleEntityId);
-        const availableCount = this.inventoryManager.getItemCount(`trunk_` + plate, 'essence');
+        const inventory = await this.inventoryFactory.getVehicleInventory(vehicleNetworkId, vehicleClass, state);
+
+        if (!inventory) {
+            return;
+        }
+
+        const availableCount = inventory.getItemCount('essence');
         const duration = itemCount * 500;
 
         if (itemCount > availableCount) {
@@ -193,14 +216,14 @@ export class OilStationProvider {
             const reallyRefilled = Math.max(0, Math.min(refilled, 3000 - station.stock));
             const itemUsed = Math.ceil(reallyRefilled / 10);
 
-            if (!this.inventoryManager.removeItemFromInventory(`trunk_` + plate, 'essence', itemUsed)) {
+            if (!inventory.remove('essence', itemUsed)) {
                 this.notifier.notify(source, "Vous n'avez pas assez d'essence dans la citerne.");
 
                 return;
             }
 
             if (station && station.type === FuelStationType.Public) {
-                await this.playerMoneyService.transfer('farm_mtp', 'safe_oil', reallyRefilled * 3);
+                await this.bankService.transferFarmMoney(source, 'farm_mtp', 'safe_oil', reallyRefilled * 3);
             }
 
             this.notifier.notify(source, `Vous avez ~g~ajouté~s~ ${reallyRefilled}L d'essence dans la station.`);
@@ -216,18 +239,13 @@ export class OilStationProvider {
                 },
             });
 
-            this.monitor.publish(
-                'job_mtp_refill_station',
-                {
-                    player_source: source,
-                    station: stationId,
-                    station_type: 'essence',
-                },
-                {
-                    quantity: reallyRefilled,
-                    position: toVector3Object(GetEntityCoords(GetPlayerPed(source)) as Vector3),
-                }
-            );
+            this.monitor.traceEvent('job_mtp_refill_station', {
+                player_source: source,
+                station_id: stationId,
+                station_type: 'essence',
+                amount: reallyRefilled,
+                position: toVector3Object(GetEntityCoords(GetPlayerPed(source)) as Vector3),
+            });
 
             TriggerClientEvent('jobs:client:fueler:CancelTankerRefill', source);
         });
@@ -236,7 +254,8 @@ export class OilStationProvider {
     @OnEvent(ServerEvent.OIL_REFILL_KEROSENE_STATION)
     public async refillKeroseneStation(source: number, stationId: number, amount: number): Promise<void> {
         const itemCount = Math.ceil(amount / 10);
-        const availableCount = this.inventoryManager.getItemCount(source, 'kerosene');
+        const inventory = await this.inventoryFactory.getPlayerInventory(source);
+        const availableCount = inventory.getItemCount('kerosene');
 
         if (itemCount > availableCount) {
             this.notifier.notify(source, "Vous n'avez pas assez de kérosène.");
@@ -265,7 +284,7 @@ export class OilStationProvider {
         const refilled = Math.floor(amount * progress);
         const itemUsed = Math.ceil(refilled / 10);
 
-        if (!this.inventoryManager.removeItemFromInventory(source, 'kerosene', itemUsed)) {
+        if (!inventory.remove('kerosene', itemUsed)) {
             this.notifier.notify(source, "Vous n'avez pas assez de kérosène.");
 
             return;
@@ -278,7 +297,7 @@ export class OilStationProvider {
         });
 
         if (station && station.type === FuelStationType.Public) {
-            await this.playerMoneyService.transfer('farm_mtp', 'safe_oil', refilled * 3);
+            await this.bankService.transferFarmMoney(source, 'farm_mtp', 'safe_oil', refilled * 3);
         }
 
         this.notifier.notify(source, `Vous avez ~g~ajouté~s~ ${refilled}L de kérosène dans la station.`);
@@ -294,18 +313,13 @@ export class OilStationProvider {
             },
         });
 
-        this.monitor.publish(
-            'job_mtp_refill_station',
-            {
-                player_source: source,
-                station: stationId,
-                station_type: 'kerosene',
-            },
-            {
-                quantity: refilled,
-                position: toVector3Object(GetEntityCoords(GetPlayerPed(source)) as Vector3),
-            }
-        );
+        this.monitor.traceEvent('job_mtp_refill_station', {
+            player_source: source,
+            station_id: stationId,
+            station_type: 'kerosene',
+            amount: refilled,
+            position: toVector3Object(GetEntityCoords(GetPlayerPed(source)) as Vector3),
+        });
     }
 
     @OnEvent(ServerEvent.OIL_DECREMENT_STATION)
@@ -314,22 +328,24 @@ export class OilStationProvider {
             ratio = 1;
         }
 
-        await this.lockService.lock(`fuel_station_${stationId}`, async () => {
-            const station = await this.prismaService.fuel_storage.findUnique({
-                where: {
-                    id: stationId,
-                },
-            });
-            await this.prismaService.fuel_storage.update({
-                where: {
-                    id: stationId,
-                },
-                data: {
-                    stock: {
-                        decrement: Math.round(ratio * station.stock),
+        if (!this.featureProvider.isFeatureEnabled(Feature.WhatIfFirstEpisode)) {
+            await this.lockService.lock(`fuel_station_${stationId}`, async () => {
+                const station = await this.prismaService.fuel_storage.findUnique({
+                    where: {
+                        id: stationId,
                     },
-                },
+                });
+                await this.prismaService.fuel_storage.update({
+                    where: {
+                        id: stationId,
+                    },
+                    data: {
+                        stock: {
+                            decrement: Math.round(ratio * station.stock),
+                        },
+                    },
+                });
             });
-        });
+        }
     }
 }

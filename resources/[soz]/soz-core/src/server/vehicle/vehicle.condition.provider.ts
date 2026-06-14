@@ -1,13 +1,16 @@
+import { VehicleBusinessProvider } from '@private/server/gang/business.vehicle.provider';
+import { Tick, TickInterval } from '@public/core/decorators/tick';
+import { InventoryFactory } from '@public/server/inventory/inventory.factory';
+import { TaxType } from '@public/shared/tax';
+
 import { OnEvent } from '../../core/decorators/event';
 import { Inject } from '../../core/decorators/injectable';
 import { Provider } from '../../core/decorators/provider';
-import { TaxType } from '../../shared/bank';
 import { ClientEvent, ServerEvent } from '../../shared/event';
 import { toVector3Object, Vector3 } from '../../shared/polyzone/vector';
 import { ProgressAnimation, ProgressOptions } from '../../shared/progress';
 import { PlayerVehicleState } from '../../shared/vehicle/player.vehicle';
 import { PrismaService } from '../database/prisma.service';
-import { InventoryManager } from '../inventory/inventory.manager';
 import { Monitor } from '../monitor/monitor';
 import { Notifier } from '../notifier';
 import { PlayerMoneyService } from '../player/player.money.service';
@@ -31,15 +34,29 @@ export class VehicleConditionProvider {
     @Inject(ProgressService)
     private progressService: ProgressService;
 
-    @Inject(InventoryManager)
-    private inventoryManager: InventoryManager;
+    @Inject(InventoryFactory)
+    private inventoryFactory: InventoryFactory;
 
     @Inject(Monitor)
     private monitor: Monitor;
 
+    @Inject(VehicleBusinessProvider)
+    private vehicleBusinessProvider: VehicleBusinessProvider;
+
+    private explodedVehicleToClean = new Map<
+        number,
+        {
+            model: number;
+            date: number;
+            plate: string;
+        }
+    >();
+
     @OnEvent(ServerEvent.VEHICLE_USE_REPAIR_KIT)
     public async onVehicleUseRepairKit(source: number, vehicleNetworkId: number) {
-        if (!this.inventoryManager.removeItemFromInventory(source, 'repairkit', 1)) {
+        const inventory = await this.inventoryFactory.getPlayerInventory(source);
+
+        if (!inventory.remove('repairkit', 1, false)) {
             this.notifier.notify(source, "Vous n'avez pas de kit de réparation.");
 
             return;
@@ -65,7 +82,9 @@ export class VehicleConditionProvider {
 
     @OnEvent(ServerEvent.VEHICLE_USE_BODY_REPAIR_KIT)
     public async onVehicleUseBodyRepairKit(source: number, vehicleNetworkId: number) {
-        if (!this.inventoryManager.removeItemFromInventory(source, 'bodyrepairkit', 1)) {
+        const inventory = await this.inventoryFactory.getPlayerInventory(source);
+
+        if (!inventory.remove('bodyrepairkit', 1, false)) {
             this.notifier.notify(source, "Vous n'avez pas de kit de réparation carosserie.");
 
             return;
@@ -80,6 +99,7 @@ export class VehicleConditionProvider {
         }
 
         this.notifier.notify(source, 'La carosserie de votre véhicule a été réparée.');
+        this.vehicleBusinessProvider.repairVehicule(vehicleNetworkId);
 
         this.vehicleStateService.updateVehicleCondition(vehicleNetworkId, {
             bodyHealth: 1000,
@@ -91,7 +111,9 @@ export class VehicleConditionProvider {
 
     @OnEvent(ServerEvent.VEHICLE_USE_CLEANING_KIT)
     public async onVehicleUseCleaningKit(source: number, vehicleNetworkId: number) {
-        if (!this.inventoryManager.removeItemFromInventory(source, 'cleaningkit', 1)) {
+        const inventory = await this.inventoryFactory.getPlayerInventory(source);
+
+        if (!inventory.remove('cleaningkit', 1, false)) {
             this.notifier.notify(source, "Vous n'avez pas de kit de nettoyage.");
 
             return;
@@ -149,7 +171,9 @@ export class VehicleConditionProvider {
             return;
         }
 
-        if (!this.inventoryManager.removeItemFromInventory(source, 'wheel_kit', 1)) {
+        const inventory = await this.inventoryFactory.getPlayerInventory(source);
+
+        if (!inventory.remove('wheel_kit', 1, false)) {
             this.notifier.notify(source, "Vous n'avez pas de kit anti crevaison.");
 
             return;
@@ -235,7 +259,7 @@ export class VehicleConditionProvider {
     public async onVehicleDead(source: number, vehicleNetworkId: number, reason: string) {
         const state = this.vehicleStateService.getVehicleState(vehicleNetworkId);
 
-        if (state.volatile.dead || !state.volatile.isPlayerVehicle) {
+        if (state.volatile.dead) {
             return;
         }
 
@@ -243,30 +267,60 @@ export class VehicleConditionProvider {
             dead: true,
         });
 
-        if (!state.volatile.id) {
-            return;
-        }
+        if (state.volatile.isPlayerVehicle) {
+            if (!state.volatile.id) {
+                return;
+            }
 
-        const vehicle = await this.prismaService.playerVehicle.update({
-            where: {
-                id: state.volatile.id,
-            },
-            data: {
-                state: PlayerVehicleState.Destroyed,
-            },
-        });
+            const vehicle = await this.prismaService.playerVehicle.update({
+                where: {
+                    id: state.volatile.id,
+                },
+                data: {
+                    state: PlayerVehicleState.Destroyed,
+                },
+            });
 
-        this.monitor.publish(
-            'vehicle_destroy',
-            {
+            this.monitor.traceEvent('vehicle_destroy', {
                 player_source: source,
                 vehicle_plate: vehicle.plate,
-            },
-            {
                 reason,
-                position: toVector3Object(GetEntityCoords(GetPlayerPed(source)) as Vector3),
+                position: toVector3Object(GetEntityCoords(NetworkGetEntityFromNetworkId(vehicleNetworkId)) as Vector3),
+            });
+        }
+
+        const entity = NetworkGetEntityFromNetworkId(vehicleNetworkId);
+        this.explodedVehicleToClean.set(entity, {
+            model: GetEntityModel(entity),
+            date: Date.now() + 3_600_000,
+            plate: GetVehicleNumberPlateText(entity),
+        });
+    }
+
+    @Tick(TickInterval.EVERY_MINUTE)
+    public cleanExplodedVeh() {
+        for (const [entity, data] of this.explodedVehicleToClean.entries()) {
+            if (!entity || !DoesEntityExist(entity)) {
+                this.explodedVehicleToClean.delete(entity);
+                continue;
             }
-        );
+
+            if (GetEntityModel(entity) !== data.model) {
+                this.explodedVehicleToClean.delete(entity);
+                continue;
+            }
+
+            if (GetVehicleNumberPlateText(entity) !== data.plate) {
+                this.explodedVehicleToClean.delete(entity);
+                continue;
+            }
+
+            if (data.date < Date.now()) {
+                DeleteEntity(entity);
+                this.explodedVehicleToClean.delete(entity);
+                continue;
+            }
+        }
     }
 
     @OnEvent(ServerEvent.VEHICLE_WASH)

@@ -1,27 +1,53 @@
+import { ItemService } from '@public/client/item/item.service';
 import { ProperTorsos, ShopBrand, UndershirtCategoryNeedingReplacementTorso } from '@public/config/shops';
-import { Component, OutfitItem, Prop } from '@public/shared/cloth';
+import { BankService } from '@public/server/bank/bank.service';
+import { InventoryFactory } from '@public/server/inventory/inventory.factory';
+import { InventoryProvider } from '@public/server/inventory/inventory.provider';
+import { PlayerPositionProvider } from '@public/server/player/player.position.provider';
+import { VehicleSpawner } from '@public/server/vehicle/vehicle.spawner';
+import { VehicleStateService } from '@public/server/vehicle/vehicle.state.service';
+import { Component, Prop } from '@public/shared/cloth';
 import { TenueIdToHide } from '@public/shared/player';
 import {
     BarberShopItem,
     ClothingCategoryID,
     ClothingShopItem,
+    ENGRAVE_PRICE,
     JewelryShopItem,
     ShopProduct,
     TattooShopItem,
 } from '@public/shared/shop';
 import { CartElement } from '@public/shared/shop/superette';
+import {
+    MuleRentDeposite,
+    MuleRentPrice,
+    ZkeaFournitureItem,
+    ZkeaRentVehicleType,
+    ZkeaShopZoneEnter,
+    ZkeaShopZoneEnterPosition,
+    ZkeaShopZoneExit,
+    ZkeaShopZoneExitPosition,
+} from '@public/shared/shop/zkea_fourniture';
+import { TaxType } from '@public/shared/tax';
+import _ from 'lodash';
 
-import { OnEvent } from '../../core/decorators/event';
+import { Once, OnEvent } from '../../core/decorators/event';
 import { Inject } from '../../core/decorators/injectable';
 import { Provider } from '../../core/decorators/provider';
+import { Rpc } from '../../core/decorators/rpc';
 import { Logger } from '../../core/logger';
-import { TaxType } from '../../shared/bank';
+import { BankMoneyType } from '../../shared/bank';
 import { CAYO } from '../../shared/cayo';
+import { ApparelComponentToItem, ApparelPropToItem, OutfitItem } from '../../shared/cloth';
 import { ClientEvent, ServerEvent } from '../../shared/event';
-import { Vector3 } from '../../shared/polyzone/vector';
+import { Feature } from '../../shared/features';
+import { ADD_ERROR_MESSAGE, InventoryItemMetadata, InventoryType } from '../../shared/inventory';
+import { Vector3, Vector4 } from '../../shared/polyzone/vector';
+import { isErr, isOk } from '../../shared/result';
+import { RpcServerEvent } from '../../shared/rpc';
 import { PriceService } from '../bank/price.service';
 import { PrismaService } from '../database/prisma.service';
-import { InventoryManager } from '../inventory/inventory.manager';
+import { FeatureProvider } from '../feature/feature.provider';
 import { Monitor } from '../monitor/monitor';
 import { Notifier } from '../notifier';
 import { PlayerMoneyService } from '../player/player.money.service';
@@ -33,8 +59,11 @@ export class ShopProvider {
     @Inject(Notifier)
     private notifier: Notifier;
 
-    @Inject(InventoryManager)
-    private inventoryManager: InventoryManager;
+    @Inject(InventoryFactory)
+    private inventoryFactory: InventoryFactory;
+
+    @Inject(InventoryProvider)
+    private inventoryProvider: InventoryProvider;
 
     @Inject(PlayerService)
     private playerService: PlayerService;
@@ -51,18 +80,50 @@ export class ShopProvider {
     @Inject(PrismaService)
     private prismaService: PrismaService;
 
+    @Inject(PlayerPositionProvider)
+    private playerPositionProvider: PlayerPositionProvider;
+
+    @Inject(VehicleSpawner)
+    private vehicleSpawner: VehicleSpawner;
+
+    @Inject(VehicleStateService)
+    private vehicleStateService: VehicleStateService;
+
     @Inject(Logger)
     private logger: Logger;
 
     @Inject(PriceService)
     private priceService: PriceService;
 
-    @OnEvent(ServerEvent.SHOP_VALIDATE_CART)
-    public async onShopBuy(source: number, cartContent: CartElement[], taxType?: TaxType) {
+    @Inject(BankService)
+    private bankService: BankService;
+
+    @Inject(ItemService)
+    private itemService: ItemService;
+
+    @Inject(FeatureProvider)
+    private featureProvider: FeatureProvider;
+
+    @Once()
+    public onStart() {
+        this.playerPositionProvider.registerZone(ZkeaShopZoneEnter, ZkeaShopZoneEnterPosition);
+        this.playerPositionProvider.registerZone(ZkeaShopZoneExit, ZkeaShopZoneExitPosition);
+    }
+
+    @Rpc(RpcServerEvent.INVENTORY_SHOP_VALIDATE_CART)
+    public async onShopBuy(
+        source: number,
+        cartContent: CartElement[],
+        moneyType: 'money' | 'marked_money' | string,
+        taxType?: TaxType
+    ) {
         const player = this.playerService.getPlayer(source);
+
         if (!player) {
-            return;
+            return false;
         }
+
+        const inventory = await this.inventoryFactory.getPlayerInventory(source);
 
         let cartAmount = 0;
         let cartWeight = 0;
@@ -72,54 +133,93 @@ export class ShopProvider {
             cartWeight = cartWeight + item.amount * item.weight;
         });
 
-        const canCarryCart = this.inventoryManager.canCarryItems(source, cartContent);
+        const canCarryCart = inventory.canCarryItems(cartContent);
         TriggerClientEvent(ClientEvent.ANIMATION_GIVE, source);
 
         if (!canCarryCart) {
             this.notifier.notify(source, 'Vous ne pouvez pas porter cette quantité...', 'error');
-            return;
+
+            return false;
         }
 
-        const hasRemovedMoney = taxType
-            ? await this.playerMoneyService.buy(source, cartAmount, taxType)
-            : this.playerMoneyService.remove(source, cartAmount);
+        if (['money', 'marked_money'].includes(moneyType)) {
+            const hasRemovedMoney = taxType
+                ? await this.playerMoneyService.buy(source, cartAmount, taxType)
+                : this.playerMoneyService.remove(source, cartAmount, moneyType as BankMoneyType);
 
-        if (!hasRemovedMoney) {
-            this.notifier.notify(source, "Vous n'avez pas assez d'argent", 'error');
+            if (!hasRemovedMoney) {
+                this.notifier.notify(source, "Vous n'avez pas assez d'argent", 'error');
 
-            return;
+                return false;
+            }
+        } else {
+            const inventory = await this.inventoryFactory.getPlayerInventory(source);
+
+            if (!inventory.remove(moneyType, cartAmount, false)) {
+                const itemDef = this.itemService.getItem(moneyType);
+
+                if (!itemDef) {
+                    return false;
+                }
+
+                this.notifier.notify(source, `Vous n'avez pas assez de ${itemDef.label}`, 'error');
+                return false;
+            }
         }
 
         cartContent.map(item => {
             if (!item.unique) {
-                this.inventoryManager.addItemToInventory(source, item.name, item.amount, item.metadata);
+                inventory.add(item.name, item.amount, item.metadata);
             } else {
                 for (let i = 0; i < item.amount; i++) {
-                    this.inventoryManager.addItemToInventory(source, item.name, 1, item.metadata);
+                    inventory.add(item.name, 1, item.metadata);
                 }
             }
         });
 
-        this.notifier.notify(
-            source,
-            `Votre achat a bien été validé ! Merci. Prix : ~g~$${await this.priceService.getPrice(
-                cartAmount,
-                taxType
-            )}`,
-            'success'
-        );
+        if (['money', 'marked_money'].includes(moneyType)) {
+            const price = await this.priceService.getPrice(cartAmount, taxType);
+            this.notifier.notify(
+                source,
+                `Votre achat a bien été validé ! Merci. Prix : ~g~$${price?.toLocaleString('fr-FR') ?? 0}`,
+                'success'
+            );
+        } else {
+            const itemDef = this.itemService.getItem(moneyType);
 
-        this.monitor.publish(
-            'Shop Buy',
-            { player_source: source },
-            { cartContent: cartContent, cartPrice: cartAmount, taxType: taxType }
-        );
+            this.notifier.notify(
+                source,
+                `Votre achat a bien été validé ! Merci. Prix : ~g~${cartAmount?.toLocaleString('fr-FR') ?? 0}~s~ ~b~${itemDef?.label || moneyType}~s~`,
+                'success'
+            );
+        }
+
+        this.monitor.traceEvent('shop_buy', {
+            player_source: source,
+            money: cartAmount,
+            tax_type: taxType,
+            money_type: moneyType,
+            cart_items: cartContent.map(item => {
+                return {
+                    item_id: item.name,
+                    amount: item.amount,
+                };
+            }),
+        });
+
+        return true;
     }
 
     @OnEvent(ServerEvent.SHOP_BUY)
     public async shopBuy(
         source: number,
-        product: ClothingShopItem | TattooShopItem | ShopProduct | JewelryShopItem | BarberShopItem,
+        product:
+            | ClothingShopItem
+            | TattooShopItem
+            | ShopProduct
+            | JewelryShopItem
+            | BarberShopItem
+            | ZkeaFournitureItem,
         brand: string,
         quantity = 1
     ) {
@@ -148,7 +248,15 @@ export class ShopProvider {
                 this.shopGeneralBuy(source, product as ShopProduct, quantity, isInCayo ? null : TaxType.WEAPON);
                 break;
             case ShopBrand.Zkea:
-                this.shopGeneralBuy(source, product as ShopProduct, quantity, isInCayo ? null : TaxType.SUPPLY);
+                if ((product as ZkeaFournitureItem).model) {
+                    this.shopZkeaFournitureBuy(
+                        source,
+                        product as ZkeaFournitureItem,
+                        isInCayo ? null : TaxType.HOUSING
+                    );
+                } else {
+                    this.shopGeneralBuy(source, product as ShopProduct, quantity, isInCayo ? null : TaxType.SUPPLY);
+                }
                 break;
             case ShopBrand.Barber:
                 this.shopBarberBuy(source, product as BarberShopItem, isInCayo);
@@ -164,13 +272,16 @@ export class ShopProvider {
 
     @OnEvent(ServerEvent.ZKEA_CHECK_STOCK)
     public async zkeaCheckStock(source: number) {
-        const amount = this.inventoryManager.getItemCount('cabinet_storage', 'cabinet_zkea');
+        const inventory = await this.inventoryFactory.getOrCreate('cabinet_storage', InventoryType.CabinetStorage);
+        const amount = inventory.getItemCount('cabinet_zkea');
+
         this.notifier.notify(source, `Il reste ${amount} ~b~meubles Zkea~s~ en stock.`, 'info');
     }
 
     @OnEvent(ServerEvent.LSC_CHECK_STOCK)
     public async lscCheckStock(source: number) {
-        const amount = this.inventoryManager.getItemCount('ls_custom_storage', 'ls_custom_upgrade_part');
+        const inventory = await this.inventoryFactory.get('ls_custom_storage');
+        const amount = inventory.getItemCount('ls_custom_upgrade_part');
         this.notifier.notify(
             source,
             `Il reste ${amount || 0} ~b~Pièces d'amélioration certifiées~s~ en stock.`,
@@ -198,7 +309,7 @@ export class ShopProvider {
                     },
                     FaceTrait: {
                         ...skin.FaceTrait,
-                        ...product.config.FaceTraits,
+                        ...product.config.FaceTrait,
                     },
                 };
             },
@@ -212,7 +323,7 @@ export class ShopProvider {
             case 'Makeup':
                 label = 'maquillage';
                 break;
-            case 'FaceTraits':
+            case 'FaceTrait':
                 label = 'lentilles';
                 break;
 
@@ -226,6 +337,28 @@ export class ShopProvider {
         )}.`;
 
         this.notifier.notify(source, notif, 'success');
+    }
+
+    @OnEvent(ServerEvent.INVENTORY_ENGRAVE_ITEM)
+    public async shopJewelryEngraveBuy(source: number, slot: number, label: string | null) {
+        const inventory = await this.inventoryFactory.getPlayerInventory(source);
+
+        if (!inventory) {
+            return;
+        }
+
+        const inventoryItem = inventory.getItemAtSlot(slot);
+        if (!inventoryItem) {
+            return;
+        }
+
+        if (!(await this.shopPay(source, ENGRAVE_PRICE, TaxType.SUPPLY))) {
+            this.notifier.notify(source, `Ah mais t'es pauvre en fait ! Reviens quand t'auras de quoi payer.`, 'error');
+            return;
+        }
+
+        const price = await this.priceService.getPrice(ENGRAVE_PRICE, TaxType.SUPPLY);
+        await this.inventoryProvider.engraveItem(source, inventory, inventoryItem, label, price);
     }
 
     public async shopJewelryBuy(source: number, product: JewelryShopItem, isInCayo: boolean) {
@@ -286,10 +419,16 @@ export class ShopProvider {
         const shopItem = shopCategories[product.categoryId].content[product.modelLabel].find(
             item => item.id == product.id
         );
-        const stock = shopItem.stock;
-        if (stock <= 0) {
-            this.notifier.notify(source, `Ce produit n'est plus en stock`, 'error');
-            return;
+
+        if (
+            !this.featureProvider.isFeatureEnabled(Feature.WhatIfFirstEpisode) &&
+            !this.featureProvider.isFeatureEnabled(Feature.WhatIfSecondEpisode)
+        ) {
+            const stock = shopItem.stock;
+            if (stock <= 0) {
+                this.notifier.notify(source, `Ce produit n'est plus en stock`, 'error');
+                return;
+            }
         }
 
         if (!(await this.shopPay(source, product.price, isInCayo ? null : TaxType.SUPPLY))) {
@@ -298,6 +437,7 @@ export class ShopProvider {
         }
 
         // Update BDD
+        /* Disabled with the stop FFS
         await this.prismaService.shop_content.update({
             where: {
                 id: product.id,
@@ -308,18 +448,33 @@ export class ShopProvider {
                 },
             },
         });
+        */
 
         // Update repository
-        shopItem.stock -= 1;
-        await this.clothingShopRepository.set(repo);
+        if (
+            !this.featureProvider.isFeatureEnabled(Feature.WhatIfFirstEpisode) &&
+            !this.featureProvider.isFeatureEnabled(Feature.WhatIfSecondEpisode)
+        ) {
+            shopItem.stock -= 1;
+            await this.clothingShopRepository.set(repo);
+        }
+
+        const playerInventory = await this.inventoryFactory.getPlayerInventory(source);
+        if (!playerInventory) return;
 
         const clothSet = product.categoryId == ClothingCategoryID.UNDERWEARS ? 'NakedClothSet' : 'BaseClothSet';
 
         // Update player cloth config
         const clothConfig = this.playerService.getPlayer(source).cloth_config;
         if (product.components && product.correspondingDrawables == null) {
+            const item = this.convertComponentsToApparel(product.modelLabel, product.colorLabel, product.components);
+            if (item) {
+                playerInventory.add(item.name, 1, item.metadata);
+            }
+
             for (const componentId of Object.keys(product.components)) {
-                clothConfig[clothSet].Components[componentId] = product.components[componentId];
+                // clothConfig[clothSet].Components[componentId] = product.components[componentId];
+
                 const HideToReset = TenueIdToHide.Components[componentId];
                 if (HideToReset) {
                     clothConfig.Config[HideToReset] = false;
@@ -327,8 +482,14 @@ export class ShopProvider {
             }
         }
         if (product.props && product.correspondingDrawables == null) {
+            const item = this.convertPropsToApparel(product.modelLabel, product.colorLabel, product.props);
+            if (item) {
+                playerInventory.add(item.name, 1, item.metadata);
+            }
+
             for (const propId of Object.keys(product.props)) {
-                clothConfig[clothSet].Props[propId] = product.props[propId];
+                // clothConfig[clothSet].Props[propId] = product.props[propId];
+
                 const HideToReset = TenueIdToHide.Props[propId];
                 if (HideToReset) {
                     clothConfig.Config[HideToReset] = false;
@@ -346,18 +507,25 @@ export class ShopProvider {
         }
 
         // Adapt torso to undershirt
-        const playerModel = this.playerService.getPlayer(source).skin.Model.Hash;
-        if (product.undershirtType && UndershirtCategoryNeedingReplacementTorso[playerModel][product.undershirtType]) {
+        if (product.undershirtType) {
+            const playerModel = this.playerService.getPlayer(source).skin.Model.Hash;
+            const replacement = UndershirtCategoryNeedingReplacementTorso[playerModel][product.undershirtType];
             const baseTorsoDrawable =
-                ProperTorsos[playerModel][clothConfig.BaseClothSet.Components[Component.Tops].Drawable];
-            const replacementTorsoDrawable =
-                UndershirtCategoryNeedingReplacementTorso[playerModel][product.undershirtType][baseTorsoDrawable];
-            if (replacementTorsoDrawable != null) {
+                ProperTorsos[playerModel][clothConfig.BaseClothSet.Components[Component.Tops].Collection][
+                    clothConfig.BaseClothSet.Components[Component.Tops].Drawable
+                ];
+            if (replacement && replacement[baseTorsoDrawable] != null) {
                 clothConfig.BaseClothSet.Components[Component.Torso] = {
-                    Drawable: replacementTorsoDrawable,
+                    Drawable: replacement[baseTorsoDrawable],
                     Texture: 0,
                     Palette: 0,
-                } as OutfitItem;
+                };
+            } else {
+                clothConfig.BaseClothSet.Components[Component.Torso] = {
+                    Drawable: baseTorsoDrawable,
+                    Texture: 0,
+                    Palette: 0,
+                };
             }
         }
 
@@ -439,20 +607,25 @@ export class ShopProvider {
         if (quantity < 1) {
             return;
         }
+
         const player = this.playerService.getPlayer(source);
+
         if (product.requiredLicense && !player.metadata.licences[product.requiredLicense]) {
             this.notifier.notify(source, "Vous n'avez pas le permis nécessaire", 'error');
             return;
         }
-        if (!this.inventoryManager.canCarryItem(source, product.id, quantity)) {
-            this.notifier.notify(source, `Vous n'avez pas assez de place dans votre inventaire`, 'error');
+
+        const inventory = await this.inventoryFactory.getPlayerInventory(source);
+
+        if (!inventory.canCarryItem(product.id, quantity)) {
+            this.notifier.notify(source, ADD_ERROR_MESSAGE['not_enough_space'], 'error');
             return;
         }
         if (!(await this.shopPay(source, product.price * quantity, taxType))) {
             this.notifier.notify(source, `Ah mais t'es pauvre en fait ! Reviens quand t'auras de quoi payer.`, 'error');
             return;
         }
-        if (this.inventoryManager.addItemToInventory(source, product.id, quantity, product.metadata)) {
+        if (isOk(inventory.add(product.id, quantity, product.metadata))) {
             this.notifier.notify(
                 source,
                 `Vous avez acheté ~b~${quantity} ${product.item.label}~s~ pour ~g~$${await this.priceService.getPrice(
@@ -465,7 +638,193 @@ export class ShopProvider {
         }
     }
 
+    public async shopZkeaFournitureBuy(source: number, product: ZkeaFournitureItem, taxType: TaxType) {
+        const cabinetStorageInventory = await this.inventoryFactory.getOrCreate(
+            'cabinet_storage',
+            InventoryType.CabinetStorage
+        );
+        const playerInventory = await this.inventoryFactory.getPlayerInventory(source);
+
+        if (
+            !this.featureProvider.isFeatureEnabled(Feature.WhatIfFirstEpisode) &&
+            !this.featureProvider.isFeatureEnabled(Feature.WhatIfSecondEpisode)
+        ) {
+            if (cabinetStorageInventory.getItemCount('cabinet_zkea') < 1) {
+                this.notifier.error(source, "Achat de meuble impossible car Zkea n'a pas assez de stock.");
+
+                return;
+            }
+
+            cabinetStorageInventory.remove('cabinet_zkea', 1);
+        }
+
+        const crate = Object.values(playerInventory.items()).find(
+            inventoryItem => inventoryItem.name === 'zkea_crate' && inventoryItem.metadata.zkeaCrateElements.length < 20
+        );
+
+        let newMeta: InventoryItemMetadata;
+        if (crate) {
+            newMeta = _.cloneDeep(crate.metadata);
+            newMeta.zkeaCrateElements.push({ type: product.type, name: product.name, model: product.model });
+            if (
+                !playerInventory.canSwapItems(
+                    [{ name: 'zkea_crate', amount: 1, metadata: crate.metadata }],
+                    [{ name: 'zkea_crate', amount: 1, metadata: newMeta }]
+                )
+            ) {
+                this.notifier.notify(source, ADD_ERROR_MESSAGE['not_enough_space'], 'error');
+                return;
+            }
+        } else {
+            newMeta = { zkeaCrateElements: [{ type: product.type, name: product.name, model: product.model }] };
+            if (!playerInventory.canCarryItem('zkea_crate', 1, newMeta)) {
+                this.notifier.notify(source, ADD_ERROR_MESSAGE['not_enough_space'], 'error');
+                return;
+            }
+        }
+
+        if (!(await this.shopPay(source, product.price, taxType))) {
+            this.notifier.notify(source, `Ah mais t'es pauvre en fait ! Reviens quand t'auras de quoi payer.`, 'error');
+            return;
+        }
+
+        if (crate) {
+            if (!playerInventory.removeAtSlot(crate.slot, 1)) {
+                this.notifier.notify(source, `Oups, une erreur est survenue... Réessaye !`, 'error');
+                return;
+            }
+        }
+        const addRequest = playerInventory.add('zkea_crate', 1, newMeta);
+
+        if (isErr(addRequest)) {
+            this.notifier.notify(source, `Oups, une erreur est survenue... Réessaye !`, 'error');
+            return;
+        }
+
+        this.notifier.notify(
+            source,
+            `Vous avez acheté ~b~1 ${product.name}~s~ pour ~g~$${await this.priceService.getPrice(
+                product.price,
+                taxType
+            )}`
+        );
+    }
+
     public async shopPay(source: number, price: number, taxType: TaxType | null): Promise<boolean> {
         return this.playerMoneyService.buy(source, price, taxType);
+    }
+
+    @OnEvent(ServerEvent.ZKEA_RENT_MULE)
+    public async onRentMule(source: number, position: Vector4) {
+        if (!(await this.playerMoneyService.buy(source, MuleRentPrice + MuleRentDeposite, TaxType.SERVICE))) {
+            this.notifier.notify(source, `Vous n'avez pas assez d'argent.`, 'error');
+            return;
+        }
+
+        const vehiculeNetId = await this.vehicleSpawner.spawnRentVehicle(source, ZkeaRentVehicleType, {
+            position: position,
+        });
+        if (typeof vehiculeNetId == 'number') {
+            const plate = GetVehicleNumberPlateText(NetworkGetEntityFromNetworkId(vehiculeNetId));
+            this.vehicleStateService.addVehicleKey(plate, this.playerService.getPlayer(source).citizenid);
+
+            TriggerClientEvent(ClientEvent.ANIMATION_GIVE, source);
+
+            const taxedPrice = await this.priceService.getPrice(MuleRentPrice + MuleRentDeposite, TaxType.SERVICE);
+            this.notifier.notify(source, `Vous avez payé ~r~${taxedPrice}$~s~`, 'info');
+            this.notifier.notify(
+                source,
+                `Tiens, v'la les clés, et m'le casse pas ! Si tu veux récupérer ta caution, ramène moi le camion.`,
+                'success'
+            );
+        }
+    }
+
+    @OnEvent(ServerEvent.ZKEA_RETURN_MULE)
+    public async onReturnMule(source: number, networkId: number) {
+        const player = this.playerService.getPlayer(source);
+
+        if (!player) {
+            return;
+        }
+
+        const vehicleState = this.vehicleStateService.getVehicleState(networkId);
+        if (!vehicleState.volatile) {
+            this.notifier.notify(source, 'Ce véhicule ne vous appartient pas.', 'error');
+            return;
+        }
+
+        if (
+            vehicleState.volatile.rentOwner === player.citizenid ||
+            this.vehicleStateService.hasVehicleKey(vehicleState.volatile.plate, player.citizenid)
+        ) {
+            if (await this.vehicleSpawner.delete(networkId)) {
+                const rentOwner = this.playerService.getPlayerByCitizenId(vehicleState.volatile.rentOwner);
+                await this.bankService.addAccountMoney(
+                    rentOwner.charinfo.account,
+                    MuleRentDeposite,
+                    'money',
+                    false,
+                    'Restitution de la caution du camion de location ZKEA'
+                );
+                this.notifier.notify(
+                    source,
+                    'Vous avez rendu votre camion de location, la caution a été rendu au locataire.',
+                    'success'
+                );
+            } else {
+                this.notifier.notify(source, 'Impossible de ranger votre camion.', 'error');
+            }
+        } else {
+            this.notifier.notify(source, 'Ce camion ne vous appartient pas.', 'error');
+        }
+    }
+
+    private convertComponentsToApparel(
+        label: string,
+        description: string,
+        components: Partial<Record<Component, OutfitItem>>
+    ): { name: string; metadata: InventoryItemMetadata } | null {
+        const apparelItemComponent = Object.keys(components)
+            .sort((a, b) => Number(a) - Number(b))
+            .find(key => ApparelComponentToItem[key]);
+
+        if (!apparelItemComponent) {
+            return null;
+        }
+
+        const apparelItem = ApparelComponentToItem[apparelItemComponent];
+        if (!apparelItem) {
+            return null;
+        }
+
+        return {
+            name: apparelItem,
+            metadata: { components, label, description },
+        };
+    }
+
+    private convertPropsToApparel(
+        label: string,
+        description: string,
+        components: Partial<Record<Prop, OutfitItem>>
+    ): { name: string; metadata: InventoryItemMetadata } | null {
+        const apparelItemComponent = Object.keys(components)
+            .sort((a, b) => Number(a) - Number(b))
+            .find(key => ApparelPropToItem[key]);
+
+        if (!apparelItemComponent) {
+            return null;
+        }
+
+        const apparelItem = ApparelPropToItem[apparelItemComponent];
+        if (!apparelItem) {
+            return null;
+        }
+
+        return {
+            name: apparelItem,
+            metadata: { components, label, description },
+        };
     }
 }

@@ -1,5 +1,7 @@
 import { Inject, Injectable } from '@public/core/decorators/injectable';
+import { Feature } from '@public/shared/features';
 import { PlayerPedHash } from '@public/shared/player';
+import { getRandomInt } from '@public/shared/random';
 import {
     ClothingShop,
     ClothingShopID,
@@ -11,12 +13,16 @@ import {
 import { ProperTorsos } from '../../config/shops';
 import { Component } from '../../shared/cloth';
 import { PrismaService } from '../database/prisma.service';
+import { FeatureProvider } from '../feature/feature.provider';
 import { RepositoryLegacy } from './repository';
 
 @Injectable()
 export class ClothingShopRepository extends RepositoryLegacy<ClothingShopRepositoryData> {
     @Inject(PrismaService)
     private prismaService: PrismaService;
+
+    @Inject(FeatureProvider)
+    private featureProvider: FeatureProvider;
 
     protected async load(): Promise<ClothingShopRepositoryData> {
         const repository: ClothingShopRepositoryData = {
@@ -94,6 +100,7 @@ export class ClothingShopRepository extends RepositoryLegacy<ClothingShopReposit
                     id: shopCategory.category_id,
                     name: shopCategory.category.name,
                     parentId: shopCategory.category.parent_id,
+                    warmScore: shopCategory.category.warm_score,
                 };
                 repository.shopNameById[shop.id] = shop.name;
                 repository.shops[shop.name] = clothingShop;
@@ -114,6 +121,7 @@ export class ClothingShopRepository extends RepositoryLegacy<ClothingShopReposit
                         name: category.name,
                         parentId: category.parent_id,
                         content: {},
+                        warmScore: category.warm_score,
                     };
                 }
             }
@@ -127,7 +135,7 @@ export class ClothingShopRepository extends RepositoryLegacy<ClothingShopReposit
                 shopId: item.shop_id,
                 categoryId: item.category_id,
                 label: item.label,
-                price: item.price,
+                price: this.featureProvider.isFeatureEnabled(Feature.WhatIfSecondEpisode) ? 0 : item.price,
                 modelHash: shopItemData.modelHash,
                 components: shopItemData.components,
                 props: shopItemData.props,
@@ -136,11 +144,24 @@ export class ClothingShopRepository extends RepositoryLegacy<ClothingShopReposit
                 underTypes: shopItemData.underTypes,
                 modelLabel: shopItemData.modelLabel,
                 colorLabel: shopItemData.colorLabel,
-                stock: item.stock,
+                stock:
+                    this.featureProvider.isFeatureEnabled(Feature.WhatIfFirstEpisode) ||
+                    this.featureProvider.isFeatureEnabled(Feature.WhatIfSecondEpisode) ||
+                    item.stock == -1
+                        ? 1000
+                        : getRandomInt(0, 10), //item.stock,
             };
             if (!shopItem.modelLabel) {
                 continue;
             }
+
+            if (
+                this.featureProvider.isFeatureEnabled(Feature.WhatIfSecondEpisode) &&
+                shopItem.components[Component.Bag]
+            ) {
+                continue;
+            }
+
             const genderToAdd = shopItem.modelHash ? [shopItem.modelHash] : [PlayerPedHash.Male, PlayerPedHash.Female];
             for (const modelHash of genderToAdd) {
                 if (!repository.categories[modelHash][shopItem.shopId][item.category_id].content[shopItem.modelLabel]) {
@@ -159,18 +180,24 @@ export class ClothingShopRepository extends RepositoryLegacy<ClothingShopReposit
                     for (const itemModelList of Object.values(shopContent.content)) {
                         for (const item of itemModelList) {
                             if (item.components[Component.Tops] != null) {
-                                item.components[Component.Torso] = {
-                                    Drawable: ProperTorsos[item.modelHash][item.components[Component.Tops].Drawable],
-                                    Texture: 0,
-                                };
-                                if (item.modelHash == PlayerPedHash.Female) {
-                                    item.components[Component.Undershirt] = {
-                                        Drawable: 14, // This is without undershirt (for women)
+                                try {
+                                    item.components[Component.Torso] = {
+                                        Drawable:
+                                            ProperTorsos[item.modelHash][item.components[Component.Tops].Collection][
+                                                item.components[Component.Tops].Drawable
+                                            ],
                                         Texture: 0,
                                     };
-                                } else {
+                                } catch (e) {
+                                    console.log(
+                                        item.components[Component.Tops],
+                                        ProperTorsos[item.modelHash][item.components[Component.Tops].Collection]
+                                    );
+                                    throw e;
+                                }
+                                if (!item.components[Component.Undershirt]) {
                                     item.components[Component.Undershirt] = {
-                                        Drawable: 15, // This is without undershirt (for men)
+                                        Drawable: item.modelHash == PlayerPedHash.Female ? 14 : 15, // This is without undershirt
                                         Texture: 0,
                                     };
                                 }

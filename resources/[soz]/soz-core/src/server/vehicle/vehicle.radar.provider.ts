@@ -2,12 +2,13 @@ import { RadarAllowedVehicle, RadarInformedVehicle } from '../../config/radar';
 import { OnEvent } from '../../core/decorators/event';
 import { Inject } from '../../core/decorators/injectable';
 import { Provider } from '../../core/decorators/provider';
-import { ClientEvent } from '../../shared/event';
+import { ClientEvent, ServerEvent } from '../../shared/event';
 import { FDO, JobType } from '../../shared/job';
 import { PlayerLicenceType } from '../../shared/player';
 import { VehicleSeat } from '../../shared/vehicle/vehicle';
 import { BankService } from '../bank/bank.service';
 import { PrismaService } from '../database/prisma.service';
+import { Monitor } from '../monitor/monitor';
 import { Notifier } from '../notifier';
 import { PlayerService } from '../player/player.service';
 import { RadarRepository } from '../repository/radar.repository';
@@ -41,9 +42,14 @@ export class VehicleRadarProvider {
     private radarRepository: RadarRepository;
 
     @Inject(VehicleStateService)
-    vehicleStateService: VehicleStateService;
+    private vehicleStateService: VehicleStateService;
 
-    @OnEvent(ClientEvent.VEHICLE_RADAR_TRIGGER)
+    @Inject(Monitor)
+    private monitor: Monitor;
+
+    private disabledEndTimes: Record<number, number> = {};
+
+    @OnEvent(ServerEvent.VEHICLE_RADAR_TRIGGER)
     public async radarTrigger(
         source: number,
         radarID: number,
@@ -56,17 +62,27 @@ export class VehicleRadarProvider {
         const vehicle = NetworkGetEntityFromNetworkId(vehicleID);
         const vehicleSpeed = Math.round(GetEntitySpeed(vehicle) * 3.6);
         const state = this.vehicleStateService.getVehicleState(vehicleID);
-        const vehiclePlate = state.volatile.plate || GetVehicleNumberPlateText(vehicle);
+        const vehiclePlate = GetVehicleNumberPlateText(vehicle);
         const vehicleModel = GetEntityModel(vehicle);
-        const fine = Math.round((vehicleSpeed - radar.speed) * 6);
+        let fine: number = 0;
+        if (state.volatile.isPlayerVehicle) {
+            fine = Math.round((vehicleSpeed - radar.speed) * 6);
+        }
         const vehicleType = GetVehicleType(vehicle);
-        const vehiclePosition = GetEntityCoords(vehicle);
 
         if (!player || !radar) {
             return;
         }
 
+        if (state.volatile.fakeplate) {
+            return;
+        }
+
         if (radar.destroyed) {
+            return;
+        }
+
+        if (this.disabledEndTimes[radarID] && this.disabledEndTimes[radarID] > Date.now()) {
             return;
         }
 
@@ -118,66 +134,61 @@ export class VehicleRadarProvider {
                     }km/h~s~~n~`;
             }
 
-            radarMessage = radarMessage + `Amende: ~r~${fine}$~s~~n~`;
             let licenceAction = 'no_action';
+            if (fine > 0) {
+                radarMessage = radarMessage + `Amende: ~r~${fine}$~s~~n~`;
 
-            if (vehicleSpeed - radar.speed >= 20) {
-                const licences = player.metadata['licences'];
-                const vehicleDB = await this.vehicleRepository.findByHash(vehicleModel);
+                if (vehicleSpeed - radar.speed >= 20) {
+                    const licences = player.metadata['licences'];
+                    const vehicleDB = await this.vehicleRepository.findByHash(vehicleModel);
 
-                let licenceType = PlayerLicenceType.Car;
-                if (vehicleDB) {
-                    licenceType = vehicleDB.requiredLicence as PlayerLicenceType;
-                } else if (vehicleType == 'bike' || vehicleClass == 8) {
-                    licenceType = PlayerLicenceType.Moto;
-                } else if (
-                    vehicleType == 'automobile' &&
-                    (vehicleClass == 10 || vehicleClass == 17 || vehicleClass == 20)
-                ) {
-                    licenceType = PlayerLicenceType.Truck;
-                } else if (vehicleType == 'heli') {
-                    licenceType = PlayerLicenceType.Heli;
-                } else if (vehicleType == 'boat') {
-                    licenceType = PlayerLicenceType.Boat;
-                }
-
-                if (licences[licenceType] >= 1) {
-                    licences[licenceType] = licences[licenceType] - 1;
+                    let licenceType = PlayerLicenceType.Car;
+                    if (vehicleDB) {
+                        licenceType = vehicleDB.requiredLicence as PlayerLicenceType;
+                    } else if (vehicleType == 'bike' || vehicleClass == 8) {
+                        licenceType = PlayerLicenceType.Moto;
+                    } else if (
+                        vehicleType == 'automobile' &&
+                        (vehicleClass == 10 || vehicleClass == 17 || vehicleClass == 20)
+                    ) {
+                        licenceType = PlayerLicenceType.Truck;
+                    } else if (vehicleType == 'heli') {
+                        licenceType = PlayerLicenceType.Heli;
+                    } else if (vehicleType == 'boat' || vehicleType !== 'submarine') {
+                        licenceType = PlayerLicenceType.Boat;
+                    }
 
                     if (licences[licenceType] >= 1) {
-                        licenceAction = 'remove_point';
-                        radarMessage = radarMessage + 'Point: ~r~-1 Point(s)~s~~n~';
-                    } else {
-                        licenceAction = 'remove_licence';
-                        radarMessage = radarMessage + '~r~Retrait du permis~s~~n~';
-                    }
-                } else {
-                    licenceAction = 'no_licence';
-                    radarMessage = radarMessage + '~r~Aucun permis~s~~n~';
-                }
+                        licences[licenceType] = licences[licenceType] - 1;
 
-                this.playerService.setPlayerMetadata(source, 'licences', licences);
+                        if (licences[licenceType] >= 1) {
+                            licenceAction = 'remove_point';
+                            radarMessage = radarMessage + 'Point: ~r~-1 Point(s)~s~~n~';
+                        } else {
+                            licenceAction = 'remove_licence';
+                            radarMessage = radarMessage + '~r~Retrait du permis~s~~n~';
+                        }
+                    } else {
+                        licenceAction = 'no_licence';
+                        radarMessage = radarMessage + '~r~Aucun permis~s~~n~';
+                    }
+
+                    this.playerService.setPlayerMetadata(source, 'licences', licences);
+                }
             }
 
-            TriggerEvent(
-                'monitor:server:event',
-                'radar_flash',
-                {
-                    player_source: source,
-                    radar_id: radarID,
-                    vehicle_plate: vehiclePlate,
-                },
-                {
-                    licence_action: licenceAction,
-                    amount: fine,
-                    vehicle_speed: vehicleSpeed,
-                    vehicle_model: vehicleModel,
-                    vehicle_type: vehicleType,
-                    position: vehiclePosition,
-                }
-            );
+            this.monitor.traceEvent('radar_flash', {
+                player_source: source,
+                id: radarID.toString(),
+                vehicle_plate: vehiclePlate,
+                type: licenceAction,
+                money: fine,
+                amount: vehicleSpeed,
+            });
 
-            this.bankService.transferBankMoney(player.charinfo.account, JobType.Gouv, fine, true);
+            if (fine > 0) {
+                await this.bankService.transferBankMoney(player.charinfo.account, JobType.Gouv, 'money', fine, true);
+            }
 
             this.notifier.advancedNotify(
                 source,
@@ -207,6 +218,12 @@ export class VehicleRadarProvider {
                     return false;
                 }
             );
+        }
+    }
+
+    public setDisbledTime(radarId: number, time: number) {
+        if (!this.disabledEndTimes[radarId] || this.disabledEndTimes[radarId] < time) {
+            this.disabledEndTimes[radarId] = time;
         }
     }
 }

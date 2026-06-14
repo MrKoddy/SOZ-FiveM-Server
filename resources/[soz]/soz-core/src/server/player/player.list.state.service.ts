@@ -10,6 +10,8 @@ export class PlayerListStateService {
         zipped: new Set<number>(),
         wearingPatientOutfit: new Set<number>(),
         escorted: new Set<number>(),
+        knockedOut: new Set<number>(),
+        validated: new Set<number>(),
     };
 
     public handlePlayer(player: PlayerData, playerState: PlayerClientState) {
@@ -17,6 +19,8 @@ export class PlayerListStateService {
         this.handle('zipped', player.source, playerState.isZipped);
         this.handle('wearingPatientOutfit', player.source, playerState.isWearingPatientOutfit);
         this.handle('escorted', player.source, playerState.isEscorted);
+        this.handle('knockedOut', player.source, playerState.isKnockedOut);
+        this.handle('validated', player.source, player.is_validated);
     }
 
     public removePlayer(player: number) {
@@ -24,6 +28,8 @@ export class PlayerListStateService {
         this.handle('zipped', player, false);
         this.handle('wearingPatientOutfit', player, false);
         this.handle('escorted', player, false);
+        this.handle('knockedOut', player, false);
+        this.handle('validated', player, false);
     }
 
     private handle(key: PlayerListStateKey, player: number, status: boolean) {
@@ -40,7 +46,13 @@ export class PlayerListStateService {
         }
 
         if (updated) {
-            TriggerClientEvent(ClientEvent.PLAYER_UPDATE_LIST_STATE, -1, key, Array.from(this.lists[key]));
+            TriggerLatentClientEvent(
+                ClientEvent.PLAYER_UPDATE_LIST_STATE,
+                -1,
+                16 * 1024,
+                key,
+                Array.from(this.lists[key])
+            );
         }
     }
 
@@ -50,6 +62,8 @@ export class PlayerListStateService {
             zipped: [],
             wearingPatientOutfit: [],
             escorted: [],
+            knockedOut: [],
+            validated: [],
         };
 
         for (const key in this.lists) {

@@ -1,5 +1,6 @@
 import { Exportable } from '@public/core/decorators/exports';
-import { InventoryItem } from '@public/shared/item';
+import { ScubaOutfit } from '@public/shared/cloth';
+import { InventoryItem } from '@public/shared/inventory';
 import { PlayerData } from '@public/shared/player';
 
 import { Once, OnceStep, OnEvent } from '../../core/decorators/event';
@@ -84,7 +85,13 @@ export class ItemProvider {
     }
 
     @OnEvent(ClientEvent.ITEM_UMBRELLA_TOGGLE)
-    async onUmbrellaToggle(): Promise<void> {
+    async onUmbrellaToggle(itemName: string): Promise<void> {
+        const models = {
+            ['umbrella']: 'p_amb_brolly_01',
+            ['umbrella_white']: 'p_amb_brolly_02',
+            ['umbrella_black']: 'p_amb_brolly_03',
+        };
+
         this.animationService.toggleAnimation({
             base: {
                 dictionary: 'amb@world_human_drinking@coffee@male@base',
@@ -99,7 +106,7 @@ export class ItemProvider {
             props: [
                 {
                     bone: 57005,
-                    model: 'p_amb_brolly_01',
+                    model: models[itemName],
                     position: [0.12, 0.005, 0.0],
                     rotation: [280.0, 10.0, 350.0],
                 },
@@ -147,28 +154,7 @@ export class ItemProvider {
     public async onScubaToogle(scuba: boolean) {
         const player = this.playerService.getPlayer();
 
-        const skin = {
-            [GetHashKey('mp_m_freemode_01')]: {
-                Components: {
-                    [3]: { Drawable: 4, Texture: 0, Palette: 0 },
-                    [4]: { Drawable: 94, Texture: 0, Palette: 0 },
-                    [6]: { Drawable: 67, Texture: 0, Palette: 0 },
-                    [8]: { Drawable: 151, Texture: 0, Palette: 0 },
-                    [11]: { Drawable: 243, Texture: 0, Palette: 0 },
-                },
-                Props: {},
-            },
-            [GetHashKey('mp_f_freemode_01')]: {
-                Components: {
-                    [3]: { Drawable: 5, Texture: 0, Palette: 0 },
-                    [4]: { Drawable: 97, Texture: 0, Palette: 0 },
-                    [6]: { Drawable: 70, Texture: 0, Palette: 0 },
-                    [8]: { Drawable: 187, Texture: 0, Palette: 0 },
-                    [11]: { Drawable: 251, Texture: 0, Palette: 0 },
-                },
-                Props: {},
-            },
-        };
+        const skin = ScubaOutfit;
 
         const { completed } = await this.playerWardrobe.waitProgress(false);
         if (!completed) {

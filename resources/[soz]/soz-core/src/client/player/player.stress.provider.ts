@@ -1,73 +1,36 @@
-import { PlayerUpdate } from '@public/core/decorators/player';
+import { On, OnEvent } from '@core/decorators/event';
+import { Inject } from '@core/decorators/injectable';
+import { PlayerUpdate } from '@core/decorators/player';
+import { Provider } from '@core/decorators/provider';
+import { Tick, TickInterval } from '@core/decorators/tick';
+import { emitRpc } from '@core/rpc';
+import { wait } from '@core/utils';
+import { AnimationService } from '@public/client/animation/animation.service';
+import { GamesProvider } from '@public/client/games/games.provider';
+import { LSMCDeathProvider } from '@public/client/job/lsmc/lsmc.death.provider';
+import { ProgressService } from '@public/client/progress.service';
+import { ZoneRepository } from '@public/client/repository/zone.repository';
+import { BlurService } from '@public/client/utils/blur.service';
+import { AnimationStopReason } from '@public/shared/animation';
+import { ClientEvent, ServerEvent } from '@public/shared/event';
+import { Feature } from '@public/shared/features';
+import { IntervalByStressLooseType, StressLooseType } from '@public/shared/health';
+import { Item } from '@public/shared/item';
+import { PlayerData } from '@public/shared/player';
+import { BoxZone, ZoneType } from '@public/shared/polyzone/box.zone';
+import { getDistance, Vector3 } from '@public/shared/polyzone/vector';
+import { RpcServerEvent } from '@public/shared/rpc';
 import { VehicleMidDamageThreshold } from '@public/shared/vehicle/vehicle';
 
-import { On, OnEvent } from '../../core/decorators/event';
-import { Inject } from '../../core/decorators/injectable';
-import { Provider } from '../../core/decorators/provider';
-import { Tick, TickInterval } from '../../core/decorators/tick';
-import { wait } from '../../core/utils';
-import { AnimationStopReason } from '../../shared/animation';
-import { ClientEvent, ServerEvent } from '../../shared/event';
-import { Feature, isFeatureEnabled } from '../../shared/features';
-import { Item } from '../../shared/item';
-import { PlayerData } from '../../shared/player';
-import { BoxZone, ZoneType } from '../../shared/polyzone/box.zone';
-import { getDistance, Vector3 } from '../../shared/polyzone/vector';
-import { AnimationService } from '../animation/animation.service';
-import { LSMCDeathProvider } from '../job/lsmc/lsmc.death.provider';
-import { Notifier } from '../notifier';
-import { ProgressService } from '../progress.service';
-import { ZoneRepository } from '../repository/zone.repository';
+import { FeatureProvider } from '../feature/feature.provider';
 import { PlayerService } from './player.service';
 import { PlayerWalkstyleProvider } from './player.walkstyle.provider';
 import { PlayerZombieProvider } from './player.zombie.provider';
-
-enum StressLooseType {
-    VehicleAbove160,
-    VehicleAbove180,
-    VehicleYellowEngine,
-    SeenDead,
-    ShootingNearby,
-    HittingNearby,
-    Dead,
-    Handcuffed,
-    DrinkCoffee,
-    DrinkAlcohol,
-}
-
-const PointsByStressLooseType: Record<StressLooseType, number> = {
-    [StressLooseType.VehicleAbove160]: 1,
-    [StressLooseType.VehicleAbove180]: 2,
-    [StressLooseType.VehicleYellowEngine]: 3,
-    [StressLooseType.ShootingNearby]: 3,
-    [StressLooseType.HittingNearby]: 2,
-    [StressLooseType.SeenDead]: 2,
-    [StressLooseType.Dead]: 10,
-    [StressLooseType.Handcuffed]: 1,
-    [StressLooseType.DrinkCoffee]: -2,
-    [StressLooseType.DrinkAlcohol]: -6,
-};
-
-const IntervalByStressLooseType: Record<StressLooseType, number> = {
-    [StressLooseType.VehicleAbove160]: 30,
-    [StressLooseType.VehicleAbove180]: 30,
-    [StressLooseType.VehicleYellowEngine]: 30,
-    [StressLooseType.ShootingNearby]: 30,
-    [StressLooseType.HittingNearby]: 30,
-    [StressLooseType.SeenDead]: 30,
-    [StressLooseType.Dead]: 0,
-    [StressLooseType.Handcuffed]: 0,
-    [StressLooseType.DrinkCoffee]: 30,
-    [StressLooseType.DrinkAlcohol]: 30,
-};
 
 @Provider()
 export class PlayerStressProvider {
     @Inject(PlayerService)
     private playerService: PlayerService;
-
-    @Inject(Notifier)
-    private notifier: Notifier;
 
     @Inject(ProgressService)
     private progressService: ProgressService;
@@ -87,6 +50,15 @@ export class PlayerStressProvider {
     @Inject(PlayerZombieProvider)
     private playerZombieProvider: PlayerZombieProvider;
 
+    @Inject(GamesProvider)
+    private readonly gamesProvider: GamesProvider;
+
+    @Inject(BlurService)
+    private blurService: BlurService;
+
+    @Inject(FeatureProvider)
+    private featureProvider: FeatureProvider;
+
     private isStressUpdated = false;
     private wasDead = false;
     private wasHandcuff = false;
@@ -105,12 +77,15 @@ export class PlayerStressProvider {
         [StressLooseType.Handcuffed]: null,
         [StressLooseType.DrinkCoffee]: null,
         [StressLooseType.DrinkAlcohol]: null,
+        [StressLooseType.Smoke]: null,
+        [StressLooseType.Thunder]: null,
     };
 
-    private updateStress(type: StressLooseType, checkZonePosition: Vector3 = null): void {
+    public async updateStress(type: StressLooseType, checkZonePosition: Vector3 = null): Promise<void> {
         const lastUsedAt = this.lastStressTypeUsedAt[type];
 
-        if (lastUsedAt !== null && GetGameTimer() - lastUsedAt < IntervalByStressLooseType[type] * 60 * 1000) {
+        const updateTimer = new Date().getTime();
+        if (lastUsedAt !== null && updateTimer - lastUsedAt < IntervalByStressLooseType[type] * 60 * 1000) {
             return;
         }
 
@@ -128,21 +103,15 @@ export class PlayerStressProvider {
             }
         }
 
-        const stressPoints = PointsByStressLooseType[type];
-        TriggerServerEvent(ServerEvent.PLAYER_INCREASE_STRESS, stressPoints);
-
-        if (stressPoints > 0) {
-            this.notifier.notify('Un événement vous a ~r~angoissé~s~.', 'error');
-        } else {
-            this.notifier.notify('Vous vous sentez moins ~g~angoissé~s~.', 'success');
+        const newTimer = await emitRpc<number>(RpcServerEvent.STRESS_UPDATE, type, updateTimer);
+        if (lastUsedAt === null || (newTimer !== null && newTimer > this.lastStressTypeUsedAt[type])) {
+            this.lastStressTypeUsedAt[type] = newTimer;
         }
-
-        this.lastStressTypeUsedAt[type] = GetGameTimer();
     }
 
     @OnEvent(ClientEvent.ITEM_USE)
     public onItemUse(name: string, item: Item): void {
-        if (!isFeatureEnabled(Feature.MyBodySummer)) {
+        if (!this.featureProvider.isFeatureEnabled(Feature.MyBodySummer)) {
             return;
         }
 
@@ -164,34 +133,42 @@ export class PlayerStressProvider {
     }
 
     @On('CEventShockingSeenPedKilled', false)
-    public onCEventShockingSeenPedKilled(entities, eventEntity): void {
-        this.onStressfulGameEvent(StressLooseType.SeenDead, entities, eventEntity, 20.0, false);
+    public async onCEventShockingSeenPedKilled(entities, eventEntity): Promise<void> {
+        await this.onStressfulGameEvent(StressLooseType.SeenDead, entities, eventEntity, 20.0, false);
     }
 
     @On('CEventShockingGunshotFired', false)
-    public onCEventShockingGunshotFired(entities, eventEntity): void {
+    public async onCEventShockingGunshotFired(entities, eventEntity): Promise<void> {
         const player = PlayerPedId();
         const coords = GetEntityCoords(player);
         const zoneID = GetNameOfZone(coords[0], coords[1], coords[2]);
 
         if ('ARMYB' != zoneID) {
-            this.onStressfulGameEvent(StressLooseType.ShootingNearby, entities, eventEntity, 40.0, false);
+            await this.onStressfulGameEvent(StressLooseType.ShootingNearby, entities, eventEntity, 40.0, false);
         }
     }
 
     @On('CEventShockingInjuredPed', false)
-    public onCEventShockingInjuredPed(entities, eventEntity): void {
-        this.onStressfulGameEvent(StressLooseType.HittingNearby, entities, eventEntity, 20.0, true);
+    public async onCEventShockingInjuredPed(entities, eventEntity): Promise<void> {
+        await this.onStressfulGameEvent(StressLooseType.HittingNearby, entities, eventEntity, 20.0, true);
     }
 
-    public onStressfulGameEvent(
+    public async onStressfulGameEvent(
         type: StressLooseType,
         entities,
         eventEntity,
         trigger_distance: number,
         must_be_player = false
-    ): void {
-        if (!isFeatureEnabled(Feature.MyBodySummer)) {
+    ): Promise<void> {
+        if (!this.featureProvider.isFeatureEnabled(Feature.MyBodySummer)) {
+            return;
+        }
+
+        if (this.featureProvider.isFeatureEnabled(Feature.WhatIfSecondEpisode)) {
+            return;
+        }
+
+        if (this.gamesProvider.areAnyGameRunning()) {
             return;
         }
 
@@ -210,12 +187,16 @@ export class PlayerStressProvider {
             return;
         }
 
-        this.updateStress(type, playerPosition);
+        await this.updateStress(type, playerPosition);
     }
 
     @Tick(TickInterval.EVERY_SECOND)
     async checkStressfulEvent(): Promise<void> {
-        if (!isFeatureEnabled(Feature.MyBodySummer)) {
+        if (!this.featureProvider.isFeatureEnabled(Feature.MyBodySummer)) {
+            return;
+        }
+
+        if (this.featureProvider.isFeatureEnabled(Feature.WhatIfSecondEpisode)) {
             return;
         }
 
@@ -230,13 +211,13 @@ export class PlayerStressProvider {
         }
 
         if (!this.wasDead && player.metadata.isdead) {
-            this.updateStress(StressLooseType.Dead);
+            await this.updateStress(StressLooseType.Dead);
         }
 
         this.wasDead = player.metadata.isdead;
 
         if (!this.wasHandcuff && player.metadata.ishandcuffed) {
-            this.updateStress(StressLooseType.Handcuffed);
+            await this.updateStress(StressLooseType.Handcuffed);
         }
 
         this.wasHandcuff = player.metadata.ishandcuffed;
@@ -259,7 +240,7 @@ export class PlayerStressProvider {
                     this.previousVehicleHealth >= VehicleMidDamageThreshold &&
                     engineHealth < VehicleMidDamageThreshold
                 ) {
-                    this.updateStress(StressLooseType.VehicleYellowEngine);
+                    await this.updateStress(StressLooseType.VehicleYellowEngine);
                 }
 
                 this.previousVehicleHealth = engineHealth;
@@ -269,11 +250,11 @@ export class PlayerStressProvider {
                 const speed = GetEntitySpeed(currentVehicle) * 3.6;
 
                 if (speed > 160) {
-                    this.updateStress(StressLooseType.VehicleAbove160);
+                    await this.updateStress(StressLooseType.VehicleAbove160);
                 }
 
                 if (speed > 200) {
-                    this.updateStress(StressLooseType.VehicleAbove180);
+                    await this.updateStress(StressLooseType.VehicleAbove180);
                 }
             }
         } else {
@@ -316,6 +297,10 @@ export class PlayerStressProvider {
             return;
         }
 
+        if (this.gamesProvider.areAnyGameRunning()) {
+            return;
+        }
+
         if (this.slowMode) {
             DisableControlAction(0, 21, true); // disable sprint
             DisableControlAction(0, 22, true); // disable jump
@@ -343,7 +328,7 @@ export class PlayerStressProvider {
 
     @PlayerUpdate()
     async onPlayerUpdate(player: PlayerData): Promise<void> {
-        if (!isFeatureEnabled(Feature.MyBodySummer)) {
+        if (!this.featureProvider.isFeatureEnabled(Feature.MyBodySummer)) {
             return;
         }
 
@@ -355,7 +340,15 @@ export class PlayerStressProvider {
 
     @Tick(TickInterval.EVERY_SECOND)
     async playBlurStressEffect(): Promise<void> {
-        if (!isFeatureEnabled(Feature.MyBodySummer)) {
+        if (!this.featureProvider.isFeatureEnabled(Feature.MyBodySummer)) {
+            return;
+        }
+
+        if (this.gamesProvider.areAnyGameRunning()) {
+            return;
+        }
+
+        if (this.featureProvider.isFeatureEnabled(Feature.WhatIfSecondEpisode)) {
             return;
         }
 
@@ -369,15 +362,9 @@ export class PlayerStressProvider {
             return;
         }
 
-        const blurAction = async () => {
-            TriggerScreenblurFadeIn(500);
-            await wait(2000);
-            TriggerScreenblurFadeOut(500);
-        };
-
-        if (GetScreenblurFadeCurrentTime() == 0) {
-            blurAction();
-        }
+        this.blurService.add('stress', 500);
+        await wait(2000);
+        this.blurService.remove('stress', 500);
 
         if (player.metadata.stress_level <= 60) {
             await wait(1000 * 60 * 5);

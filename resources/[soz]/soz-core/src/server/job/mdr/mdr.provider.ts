@@ -8,7 +8,8 @@ import { PlayerMoneyService } from '@public/server/player/player.money.service';
 import { PlayerService } from '@public/server/player/player.service';
 import { ProgressService } from '@public/server/player/progress.service';
 import { ClientEvent, ServerEvent } from '@public/shared/event';
-import { InventoryItem } from '@public/shared/item';
+
+import { InventoryItem } from '../../../shared/inventory';
 
 const FORMAT_LOCALIZED: Intl.DateTimeFormatOptions = {
     day: 'numeric',
@@ -74,15 +75,11 @@ export class MdrProvider {
             const completed = await this.doWash(source);
 
             if (completed) {
-                this.monitor.publish(
-                    'mdr_wash',
-                    {
-                        player_source: source,
-                    },
-                    {}
-                );
+                this.monitor.traceEvent('mdr_wash', {
+                    player_source: source,
+                });
 
-                this.notifier.notify(source, `Vous avez réhabilité ~r~1000$~s~ en ~g~$400~s~.`);
+                this.notifier.notify(source, `Vous avez réhabilité ~r~1000$~s~ en ~g~$200~s~.`);
             } else {
                 this.notifier.notify(source, 'Vous avez ~r~arrêté~s~ de réhabiliter.');
                 return;
@@ -125,7 +122,7 @@ export class MdrProvider {
         }
 
         this.playerMoneyService.remove(source, 1000, 'marked_money');
-        this.playerMoneyService.add(source, 400, 'money');
+        this.playerMoneyService.add(source, 200, 'money');
 
         return true;
     }

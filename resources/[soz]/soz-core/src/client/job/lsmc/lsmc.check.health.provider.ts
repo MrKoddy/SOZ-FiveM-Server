@@ -4,12 +4,13 @@ import { Once, OnNuiEvent } from '../../../core/decorators/event';
 import { Inject } from '../../../core/decorators/injectable';
 import { Provider } from '../../../core/decorators/provider';
 import { NuiEvent, ServerEvent } from '../../../shared/event';
-import { Feature, isFeatureEnabled } from '../../../shared/features';
+import { Feature } from '../../../shared/features';
 import { HealthBookLabel, HealthBookMinMax } from '../../../shared/health';
 import { MenuType } from '../../../shared/nui/menu';
 import { PlayerHealthBook } from '../../../shared/player';
 import { Vector3 } from '../../../shared/polyzone/vector';
 import { Err, Ok } from '../../../shared/result';
+import { FeatureProvider } from '../../feature/feature.provider';
 import { InputService } from '../../nui/input.service';
 import { NuiMenu } from '../../nui/nui.menu';
 import { PlayerService } from '../../player/player.service';
@@ -32,6 +33,9 @@ export class LSMCCheckHealthProvider {
 
     @Inject(InputService)
     private inputService: InputService;
+
+    @Inject(FeatureProvider)
+    private featureProvider: FeatureProvider;
 
     public doBloodCheck(entity: number) {
         const target = GetPlayerServerId(NetworkGetPlayerIndexFromPed(entity));
@@ -96,40 +100,31 @@ export class LSMCCheckHealthProvider {
 
     @Once()
     public onStart() {
-        if (!isFeatureEnabled(Feature.MyBodySummer)) {
+        if (!this.featureProvider.isFeatureEnabled(Feature.MyBodySummer)) {
             return;
         }
 
         this.targetFactory.createForAllPlayer([
             {
                 label: 'Prise de sang pour test',
-                color: 'lsmc',
-                icon: 'c:ems/take_blood.png',
+                icon: 'ems/take_blood',
                 job: 'lsmc',
-                canInteract: () => {
-                    return this.playerService.isOnDuty();
-                },
+                category: 'society',
                 action: this.doBloodCheck.bind(this),
                 item: 'flask_blood_empty',
             },
             {
                 label: 'Etat de santé',
-                icon: 'c:ems/health_state.png',
-                color: 'lsmc',
+                icon: 'ems/health_state',
                 job: 'lsmc',
-                canInteract: () => {
-                    return this.playerService.isOnDuty();
-                },
+                category: 'society',
                 action: this.doHealthCheck.bind(this),
             },
             {
                 label: 'Modifier la carte de santé',
-                icon: 'c:ems/health_card.png',
-                color: 'lsmc',
+                icon: 'ems/health_card',
                 job: 'lsmc',
-                canInteract: () => {
-                    return this.playerService.isOnDuty();
-                },
+                category: 'society',
                 action: entity => {
                     const target = GetPlayerServerId(NetworkGetPlayerIndexFromPed(entity));
                     this.nuiMenu.openMenu(MenuType.SetHealthState, target, {
@@ -145,10 +140,10 @@ export class LSMCCheckHealthProvider {
         ]);
 
         [
-            new BoxZone([1816.41, 3680.58, 33.48], 1.0, 1.0, {
-                heading: 310.81,
-                minZ: 33.88,
-                maxZ: 34.48,
+            new BoxZone([1824.11, 3680.55, 34.28], 1.8, 3.8, {
+                heading: 299.05,
+                minZ: 33.28,
+                maxZ: 35.28,
             }),
             new BoxZone([373.02, -1416.34, 32.41], 0.8, 0.6, {
                 heading: 231.23,
@@ -159,13 +154,9 @@ export class LSMCCheckHealthProvider {
             this.targetFactory.createForBoxZone('lsmc_analyze_' + index, zone, [
                 {
                     label: 'Analyse urinaire',
-                    icon: 'c:ems/urine_test.png',
-                    color: 'lsmc',
+                    icon: 'ems/urine_test',
                     job: 'lsmc',
-                    canInteract: () => {
-                        return this.playerService.isOnDuty();
-                    },
-                    event: ServerEvent.LSMC_PEE_ANALYZE,
+                    category: 'society',
                     action: () => {
                         TriggerServerEvent(ServerEvent.LSMC_PEE_ANALYZE);
                     },
@@ -173,12 +164,9 @@ export class LSMCCheckHealthProvider {
                 },
                 {
                     label: 'Analyse de sang',
-                    icon: 'c:ems/blood_test.png',
-                    color: 'lsmc',
+                    icon: 'ems/blood_test',
                     job: 'lsmc',
-                    canInteract: () => {
-                        return this.playerService.isOnDuty();
-                    },
+                    category: 'society',
                     action: () => {
                         TriggerServerEvent(ServerEvent.LSMC_BLOOD_ANALYZE);
                     },

@@ -10,7 +10,7 @@ import { RpcServerEvent } from '../../shared/rpc';
 import { VehicleConfiguration } from '../../shared/vehicle/modification';
 import {
     getDefaultVehicleCondition,
-    VehicleClassFuelStorageMultiplier,
+    LSCustomMode,
     VehicleCondition,
     VehicleVolatileState,
 } from '../../shared/vehicle/vehicle';
@@ -78,16 +78,13 @@ export class VehicleConditionProvider {
             const state = await this.vehicleStateService.getVehicleState(entityId);
             const vehDef = this.vehicleRepository.getByModelHash(GetEntityModel(entityId));
             const currentVehicleCondition: VehicleCondition = {
-                ...getDefaultVehicleCondition(),
+                ...getDefaultVehicleCondition(vehDef),
                 ...this.vehicleService.getClientVehicleCondition(entityId, state),
-                oilLevel: getRandomFloat(30, getDefaultVehicleCondition().oilLevel),
-                fuelLevel: getRandomFloat(
-                    10,
-                    getDefaultVehicleCondition().fuelLevel *
-                        (VehicleClassFuelStorageMultiplier[vehDef?.requiredLicence] || 1.0)
-                ),
-                mileage: getRandomFloat(1000000, 25000000),
             };
+            currentVehicleCondition.oilLevel = getRandomFloat(30, currentVehicleCondition.oilLevel);
+            currentVehicleCondition.fuelLevel = getRandomFloat(30, currentVehicleCondition.fuelLevel);
+            currentVehicleCondition.mileage = getRandomFloat(1000000, 25000000);
+
             const currentVehicleConfiguration = this.vehicleService.getClientVehicleConfiguration(entityId);
 
             this.currentVehicleCondition.set(vehicleNetworkId, currentVehicleCondition);
@@ -103,7 +100,8 @@ export class VehicleConditionProvider {
                 currentVehicleConfiguration,
                 currentVehicleConfiguration,
                 null,
-                false
+                false,
+                LSCustomMode.Admin
             );
         }
     }
@@ -180,7 +178,7 @@ export class VehicleConditionProvider {
     }
 
     private checkVehicleWater(vehicle: number, state: VehicleVolatileState) {
-        if (!state.isPlayerVehicle || state.dead) {
+        if (state.dead) {
             return;
         }
 
@@ -385,17 +383,16 @@ export class VehicleConditionProvider {
         );
 
         const tireBurstCompletely = {};
-        const tireTemporaryRepairDistance = { ...currentCondition.tireTemporaryRepairDistance };
 
         let applyCondition = false;
 
         for (const tireKey of keys) {
-            const distance = tireTemporaryRepairDistance[tireKey] + diffDistance;
+            const distance = currentCondition.tireTemporaryRepairDistance[tireKey] + diffDistance;
 
             if (distance < TIRE_TEMPORARY_REPAIR_DISTANCE) {
-                tireTemporaryRepairDistance[tireKey] = distance;
+                currentCondition.tireTemporaryRepairDistance[tireKey] = distance;
             } else {
-                delete tireTemporaryRepairDistance[tireKey];
+                delete currentCondition.tireTemporaryRepairDistance[tireKey];
                 tireBurstCompletely[tireKey] = true;
                 applyCondition = true;
             }
@@ -403,6 +400,7 @@ export class VehicleConditionProvider {
 
         TriggerServerEvent(ServerEvent.VEHICLE_UPDATE_CONDITION_FROM_OWNER, vehicleNetworkId, {
             tireBurstCompletely,
+            tireTemporaryRepairDistance: currentCondition.tireTemporaryRepairDistance,
         });
 
         if (applyCondition) {
@@ -410,6 +408,7 @@ export class VehicleConditionProvider {
                 vehicle,
                 {
                     tireBurstCompletely,
+                    tireTemporaryRepairDistance: currentCondition.tireTemporaryRepairDistance,
                 },
                 currentCondition
             );

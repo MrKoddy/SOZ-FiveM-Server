@@ -1,25 +1,43 @@
-import { Once, OnceStep, OnEvent, OnNuiEvent } from '@core/decorators/event';
+import { Once, OnceStep, OnEvent } from '@core/decorators/event';
 import { Exportable } from '@core/decorators/exports';
 import { Inject } from '@core/decorators/injectable';
 import { Provider } from '@core/decorators/provider';
 import { Rpc } from '@core/decorators/rpc';
-import { emitRpc } from '@core/rpc';
+import { emitRpc, emitRpcTimeout } from '@core/rpc';
+import { InventoryManager } from '@public/client/inventory/inventory.manager';
 import { ObjectService } from '@public/client/object/object.service';
 import { getProperGroundPositionForObject } from '@public/client/object/object.utils';
+import { InteractionProvider } from '@public/client/quick-interaction/interaction.provider';
 import { TargetFactory } from '@public/client/target/target.factory';
 import { Command } from '@public/core/decorators/command';
-import { Tick } from '@public/core/decorators/tick';
+import { Tick, TickInterval } from '@public/core/decorators/tick';
 import { wait } from '@public/core/utils';
 import { getChunkId, getGridChunks } from '@public/shared/grid';
-import { Vector3, Vector4 } from '@public/shared/polyzone/vector';
+import { InventoryType } from '@public/shared/inventory';
+import { joaat } from '@public/shared/joaat';
+import { LOW_RANGE_JOBS_ITEMS } from '@public/shared/job';
+import { ModelSwap } from '@public/shared/modelswap';
+import { getDistance, Vector3, Vector4 } from '@public/shared/polyzone/vector';
 import { RpcClientEvent, RpcServerEvent } from '@public/shared/rpc';
+import { TargetOption } from '@public/shared/target';
 
-import { ClientEvent, NuiEvent, ServerEvent } from '../../shared/event';
+import { ClientEvent, ServerEvent } from '../../shared/event';
 import { WorldObject } from '../../shared/object';
+import { DnDCallback, InventoryDragAndDropProvider } from '../inventory/inventory.draganddrop.provider';
+
+const RemovableObjects = [GetHashKey('prop_cardbordbox_03a'), GetHashKey('prop_roadcone02a')];
 
 type SpawnedObject = {
     entity: number;
     object: WorldObject;
+    targets: TargetOption[];
+    dragAndDropCallbacks: DnDCallback[];
+};
+
+type SpawnableObject = {
+    object: WorldObject;
+    targets: TargetOption[];
+    dragAndDropCallbacks: DnDCallback[];
 };
 
 @Provider()
@@ -30,9 +48,20 @@ export class ObjectProvider {
     @Inject(TargetFactory)
     private targetFactory: TargetFactory;
 
+    @Inject(InventoryDragAndDropProvider)
+    private inventoryDragAndDropProvider: InventoryDragAndDropProvider;
+
+    @Inject(InventoryManager)
+    private inventoryManager: InventoryManager;
+
+    @Inject(InteractionProvider)
+    private interactionProvider: InteractionProvider;
+
     private loadedObjects: Record<string, SpawnedObject> = {};
 
-    private objectsByChunk = new Map<number, WorldObject[]>();
+    private objectsByChunk = new Map<number, Map<string, SpawnableObject>>();
+
+    private objectsById = new Map<string, SpawnableObject>();
 
     private currentChunks: number[] = [];
 
@@ -41,6 +70,10 @@ export class ObjectProvider {
 
     public getLoadedObjectsCount(): number {
         return Object.keys(this.loadedObjects).length;
+    }
+
+    public hasObject(id: string): boolean {
+        return this.findObject(id) !== null;
     }
 
     public getObject(id: string): WorldObject | null {
@@ -53,14 +86,34 @@ export class ObjectProvider {
         return null;
     }
 
+    public findObject(id: string): WorldObject | null {
+        if (this.objectsById.has(id)) {
+            return this.objectsById.get(id).object;
+        }
+
+        return null;
+    }
+
     public getObjects(filter?: (object: WorldObject) => boolean): WorldObject[] {
-        const objects = [];
+        const objects: WorldObject[] = [];
 
         for (const chunk of this.objectsByChunk.values()) {
-            for (const object of chunk) {
-                if (!filter || filter(object)) {
-                    objects.push(object);
+            for (const object of chunk.values()) {
+                if (!filter || filter(object.object)) {
+                    objects.push(object.object);
                 }
+            }
+        }
+
+        return objects;
+    }
+
+    public getLoadedObjects(filter?: (object: WorldObject) => boolean): WorldObject[] {
+        const objects: WorldObject[] = [];
+
+        for (const object of Object.values(this.loadedObjects)) {
+            if (!filter || filter(object.object)) {
+                objects.push(object.object);
             }
         }
 
@@ -75,38 +128,47 @@ export class ObjectProvider {
         }
     }
 
-    @Once(OnceStep.PlayerLoaded)
-    private async setupObjects(): Promise<void> {
-        const objects = await emitRpc<WorldObject[]>(RpcServerEvent.OBJECT_GET_LIST);
+    public async setupObjects(): Promise<void> {
+        const objects = await emitRpcTimeout<WorldObject[]>(RpcServerEvent.OBJECT_GET_LIST, 10_000);
 
         for (const object of objects) {
             await this.createObject(object);
         }
 
-        this.targetFactory.createForModel(
-            ['prop_cardbordbox_03a', 'prop_roadcone02a'],
-            [
+        const lowJobsItem = {};
+        for (const [modelString, value] of Object.entries(LOW_RANGE_JOBS_ITEMS)) {
+            lowJobsItem[GetHashKey(modelString)] = value;
+        }
+
+        RemovableObjects.forEach(model => {
+            const config = lowJobsItem[model] || {
+                interactionDistance: 1.5,
+                drawDistance: 6.0,
+            };
+
+            this.interactionProvider.createInteractionForModels(
+                model,
                 {
                     label: 'Démonter',
-                    icon: 'c:jobs/demonter.png',
                     canInteract: entity => {
                         const id = this.getIdFromEntity(entity);
-
                         return id !== null;
                     },
                     action: async (entity: number) => {
                         const id = this.getIdFromEntity(entity);
-
                         if (!id) {
                             return;
                         }
 
                         TriggerServerEvent(ServerEvent.OBJECT_COLLECT, id);
                     },
+                    job: config.jobs,
                 },
-            ],
-            2.5
-        );
+                undefined,
+                config.interactionDistance,
+                config.drawDistance
+            );
+        });
 
         this.ready = true;
     }
@@ -116,24 +178,45 @@ export class ObjectProvider {
     }
 
     @OnEvent(ClientEvent.OBJECT_CREATE)
-    public async createObjects(objects: WorldObject[]) {
+    public async createObjects(
+        objects: WorldObject[],
+        targets: TargetOption[] = [],
+        dragAndDropCallbacks: DnDCallback[] = []
+    ) {
         for (const object of objects) {
-            await this.createObject(object);
+            await this.createObject(object, targets, dragAndDropCallbacks);
         }
     }
 
     @Exportable('CreateObject')
-    public async createObject(object: WorldObject): Promise<string> {
+    public async createObject(
+        object: WorldObject,
+        targets: TargetOption[] = [],
+        dragAndDropCallbacks: DnDCallback[] = []
+    ): Promise<string> {
+        const spawnableObject = {
+            object,
+            targets,
+            dragAndDropCallbacks,
+        };
+
+        if (object.permanent) {
+            await this.spawnObject(spawnableObject);
+
+            return object.id;
+        }
+
         const chunk = getChunkId(object.position);
 
         if (!this.objectsByChunk.has(chunk)) {
-            this.objectsByChunk.set(chunk, []);
+            this.objectsByChunk.set(chunk, new Map());
         }
 
-        this.objectsByChunk.get(chunk).push(object);
+        this.objectsByChunk.get(chunk).set(spawnableObject.object.id, spawnableObject);
+        this.objectsById.set(object.id, spawnableObject);
 
         if (this.currentChunks.includes(chunk)) {
-            await this.spawnObject(object);
+            await this.spawnObject(spawnableObject);
         }
 
         return object.id;
@@ -142,15 +225,16 @@ export class ObjectProvider {
     @OnEvent(ClientEvent.OBJECT_EDIT)
     public async editObject(object: WorldObject) {
         this.deleteObject(object.id);
+
         await wait(0);
-        this.createObject(object);
+        await this.createObject(object);
     }
 
     @Exportable('GetObjectIdFromEntity')
     public getIdFromEntity(entity: number): string | null {
-        for (const object of Object.values(this.loadedObjects)) {
-            if (object.entity === entity) {
-                return object.object.id;
+        for (const spawnedObject of Object.values(this.loadedObjects)) {
+            if (spawnedObject.entity === entity) {
+                return spawnedObject.object.id;
             }
         }
 
@@ -175,18 +259,95 @@ export class ObjectProvider {
     }
 
     public deleteObject(id: string): void {
-        for (const [chunk, objects] of this.objectsByChunk.entries()) {
-            this.objectsByChunk.set(
-                chunk,
-                objects.filter(object => object.id !== id)
-            );
+        const obj = this.objectsById.get(id);
+        if (obj) {
+            const chunk = getChunkId(obj.object.position);
+            const perChunk = this.objectsByChunk.get(chunk);
+            if (perChunk) {
+                perChunk.delete(id);
 
-            if (Object.keys(objects).length === 0) {
-                this.objectsByChunk.delete(chunk);
+                if (perChunk?.size === 0) {
+                    this.objectsByChunk.delete(chunk);
+                }
             }
         }
 
+        this.objectsById.delete(id);
         this.unspawnObject(id);
+    }
+
+    public async updateObject(
+        object: WorldObject,
+        targets: TargetOption[] = [],
+        dragAndDropCallbacks: DnDCallback[] = []
+    ) {
+        // if the object is not loaded, delete it and create it again
+        if (!this.loadedObjects[object.id]) {
+            this.deleteObject(object.id);
+            await this.createObject(object, targets, dragAndDropCallbacks);
+
+            return;
+        }
+
+        // object is loaded, check if same grid chunk
+        const existingObject = this.loadedObjects[object.id];
+        const existingChunk = getChunkId(existingObject.object.position);
+        const newChunk = getChunkId(object.position);
+
+        // if the chunk is not the same, delete the object and create it again
+        if (existingChunk !== newChunk) {
+            this.deleteObject(object.id);
+            await this.createObject(object, targets, dragAndDropCallbacks);
+
+            return;
+        }
+
+        // if the chunk is the same, update the object
+        const objectInChunk = this.objectsByChunk.get(newChunk)?.get(object.id);
+
+        if (objectInChunk) {
+            objectInChunk.object = object;
+            objectInChunk.targets = targets;
+            objectInChunk.dragAndDropCallbacks = dragAndDropCallbacks;
+        }
+
+        if (existingObject.dragAndDropCallbacks) {
+            this.inventoryDragAndDropProvider.unregisterEntity(existingObject.entity);
+        }
+
+        existingObject.object = object;
+        existingObject.targets = targets;
+        existingObject.dragAndDropCallbacks = dragAndDropCallbacks;
+
+        if (existingObject.dragAndDropCallbacks) {
+            this.inventoryDragAndDropProvider.registerEntity(existingObject.entity, dragAndDropCallbacks);
+        }
+
+        await this.objectService.updateObject(existingObject.entity, object);
+
+        targets = [...existingObject.targets];
+
+        if (object.inventoryId) {
+            targets.push({
+                label: 'Ouvrir',
+                icon: 'inventory/ouvrir_le_stockage',
+                category: 'citizen',
+                canInteract: () => true,
+                action: () => {
+                    this.inventoryManager.openInventory(
+                        InventoryType.ObjectStorage,
+                        object.inventoryId,
+                        object.position
+                    );
+                },
+            });
+        }
+
+        if (existingObject.targets) {
+            this.targetFactory.createForEntity(existingObject.entity, targets, 2.5, object.id);
+        } else {
+            this.targetFactory.removeForEntity([existingObject.entity]);
+        }
     }
 
     //@StateSelector(state => state.grid)
@@ -203,8 +364,8 @@ export class ObjectProvider {
         // Unload objects from removed chunks
         for (const chunk of removedChunks) {
             if (this.objectsByChunk.has(chunk)) {
-                for (const object of this.objectsByChunk.get(chunk)) {
-                    this.unspawnObject(object.id);
+                for (const [, spawnableObject] of this.objectsByChunk.get(chunk)) {
+                    this.unspawnObject(spawnableObject.object.id);
                 }
             }
         }
@@ -212,44 +373,92 @@ export class ObjectProvider {
         // Load objects from added chunks
         for (const chunk of addedChunks) {
             if (this.objectsByChunk.has(chunk)) {
-                for (const object of this.objectsByChunk.get(chunk)) {
-                    await this.spawnObject(object);
+                for (const [, spawnableObject] of this.objectsByChunk.get(chunk)) {
+                    await this.spawnObject(spawnableObject);
                 }
             }
         }
     }
 
-    private async spawnObject(object: WorldObject) {
-        if (this.loadedObjects[object.id]) {
+    private async spawnObject(spawnableObject: SpawnableObject) {
+        if (this.loadedObjects[spawnableObject.object.id]) {
             return;
         }
 
-        const entity = await this.objectService.createObject(object);
+        const entity = await this.objectService.createObject(spawnableObject.object);
 
         if (!entity) {
             return;
         }
 
-        this.loadedObjects[object.id] = {
+        this.loadedObjects[spawnableObject.object.id] = {
             entity,
-            object,
+            object: spawnableObject.object,
+            targets: spawnableObject.targets,
+            dragAndDropCallbacks: spawnableObject.dragAndDropCallbacks,
         };
+
+        const targets = [...spawnableObject.targets];
+
+        if (spawnableObject.object.inventoryId) {
+            targets.push({
+                label: 'Ouvrir',
+                icon: 'inventory/ouvrir_le_stockage',
+                category: 'citizen',
+                canInteract: () => true,
+                action: () => {
+                    this.inventoryManager.openInventory(
+                        InventoryType.ObjectStorage,
+                        spawnableObject.object.inventoryId,
+                        spawnableObject.object.position
+                    );
+                },
+            });
+        }
+
+        if (targets.length > 0) {
+            this.targetFactory.createForEntity(entity, targets, 2.5, spawnableObject.object.id);
+        }
+
+        if (spawnableObject.dragAndDropCallbacks) {
+            this.inventoryDragAndDropProvider.registerEntity(entity, spawnableObject.dragAndDropCallbacks);
+        }
+
+        TriggerEvent(ClientEvent.OBJECT_SPAWN, spawnableObject.object.id, entity);
 
         await wait(0);
     }
 
     private unspawnObject(id: string): void {
-        const object = this.loadedObjects[id];
+        const spawnedObject = this.loadedObjects[id];
 
-        if (!object) {
+        if (!spawnedObject) {
             return;
         }
 
-        if (!this.objectService.deleteObject(object.entity, object.object)) {
+        if (spawnedObject.targets) {
+            this.targetFactory.removeForEntity([spawnedObject.entity]);
+        }
+
+        if (spawnedObject.dragAndDropCallbacks) {
+            this.inventoryDragAndDropProvider.unregisterEntity(spawnedObject.entity);
+        }
+
+        if (!this.objectService.deleteObject(spawnedObject.entity, spawnedObject.object)) {
             return;
+        }
+
+        if (spawnedObject.targets) {
+            this.targetFactory.removeForEntity([spawnedObject.entity]);
+        }
+
+        if (spawnedObject.object.inventoryId) {
+            this.targetFactory.removeForEntity([spawnedObject.entity]);
         }
 
         delete this.loadedObjects[id];
+
+        TriggerEvent(ClientEvent.OBJECT_DESPAWN, spawnedObject.object.id, spawnedObject.entity);
     }
 
     public disable(): void {
@@ -289,31 +498,27 @@ export class ObjectProvider {
         this.loadedObjects = {};
     }
 
-    public applyEntityMatrix(entity: number, matrix: Float32Array) {
-        SetEntityMatrix(
-            entity,
-            matrix[4],
-            matrix[5],
-            matrix[6], // Right
-            matrix[0],
-            matrix[1],
-            matrix[2], // Forward
-            matrix[8],
-            matrix[9],
-            matrix[10], // Up
-            matrix[12],
-            matrix[13],
-            matrix[14] // Position
-        );
+    @Tick(TickInterval.EVERY_MINUTE, 'object-scale')
+    public async objectScale() {
+        for (const obj of Object.values(this.loadedObjects)) {
+            if (obj.object.growth) {
+                this.objectService.computeGrowth(obj.entity, obj.object);
+            }
+        }
     }
 
     @Tick(30000, 'object-spawn-check')
     public async objectSpawnCheck() {
-        for (const obj of Object.values(this.loadedObjects)) {
-            if (!DoesEntityExist(obj.entity)) {
-                console.log('object-spawn-check: missing entity, trying to fix it', obj.object.id);
-                delete this.loadedObjects[obj.object.id];
-                this.spawnObject(obj.object);
+        for (const spawnedObject of Object.values(this.loadedObjects)) {
+            if (!DoesEntityExist(spawnedObject.entity)) {
+                console.log('object-spawn-check: missing entity, trying to fix it', spawnedObject.object.id);
+                delete this.loadedObjects[spawnedObject.object.id];
+
+                this.spawnObject({
+                    object: spawnedObject.object,
+                    targets: spawnedObject.targets,
+                    dragAndDropCallbacks: spawnedObject.dragAndDropCallbacks,
+                });
             }
         }
     }
@@ -321,12 +526,14 @@ export class ObjectProvider {
     @Command('props')
     public async listprops() {
         const [isAllowed] = await emitRpc<[boolean, string]>(RpcServerEvent.ADMIN_IS_ALLOWED);
-        const propsIds = Object.keys(this.loadedObjects).filter(id => isAllowed || !id.includes('drug_seedling'));
+        const propsIds = Object.keys(this.loadedObjects).filter(
+            id => isAllowed || (!id.includes('drug_seedling') && !id.includes('gang'))
+        );
 
         console.log(propsIds);
     }
 
-    @OnNuiEvent(NuiEvent.ObjectPlace)
+    @OnEvent(ClientEvent.OBJECT_PLACE_JOB)
     public async onPlaceObject({
         item,
         props,
@@ -341,5 +548,46 @@ export class ObjectProvider {
         const groundPosition = this.getGroundPosition(props, offset || 0.0, rotation || 0);
 
         TriggerServerEvent(ServerEvent.OBJECT_PLACE, item, props, groundPosition);
+    }
+
+    public async createSwap(swap: ModelSwap) {
+        const model = joaat(swap.source);
+        const target = joaat(swap.target);
+        for (const spawnableObject of Object.values(this.loadedObjects)) {
+            if (spawnableObject.entity && spawnableObject.object.model !== model) {
+                continue;
+            }
+
+            if (getDistance(swap.position, spawnableObject.object.position) > swap.range) {
+                continue;
+            }
+
+            if (![model, target].includes(GetEntityModel(spawnableObject.entity))) {
+                continue;
+            }
+
+            this.unspawnObject(spawnableObject.object.id);
+            await this.spawnObject(spawnableObject);
+        }
+    }
+
+    public async removeSwap(swap: ModelSwap) {
+        const model = joaat(swap.source);
+        for (const chunk of this.currentChunks) {
+            if (this.objectsByChunk.has(chunk)) {
+                for (const [, spawnableObject] of this.objectsByChunk.get(chunk)) {
+                    if (spawnableObject.object.model !== model) {
+                        continue;
+                    }
+
+                    if (getDistance(swap.position, spawnableObject.object.position) > swap.range) {
+                        continue;
+                    }
+
+                    this.unspawnObject(spawnableObject.object.id);
+                    await this.spawnObject(spawnableObject);
+                }
+            }
+        }
     }
 }

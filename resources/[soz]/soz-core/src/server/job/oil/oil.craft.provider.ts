@@ -1,8 +1,9 @@
+import { InventoryFactory } from '@public/server/inventory/inventory.factory';
+
 import { OnEvent } from '../../../core/decorators/event';
 import { Inject } from '../../../core/decorators/injectable';
 import { Provider } from '../../../core/decorators/provider';
 import { ServerEvent } from '../../../shared/event/server';
-import { InventoryManager } from '../../inventory/inventory.manager';
 import { ItemService } from '../../item/item.service';
 import { Monitor } from '../../monitor/monitor';
 import { Notifier } from '../../notifier';
@@ -21,8 +22,8 @@ export class OilCraftProvider {
     @Inject(PlayerService)
     private playerService: PlayerService;
 
-    @Inject(InventoryManager)
-    private inventoryManager: InventoryManager;
+    @Inject(InventoryFactory)
+    private inventoryFactory: InventoryFactory;
 
     @Inject(ProgressService)
     private progressService: ProgressService;
@@ -38,22 +39,22 @@ export class OilCraftProvider {
 
     @OnEvent(ServerEvent.OIL_CRAFT_ESSENCE)
     public async onCraftEssence(source: number) {
-        await this.craft(source, 'petroleum_refined', 'essence', 1, 1000);
+        await this.craft(source, 'petroleum_refined', 'essence', 1, 500);
     }
 
     @OnEvent(ServerEvent.OIL_CRAFT_ESSENCE_JERRYCAN)
     public async onCraftEssenceJerrycan(source: number) {
-        await this.craft(source, 'essence', 'essence_jerrycan', 3, 60000, true);
+        await this.craft(source, 'essence', 'essence_jerrycan', 3, 30000, true);
     }
 
     @OnEvent(ServerEvent.OIL_CRAFT_KEROSENE)
     public async onCraftKerosene(source: number) {
-        await this.craft(source, 'petroleum_refined', 'kerosene', 4, 500);
+        await this.craft(source, 'petroleum_refined', 'kerosene', 4, 250);
     }
 
     @OnEvent(ServerEvent.OIL_CRAFT_KEROSENE_JERRYCAN)
     public async onCraftKeroseneJerrycan(source: number) {
-        await this.craft(source, 'kerosene', 'kerosene_jerrycan', 1, 60000, true);
+        await this.craft(source, 'kerosene', 'kerosene_jerrycan', 1, 30000, true);
     }
 
     private async craft(
@@ -77,7 +78,8 @@ export class OilCraftProvider {
             return;
         }
 
-        const baseRemoveAmount = this.inventoryManager.getItemCount(source, itemToRemove.name);
+        const inventory = await this.inventoryFactory.getPlayerInventory(source);
+        const baseRemoveAmount = inventory.getItemCount(itemToRemove.name);
 
         if (baseRemoveAmount < multiplier) {
             this.notifier.notify(source, `Vous n'avez pas assez de ${itemToRemove.label}.`, 'error');
@@ -107,14 +109,22 @@ export class OilCraftProvider {
             return;
         }
 
-        if (!this.inventoryManager.canSwapItem(source, itemIdToRemove, removeAmount, itemIdToAdd, addAmount)) {
+        if (
+            !inventory.canSwapItems(
+                [{ name: itemIdToRemove, amount: removeAmount }],
+                [{ name: itemIdToAdd, amount: addAmount }]
+            )
+        ) {
             this.notifier.notify(source, `Vous êtes trop chargé.`, 'error');
 
             return;
         }
 
-        this.inventoryManager.removeItemFromInventory(source, itemIdToRemove, removeAmount);
-        this.inventoryManager.addItemToInventory(source, itemIdToAdd, addAmount);
+        if (!inventory.remove(itemIdToRemove, removeAmount, false)) {
+            return;
+        }
+
+        inventory.add(itemIdToAdd, addAmount);
 
         this.notifier.notify(
             source,
@@ -123,15 +133,10 @@ export class OilCraftProvider {
         );
 
         if (oilCraftingMonitorEventsMap[itemIdToAdd]) {
-            this.monitor.publish(
-                oilCraftingMonitorEventsMap[itemIdToAdd],
-                {
-                    player_source: source,
-                },
-                {
-                    quantity: addAmount,
-                }
-            );
+            this.monitor.traceEvent(oilCraftingMonitorEventsMap[itemIdToAdd], {
+                player_source: source,
+                amount: addAmount,
+            });
         }
     }
 }

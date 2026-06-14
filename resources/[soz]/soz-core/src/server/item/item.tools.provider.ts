@@ -1,10 +1,11 @@
 import { Exportable } from '@public/core/decorators/exports';
-import { InventoryItem, Item } from '@public/shared/item';
+import { Item } from '@public/shared/item';
 
 import { Once } from '../../core/decorators/event';
 import { Inject } from '../../core/decorators/injectable';
 import { Provider } from '../../core/decorators/provider';
 import { ClientEvent } from '../../shared/event';
+import { InventoryItem, isInventoryItemExpired } from '../../shared/inventory';
 import { ObjectProvider } from '../object/object.provider';
 import { PlayerService } from '../player/player.service';
 import { ItemService } from './item.service';
@@ -22,8 +23,10 @@ export class ItemToolsProvider {
 
     @Once()
     public onStart() {
-        this.item.setItemUseCallback('umbrella', source => {
-            TriggerClientEvent(ClientEvent.ITEM_UMBRELLA_TOGGLE, source);
+        ['umbrella', 'umbrella_white', 'umbrella_black'].forEach(item => {
+            this.item.setItemUseCallback(item, (source, item: Item) => {
+                TriggerClientEvent(ClientEvent.ITEM_UMBRELLA_TOGGLE, source, item.name);
+            });
         });
 
         this.item.setItemUseCallback('walkstick', source => {
@@ -53,13 +56,11 @@ export class ItemToolsProvider {
         const player = this.playerService.getPlayer(source);
 
         const scuba = player.metadata.scuba;
-        this.playerService.setPlayerMetadata(source, 'scuba', !scuba);
-
         TriggerClientEvent(ClientEvent.ITEM_SCUBA_TOOGLE, source, !scuba);
     }
 
     @Exportable('ItemIsExpired')
     public itemIsExpired(item: InventoryItem) {
-        return this.item.isItemExpired(item);
+        return isInventoryItemExpired(item);
     }
 }

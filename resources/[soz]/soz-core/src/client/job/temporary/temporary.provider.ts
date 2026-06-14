@@ -1,3 +1,6 @@
+import { FeatureProvider } from '@public/client/feature/feature.provider';
+import { Feature } from '@public/shared/features';
+
 import { Once, OnceStep } from '../../../core/decorators/event';
 import { Inject } from '../../../core/decorators/injectable';
 import { Provider } from '../../../core/decorators/provider';
@@ -13,6 +16,7 @@ import { getRandomInt } from '../../../shared/random';
 import { RpcServerEvent } from '../../../shared/rpc';
 import { BlipFactory } from '../../blip';
 import { Notifier } from '../../notifier';
+import { PlayerService } from '../../player/player.service';
 import { PlayerWardrobe } from '../../player/player.wardrobe';
 import { ProgressService } from '../../progress.service';
 import { TargetFactory } from '../../target/target.factory';
@@ -48,8 +52,7 @@ const TemporaryJobs: Partial<Record<JobType, TemporaryJob>> = {
                     '4': { Drawable: 0, Texture: 0, Palette: 0 },
                     '6': { Drawable: 14, Texture: 0, Palette: 0 },
                     '7': { Drawable: 22, Texture: 4, Palette: 0 },
-                    '8': { Drawable: -1, Texture: 0, Palette: 0 },
-                    '9': { Drawable: 0, Texture: 0, Palette: 0 },
+                    '8': { Drawable: 15, Texture: 0, Palette: 0 },
                     '10': { Drawable: 0, Texture: 0, Palette: 0 },
                     '11': { Drawable: 13, Texture: 3, Palette: 0 },
                 },
@@ -60,9 +63,7 @@ const TemporaryJobs: Partial<Record<JobType, TemporaryJob>> = {
                     '3': { Drawable: 14, Texture: 0, Palette: 0 },
                     '4': { Drawable: 0, Texture: 0, Palette: 0 },
                     '6': { Drawable: 2, Texture: 2, Palette: 0 },
-                    '7': { Drawable: 0, Texture: 0, Palette: 0 },
-                    '8': { Drawable: 0, Texture: 0, Palette: 0 },
-                    '9': { Drawable: 0, Texture: 0, Palette: 0 },
+                    '8': { Drawable: 14, Texture: 0, Palette: 0 },
                     '10': { Drawable: 0, Texture: 0, Palette: 0 },
                     '11': { Drawable: 9, Texture: 2, Palette: 0 },
                 },
@@ -76,7 +77,7 @@ const TemporaryJobs: Partial<Record<JobType, TemporaryJob>> = {
             new BoxZone([235.83, 235.83, 105.5], 45.8, 54.0, { heading: 340, maxZ: 110.0, minZ: 104.0 }),
             new BoxZone([-1221.01, -1546.34, 18.48], 48.8, 76.6, { heading: 305, maxZ: 7.08, minZ: 3.08 }),
         ],
-        targetIcon: 'fas fa-sign-in-alt',
+        targetIcon: 'jobs/duty',
         targetLabel: 'Donner une info chat',
         targetCanInteract: (entity: number) => {
             return GetEntityType(entity) === 1;
@@ -109,26 +110,24 @@ const TemporaryJobs: Partial<Record<JobType, TemporaryJob>> = {
                     '3': { Drawable: 0, Texture: 0, Palette: 0 },
                     '4': { Drawable: 6, Texture: 0, Palette: 0 },
                     '6': { Drawable: 9, Texture: 10, Palette: 0 },
-                    '7': { Drawable: 0, Texture: 0, Palette: 0 },
-                    '8': { Drawable: 0, Texture: 25, Palette: 0 },
-                    '9': { Drawable: 0, Texture: 0, Palette: 0 },
+                    '8': { Drawable: 15, Texture: 0, Palette: 0 },
                     '10': { Drawable: 0, Texture: 0, Palette: 0 },
                     '11': { Drawable: 9, Texture: 12, Palette: 0 },
                 },
                 Props: {},
+                GlovesID: 56000,
             },
             [GetHashKey('mp_f_freemode_01')]: {
                 Components: {
                     '3': { Drawable: 14, Texture: 0, Palette: 0 },
                     '4': { Drawable: 8, Texture: 4, Palette: 0 },
                     '6': { Drawable: 3, Texture: 5, Palette: 0 },
-                    '7': { Drawable: 0, Texture: 0, Palette: 0 },
-                    '8': { Drawable: 0, Texture: 0, Palette: 0 },
-                    '9': { Drawable: 0, Texture: 0, Palette: 0 },
+                    '8': { Drawable: 14, Texture: 0, Palette: 0 },
                     '10': { Drawable: 0, Texture: 0, Palette: 0 },
                     '11': { Drawable: 14, Texture: 9, Palette: 0 },
                 },
                 Props: {},
+                GlovesID: 55000,
             },
         },
         vehicleSpawn: [-413.45, -2791.54, 7.0, 317.52],
@@ -140,7 +139,7 @@ const TemporaryJobs: Partial<Record<JobType, TemporaryJob>> = {
             new BoxZone([-822.38, -995.39, 13.07], 1, 1, { heading: 29, maxZ: 14.07, minZ: 12.27 }),
             new BoxZone([-1365.82, -686.5, 25.32], 1, 1, { heading: 37, maxZ: 25.32, minZ: 23.72 }),
         ],
-        targetIcon: 'c:pole/livrer.png',
+        targetIcon: 'pole/livrer',
         targetLabel: 'Livrez la fougère',
         missionMoney: 10,
         missionProgressAnimation: {
@@ -172,26 +171,24 @@ const TemporaryJobs: Partial<Record<JobType, TemporaryJob>> = {
                     '3': { Drawable: 0, Texture: 0, Palette: 0 },
                     '4': { Drawable: 9, Texture: 3, Palette: 0 },
                     '6': { Drawable: 25, Texture: 0, Palette: 0 },
-                    '7': { Drawable: 0, Texture: 0, Palette: 0 },
                     '8': { Drawable: 59, Texture: 0, Palette: 0 },
-                    '9': { Drawable: 0, Texture: 0, Palette: 0 },
                     '10': { Drawable: 0, Texture: 0, Palette: 0 },
                     '11': { Drawable: 22, Texture: 0, Palette: 0 },
                 },
                 Props: {},
+                GlovesID: 56000,
             },
             [GetHashKey('mp_f_freemode_01')]: {
                 Components: {
                     '3': { Drawable: 15, Texture: 0, Palette: 0 },
                     '4': { Drawable: 11, Texture: 4, Palette: 0 },
                     '6': { Drawable: 25, Texture: 0, Palette: 0 },
-                    '7': { Drawable: 0, Texture: 0, Palette: 0 },
                     '8': { Drawable: 36, Texture: 0, Palette: 0 },
-                    '9': { Drawable: 0, Texture: 0, Palette: 0 },
                     '10': { Drawable: 0, Texture: 0, Palette: 0 },
                     '11': { Drawable: 0, Texture: 0, Palette: 0 },
                 },
                 Props: {},
+                GlovesID: 55000,
             },
         },
         vehicleSpawn: [500.79, -105.88, 62.07, 253.78],
@@ -206,7 +203,7 @@ const TemporaryJobs: Partial<Record<JobType, TemporaryJob>> = {
             new BoxZone([-566.75, -356.01, 35.06], 1.0, 1.6, { heading: 1, maxZ: 36.06, minZ: 33.86 }),
             new BoxZone([-298.36, -154.46, 41.33], 1.6, 0.6, { heading: 358, maxZ: 41.73, minZ: 19.93 }),
         ],
-        targetIcon: 'c:pole/repair.png',
+        targetIcon: 'pole/repair',
         targetLabel: 'Réparer',
         missionMoney: 12,
         missionProgressAnimation: {
@@ -246,6 +243,12 @@ export class TemporaryProvider {
     @Inject(Notifier)
     private notifier: Notifier;
 
+    @Inject(PlayerService)
+    private playerService: PlayerService;
+
+    @Inject(FeatureProvider)
+    private featureProvider: FeatureProvider;
+
     private jobVehicle: number | null = null;
 
     private missionIndex: number | null = null;
@@ -258,6 +261,10 @@ export class TemporaryProvider {
 
     @Once(OnceStep.PlayerLoaded)
     public temporaryLoad(): void {
+        if (this.featureProvider.isFeatureEnabled(Feature.WhatIfFirstEpisode)) {
+            return;
+        }
+
         const options = [];
 
         for (const jobType of Object.keys(TemporaryJobs)) {
@@ -293,27 +300,36 @@ export class TemporaryProvider {
                     distance: 2.5,
                     options: [
                         {
-                            icon: 'c:pole/start.png',
+                            icon: 'pole/start',
                             label: job.label,
-                            job: JobType.Unemployed,
+                            category: 'society',
                             blackoutGlobal: true,
+                            canInteract: () => {
+                                return this.playerService.getPlayer()?.job.id === JobType.Unemployed;
+                            },
                             action: () => {
                                 this.startJob(jobType as JobType);
                             },
                         },
                         {
-                            icon: 'c:pole/restart.png',
+                            icon: 'pole/restart',
                             label: 'Relancer',
-                            job: jobType,
+                            category: 'society',
                             blackoutGlobal: true,
+                            canInteract: () => {
+                                return this.playerService.getPlayer()?.job.id === jobType;
+                            },
                             action: () => {
                                 this.relaunchJob(jobType as JobType);
                             },
                         },
                         {
-                            icon: 'c:pole/end.png',
+                            icon: 'pole/end',
                             label: 'Terminer',
-                            job: jobType,
+                            category: 'society',
+                            canInteract: () => {
+                                return this.playerService.getPlayer()?.job.id === jobType;
+                            },
                             action: () => {
                                 this.stopJob(jobType as JobType);
                             },
@@ -368,7 +384,7 @@ export class TemporaryProvider {
         TriggerServerEvent(ServerEvent.CHARACTER_SET_JOB_CLOTHES, outfit);
 
         const vehicleNetId = await emitRpc<number>(
-            RpcServerEvent.VEHICLE_SPAWN_TEMPORARY,
+            RpcServerEvent.VEHICLE_SPAWN_JOB_TEMPORARY,
             job.vehicleModel,
             job.vehicleSpawn
         );
@@ -433,6 +449,7 @@ export class TemporaryProvider {
             {
                 icon: job.targetIcon,
                 label: job.targetLabel,
+                category: 'society',
                 canInteract: entity => {
                     if (job.repeat && this.entityDones.includes(entity)) {
                         return false;
@@ -503,7 +520,7 @@ export class TemporaryProvider {
 
         if (!this.jobVehicle || !DoesEntityExist(NetworkGetEntityFromNetworkId(this.jobVehicle))) {
             this.jobVehicle = await emitRpc<number>(
-                RpcServerEvent.VEHICLE_SPAWN_TEMPORARY,
+                RpcServerEvent.VEHICLE_SPAWN_JOB_TEMPORARY,
                 job.vehicleModel,
                 job.vehicleSpawn
             );

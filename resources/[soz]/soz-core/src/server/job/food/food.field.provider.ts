@@ -1,21 +1,20 @@
+import { InventoryFactory } from '@public/server/inventory/inventory.factory';
+
 import { Once, OnceStep, OnEvent } from '../../../core/decorators/event';
 import { Inject } from '../../../core/decorators/injectable';
 import { Provider } from '../../../core/decorators/provider';
 import { ServerEvent } from '../../../shared/event/server';
-import { getAmount } from '../../../shared/field';
+import { getAmount, isItemField } from '../../../shared/field';
+import { ADD_ERROR_MESSAGE } from '../../../shared/inventory';
 import { JobType } from '../../../shared/job';
 import { FoodFields, FoodFieldType } from '../../../shared/job/food';
-import { PollutionLevel } from '../../../shared/pollution';
 import { toVector3Object, Vector3 } from '../../../shared/polyzone/vector';
-import { FieldProvider } from '../../farm/field.provider';
-import { InventoryManager } from '../../inventory/inventory.manager';
+import { FieldProvider } from '../../field/field.provider';
 import { ItemService } from '../../item/item.service';
 import { Monitor } from '../../monitor/monitor';
 import { Notifier } from '../../notifier';
 import { PlayerService } from '../../player/player.service';
 import { ProgressService } from '../../player/progress.service';
-import { Pollution } from '../../pollution';
-
 @Provider()
 export class FoodFieldProvider {
     @Inject(PlayerService)
@@ -27,8 +26,8 @@ export class FoodFieldProvider {
     @Inject(ProgressService)
     private progressService: ProgressService;
 
-    @Inject(InventoryManager)
-    private inventoryManager: InventoryManager;
+    @Inject(InventoryFactory)
+    private inventoryFactory: InventoryFactory;
 
     @Inject(FieldProvider)
     private fieldService: FieldProvider;
@@ -38,9 +37,6 @@ export class FoodFieldProvider {
 
     @Inject(Notifier)
     private notifier: Notifier;
-
-    @Inject(Pollution)
-    private pollution: Pollution;
 
     @Once(OnceStep.RepositoriesLoaded)
     public async init() {
@@ -87,7 +83,9 @@ export class FoodFieldProvider {
             return;
         }
 
-        // @TODO Show Field health
+        if (!isItemField(field)) {
+            return;
+        }
 
         // eslint-disable-next-line no-constant-condition
         while (true) {
@@ -134,8 +132,10 @@ export class FoodFieldProvider {
                 }
             }
 
-            if (!this.inventoryManager.canCarryItems(source, items)) {
-                this.notifier.error(player.source, "Vous n'avez pas assez de place dans votre inventaire");
+            const inventory = await this.inventoryFactory.getPlayerInventory(source);
+
+            if (!inventory.canCarryItems(items)) {
+                this.notifier.error(player.source, ADD_ERROR_MESSAGE['not_enough_space']);
 
                 return;
             }
@@ -145,7 +145,7 @@ export class FoodFieldProvider {
             for (const item of items) {
                 const itemData = this.itemService.getItem(item.name);
 
-                this.inventoryManager.addItemToInventory(source, item.name, item.amount);
+                inventory.add(item.name, item.amount);
 
                 if (!(await this.fieldService.harvestField(fieldIdentifier, item.amount))) {
                     this.notifier.error(source, 'Le champ est vide');
@@ -155,96 +155,14 @@ export class FoodFieldProvider {
                     this.notifier.notify(source, `Vous avez récolté ${item.amount} ${itemData.label}`);
                 }
 
-                this.monitor.publish(
-                    'job_cm_food_collect',
-                    {
-                        player_source: source,
-                        item_id: item.name,
-                    },
-                    {
-                        item_label: itemData.label,
-                        quantity: item.amount,
-                        position: toVector3Object(position),
-                    }
-                );
-            }
-        }
-
-        // @TODO Hide Field health
-    }
-
-    @OnEvent(ServerEvent.FOOD_MILK_COLLECT)
-    public async onMilkCollect(source: number, hours: number) {
-        const player = this.playerService.getPlayer(source);
-
-        if (!player) {
-            return;
-        }
-
-        // eslint-disable-next-line no-constant-condition
-        while (true) {
-            const { completed } = await this.progressService.progress(
-                source,
-                'food-harvest-milk',
-                'Vous récupérez des pots de lait',
-                10000,
-                {
-                    name: 'action_a',
-                    dictionary: 'anim@mp_radio@garage@low',
-                },
-                {
-                    disableMovement: true,
-                    disableCarMovement: true,
-                    disableMouse: false,
-                    disableCombat: true,
-                }
-            );
-
-            if (!completed) {
-                return;
-            }
-
-            const amount = { min: 1, max: 4 };
-
-            if (this.pollution.getPollutionLevel() === PollutionLevel.Low) {
-                amount.min = 2;
-                amount.max = 5;
-            }
-
-            const amountToHarvest = getAmount(amount);
-            const hoursTypeItem = Math.floor((hours % 24) / 8);
-            let item = 'milk';
-
-            if (hoursTypeItem === 1) {
-                item = 'semi_skimmed_milk';
-            } else if (hoursTypeItem === 2) {
-                item = 'skimmed_milk';
-            }
-
-            const { success } = this.inventoryManager.addItemToInventory(source, item, amountToHarvest);
-
-            if (!success) {
-                this.notifier.error(player.source, 'Vos poches sont pleines...');
-
-                return;
-            }
-
-            const itemData = this.itemService.getItem(item);
-
-            this.notifier.notify(player.source, `Vous avez récolté ${amountToHarvest} ${itemData.label}`);
-
-            this.monitor.publish(
-                'job_cm_food_collect',
-                {
+                this.monitor.traceEvent('job_cm_food_collect', {
                     player_source: source,
-                    item_id: item,
-                },
-                {
+                    item_id: item.name,
                     item_label: itemData.label,
-                    quantity: amountToHarvest,
-                    position: toVector3Object(GetEntityCoords(GetPlayerPed(source)) as Vector3),
-                }
-            );
+                    amount: item.amount,
+                    position: toVector3Object(position),
+                });
+            }
         }
     }
 }

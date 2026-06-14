@@ -1,18 +1,23 @@
 import { Exportable } from '@public/core/decorators/exports';
+import { Rpc } from '@public/core/decorators/rpc';
+import { InventoryFactory } from '@public/server/inventory/inventory.factory';
+import { RpcServerEvent } from '@public/shared/rpc';
 
 import { On } from '../../../core/decorators/event';
 import { Inject } from '../../../core/decorators/injectable';
 import { Provider } from '../../../core/decorators/provider';
 import { ServerEvent } from '../../../shared/event';
-import { Feature, isFeatureEnabled } from '../../../shared/features';
+import { Feature } from '../../../shared/features';
 import { doLooting, Loot } from '../../../shared/loot';
 import { Vector3 } from '../../../shared/polyzone/vector';
 import { PrismaService } from '../../database/prisma.service';
-import { InventoryManager } from '../../inventory/inventory.manager';
+import { FeatureProvider } from '../../feature/feature.provider';
 import { Notifier } from '../../notifier';
 import { PlayerMoneyService } from '../../player/player.money.service';
 import { PlayerService } from '../../player/player.service';
 import { ProgressService } from '../../player/progress.service';
+
+const MAX_HUNT = 66;
 
 @Provider()
 export class HuntProvider {
@@ -31,8 +36,11 @@ export class HuntProvider {
     @Inject(ProgressService)
     private progressService: ProgressService;
 
-    @Inject(InventoryManager)
-    private inventoryManager: InventoryManager;
+    @Inject(InventoryFactory)
+    private inventoryFactory: InventoryFactory;
+
+    @Inject(FeatureProvider)
+    private featureProvider: FeatureProvider;
 
     private loots: Loot[] = [
         { type: 'item', value: 'batrachian_eye', chance: 10 },
@@ -49,7 +57,7 @@ export class HuntProvider {
 
     @On(ServerEvent.HALLOWEEN2022_HUNT)
     public async onScenario1(source: number, position: Vector3) {
-        if (!isFeatureEnabled(Feature.Halloween)) {
+        if (!this.featureProvider.isFeatureEnabled(Feature.Halloween)) {
             return;
         }
 
@@ -70,7 +78,7 @@ export class HuntProvider {
         });
 
         if (pumpkin.length > 0) {
-            this.notifier.notify(source, 'Vous avez déjà fouillé cette citrouille', 'info');
+            this.notifier.notify(source, 'Vous avez déjà trouvé cette coupe', 'info');
             return;
         }
 
@@ -80,8 +88,8 @@ export class HuntProvider {
             'Vous fouillez...',
             2000,
             {
-                dictionary: 'anim@mp_radio@garage@low',
-                name: 'action_a',
+                dictionary: 'Rcm_epsilonism4',
+                name: 'eps_4_ig_1_jimmy_lookaround_idle_a_jb',
                 flags: 1,
             },
             {
@@ -95,6 +103,29 @@ export class HuntProvider {
             return;
         }
 
+        const loot = doLooting(this.loots);
+
+        const itemsToAdd = [
+            {
+                name: 'halloween_blood_cup',
+                amount: 1,
+            },
+        ];
+
+        if (loot.type === 'item') {
+            itemsToAdd.push({
+                name: loot.value.toString(),
+                amount: 1,
+            });
+        }
+
+        const inventory = await this.inventoryFactory.getPlayerInventory(source);
+
+        if (!inventory.canCarryItems(itemsToAdd)) {
+            this.notifier.notify(source, "Vous n'avez pas assez de place dans votre inventaire", 'error');
+            return;
+        }
+
         await this.prismaService.halloween_pumpkin_hunt.create({
             data: {
                 citizenid: player.citizenid,
@@ -103,24 +134,36 @@ export class HuntProvider {
             },
         });
 
-        this.notifier.notify(source, `Vous avez fouillé ~b~${pumpkinFound + 1}~s~ citrouille(s)`, 'success');
-        const loot = doLooting(this.loots);
+        inventory.add('halloween_blood_cup', 1);
 
         if (loot.type === 'item') {
-            if (this.inventoryManager.canCarryItem(source, loot.value.toString(), 1)) {
-                this.inventoryManager.addItemToInventory(source, loot.value as string, 1);
-                return this.notifier.notify(source, 'Vous avez trouvé un objet', 'success');
-            } else {
-                return this.notifier.notify(source, "Vous n'avez pas assez de place dans votre inventaire", 'error');
-            }
+            inventory.add(loot.value as string, 1);
+            this.notifier.notify(source, 'Vous avez trouvé une coupe avec un objet', 'success');
         } else if (loot.type === 'money') {
             this.playerMoneyService.add(source, loot.value as number);
-            return this.notifier.notify(source, "Vous avez trouvé de l'argent", 'success');
+            this.notifier.notify(source, "Vous avez trouvé une coupe avec de l'argent", 'success');
         }
+        this.notifier.notify(source, `Vous avez trouvé ~b~${pumpkinFound + 1}~s~ coupe(s)`, 'success');
     }
 
     @Exportable('isHalloween')
     public isHalloween(): boolean {
-        return isFeatureEnabled(Feature.Halloween);
+        return this.featureProvider.isFeatureEnabled(Feature.Halloween);
+    }
+
+    @Rpc(RpcServerEvent.HALLOWEEN_HUNTCHECK)
+    public async huntCheck(source: number) {
+        const player = this.playerService.getPlayer(source);
+        if (!player) {
+            return false;
+        }
+
+        const found = await this.prismaService.halloween_pumpkin_hunt.count({
+            where: {
+                citizenid: player.citizenid,
+            },
+        });
+
+        return found >= MAX_HUNT;
     }
 }

@@ -1,3 +1,5 @@
+import './world.event.repository';
+
 import { DrugSeedlingRepository } from '@private/server/resources/drug.seedling.repository';
 import { DrugSellLocationRepository } from '@private/server/resources/drug.sell.location.repository';
 
@@ -14,6 +16,7 @@ import { ClientEvent } from '../../shared/event';
 import { RpcServerEvent } from '../../shared/rpc';
 import { BillboardRepository } from './billboard.repository';
 import { ClothingShopRepository } from './cloth.shop.repository';
+import { DoorRepository } from './door.repository';
 import { FuelStationRepository } from './fuel.station.repository';
 import { GarageRepository } from './garage.repository';
 import { GloveShopRepository } from './glove.shop.repository';
@@ -50,6 +53,9 @@ export class RepositoryProvider {
     @Inject(TowRopeRepository)
     private towRopeRepository: TowRopeRepository;
 
+    @Inject(DoorRepository)
+    private doorRepository: DoorRepository;
+
     @Inject(ObjectRepository)
     private objectRepository: ObjectRepository;
 
@@ -85,7 +91,6 @@ export class RepositoryProvider {
     @Once()
     public setup() {
         this.legacyRepositories['garage'] = this.garageRepository;
-        this.legacyRepositories['vehicle'] = this.vehicleRepository;
         this.legacyRepositories['fuelStation'] = this.fuelStationRepository;
         this.legacyRepositories['upwCharger'] = this.upwChargerRepository;
         this.legacyRepositories['upwStation'] = this.upwStationRepository;
@@ -95,7 +100,6 @@ export class RepositoryProvider {
         this.legacyRepositories['underTypesShop'] = this.underTypesShopRepository;
         this.legacyRepositories['drugSeedling'] = this.drugSeedlingRepository;
         this.legacyRepositories['drugSellLocation'] = this.drugSellLocationRepository;
-        this.legacyRepositories['race'] = this.raceRepository;
         this.legacyRepositories['billboard'] = this.billboardRepository;
     }
 

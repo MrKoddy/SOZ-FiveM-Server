@@ -1,29 +1,33 @@
 import { BlipFactory } from '@public/client/blip';
 import { PedFactory } from '@public/client/factory/ped.factory';
+import { FeatureProvider } from '@public/client/feature/feature.provider';
 import { InventoryManager } from '@public/client/inventory/inventory.manager';
 import { NuiDispatch } from '@public/client/nui/nui.dispatch';
 import { NuiMenu } from '@public/client/nui/nui.menu';
 import { AttachedObjectService } from '@public/client/object/attached.object.service';
 import { PlayerService } from '@public/client/player/player.service';
-import { ResourceLoader } from '@public/client/repository/resource.loader';
 import { VehicleRadarProvider } from '@public/client/vehicle/vehicle.radar.provider';
 import { Once, OnceStep, OnEvent } from '@public/core/decorators/event';
 import { Inject } from '@public/core/decorators/injectable';
 import { Provider } from '@public/core/decorators/provider';
+import { SozRole } from '@public/core/permissions';
+import { emitRpc } from '@public/core/rpc';
 import { wait } from '@public/core/utils';
 import { ClientEvent, ServerEvent } from '@public/shared/event';
+import { Feature } from '@public/shared/features';
 import { FDO } from '@public/shared/job';
 import { MenuType } from '@public/shared/nui/menu';
 import { BoxZone } from '@public/shared/polyzone/box.zone';
 import { rad, Vector3 } from '@public/shared/polyzone/vector';
+import { RpcServerEvent } from '@public/shared/rpc';
 
 import { AnimationStopReason } from '../../../shared/animation';
 import { AnimationService } from '../../animation/animation.service';
 
-const WEAPON_DIGISCANNER = -38085395;
+export const WEAPON_DIGISCANNER = -38085395;
 const RadarRange = 40;
 const stations = {
-    LSPD: { label: 'Los Santos Police Department', blip: { sprite: 60 }, coords: [632.76, 7.31, 82.63] },
+    LSPD: { label: 'Los Santos Police Department', blip: { sprite: 60 }, coords: [1136.79, -486.63, 65.16] },
     BCSO: {
         label: "Blaine County Sheriff's Office",
         blip: { sprite: 137 },
@@ -35,9 +39,6 @@ const stations = {
 export class PoliceProvider {
     @Inject(PlayerService)
     private playerService: PlayerService;
-
-    @Inject(ResourceLoader)
-    private resourceLoader: ResourceLoader;
 
     @Inject(NuiDispatch)
     private dispatcher: NuiDispatch;
@@ -63,12 +64,19 @@ export class PoliceProvider {
     @Inject(AttachedObjectService)
     private attachedObjectService: AttachedObjectService;
 
+    @Inject(FeatureProvider)
+    private featureProvider: FeatureProvider;
+
     private radarEnabled = false;
 
     private inTakeDown = false;
 
     @Once(OnceStep.PlayerLoaded)
     public async onStart() {
+        if (this.featureProvider.isFeatureEnabled(Feature.WhatIfFirstEpisode)) {
+            return;
+        }
+
         for (const [id, station] of Object.entries(stations)) {
             if (!this.blipFactory.exist(`police_${id}`)) {
                 this.blipFactory.create(`police_${id}`, {
@@ -78,6 +86,7 @@ export class PoliceProvider {
                 });
             }
         }
+
         await this.pedFactory.createPedOnGrid({
             model: 's_m_y_sheriff_01',
             coords: {
@@ -90,13 +99,14 @@ export class PoliceProvider {
             invincible: true,
             blockevents: true,
         });
+
         await this.pedFactory.createPedOnGrid({
             model: 's_f_y_cop_01',
             coords: {
-                x: 608.67,
-                y: -15.94,
-                z: 76.63 - 1,
-                w: 347.54,
+                x: 1151.45,
+                y: -464.66,
+                z: 64.16,
+                w: 351.32,
             },
             freeze: true,
             invincible: true,
@@ -109,12 +119,6 @@ export class PoliceProvider {
             sprite: 421,
             scale: 0.9,
         });
-    }
-
-    @OnEvent(ClientEvent.POLICE_OPEN_STASH_CLOAKROOM, false)
-    public openStashCloakroom() {
-        const player = this.playerService.getPlayer();
-        TriggerServerEvent('inventory:server:openInventory', 'stash', `${player.job.id}_${player.citizenid}`);
     }
 
     @OnEvent(ClientEvent.TAKE_DOWN)
@@ -306,15 +310,15 @@ export class PoliceProvider {
     }
 
     @OnEvent(ClientEvent.JOBS_POLICE_OPEN_SOCIETY_MENU)
-    public onOpenSocietyMenu() {
+    public async onOpenSocietyMenu() {
         if (this.nuiMenu.getOpened() === MenuType.PoliceJobMenu) {
             this.nuiMenu.closeMenu();
             return;
         }
 
+        const [isAllowed, permission] = await emitRpc<[boolean, string]>(RpcServerEvent.ADMIN_IS_ALLOWED);
         this.nuiMenu.openMenu(MenuType.PoliceJobMenu, {
-            onDuty: this.playerService.isOnDuty(),
-            job: this.playerService.getPlayer().job.id,
+            permission: isAllowed ? (permission as SozRole) : null,
             displayRadar: this.vehicleRadarProvider.displayRadar,
         });
     }

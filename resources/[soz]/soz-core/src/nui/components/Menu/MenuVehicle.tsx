@@ -1,9 +1,9 @@
+import { TaxType } from '@public/shared/tax';
 import { FunctionComponent } from 'react';
 
-import { TaxType } from '../../../shared/bank';
 import { NuiEvent } from '../../../shared/event';
 import { MenuType } from '../../../shared/nui/menu';
-import { VehicleMenuData } from '../../../shared/vehicle/vehicle';
+import { LSCustomMode, VehicleMenuData } from '../../../shared/vehicle/vehicle';
 import { fetchNui } from '../../fetch';
 import { useGetPrice } from '../../hook/price';
 import {
@@ -55,8 +55,12 @@ export const MenuVehicle: FunctionComponent<MenuVehicleProps> = ({ data }) => {
         fetchNui(NuiEvent.VehicleHandleRadio);
     };
 
-    const onOpenLSCustom = () => {
-        fetchNui(NuiEvent.VehicleOpenLSCustom);
+    const onOpenLSCustom = (mode: LSCustomMode) => {
+        fetchNui(NuiEvent.VehicleOpenLSCustom, mode);
+    };
+
+    const onOpenBennysUpgrade = (mode: LSCustomMode) => {
+        fetchNui(NuiEvent.BennysUpgradeVehicle, mode);
     };
 
     const onPitStop = price => {
@@ -77,10 +81,14 @@ export const MenuVehicle: FunctionComponent<MenuVehicleProps> = ({ data }) => {
         fetchNui(NuiEvent.VehiclePoliceDisplay, value);
     };
 
+    const onGyro = (value: boolean) => {
+        fetchNui(NuiEvent.VehicleGyro, value);
+    };
+
     return (
         <Menu type={MenuType.Vehicle}>
             <MainMenu>
-                <MenuTitle banner="https://nui-img/soz/menu_vehicle">Gestion véhicule</MenuTitle>
+                <MenuTitle title="Véhicule" />
                 <MenuContent>
                     {data.isDriver && (
                         <MenuItemCheckbox onChange={onVehicleEngineChange} checked={data.engineOn}>
@@ -115,7 +123,9 @@ export const MenuVehicle: FunctionComponent<MenuVehicleProps> = ({ data }) => {
                             </MenuItemSelect>
                             <MenuItemSubMenuLink id="door">Gestion des portes</MenuItemSubMenuLink>
                             {data.insideLSCustom && (
-                                <MenuItemButton onConfirm={() => onOpenLSCustom()}>LS Custom</MenuItemButton>
+                                <MenuItemButton onConfirm={() => onOpenLSCustom(LSCustomMode.LsCustom)}>
+                                    LS Custom
+                                </MenuItemButton>
                             )}
                             {data.insideLSCustom && !data.onDutyNg && (
                                 <MenuItemButton
@@ -123,6 +133,16 @@ export const MenuVehicle: FunctionComponent<MenuVehicleProps> = ({ data }) => {
                                     description={`Prix: ${getPrice(data.pitstopPrice, TaxType.SERVICE)} $`}
                                 >
                                     Pit Stop
+                                </MenuItemButton>
+                            )}
+                            {data.crimiCustom && (
+                                <MenuItemButton onConfirm={() => onOpenBennysUpgrade(LSCustomMode.CrimiCusto)}>
+                                    Modifier l'apparence
+                                </MenuItemButton>
+                            )}
+                            {data.crimiPerformance && (
+                                <MenuItemButton onConfirm={() => onOpenLSCustom(LSCustomMode.CrimiPerfo)}>
+                                    Modifier les performances
                                 </MenuItemButton>
                             )}
                         </>
@@ -137,11 +157,16 @@ export const MenuVehicle: FunctionComponent<MenuVehicleProps> = ({ data }) => {
                             Affichage des patrouilles
                         </MenuItemCheckbox>
                     )}
+                    {data.canGyro && (
+                        <MenuItemCheckbox onChange={onGyro} checked={data.hasGyro}>
+                            Gyrophare
+                        </MenuItemCheckbox>
+                    )}
                 </MenuContent>
             </MainMenu>
             <SubMenu id="door">
-                <MenuTitle banner="https://nui-img/soz/menu_vehicle">Gestion des portes</MenuTitle>
-                <MenuContent>
+                <MenuTitle title="Véhicule" />
+                <MenuContent subtitle="Gestion des portes">
                     {Object.entries(data.doorStatus).map(([door, status]) => {
                         return (
                             <MenuItemCheckbox

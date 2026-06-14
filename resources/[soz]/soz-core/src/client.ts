@@ -5,14 +5,20 @@ import { modules as PrivateModules } from '@private/client/modules';
 
 import { AdminModule } from './client/admin/admin.module';
 import { AfkModule } from './client/afk/afk.module';
+import { AimModule } from './client/aim/aim.module';
+import { AnimalModule } from './client/animal/animal.module';
 import { AnimationModule } from './client/animation/animation.module';
 import { BankModule } from './client/bank/bank.module';
 import { BillboardModule } from './client/billboard/billboard.module';
 import { BinocularsModule } from './client/binoculars/binoculars.module';
+import { CameraModule } from './client/camera/camera.module';
 import { ClothingModule } from './client/clothing/clothing.module';
 import { CraftModule } from './client/craft/craft.module';
+import { DoorModule } from './client/door/door.module';
 import { DrivingSchoolModule } from './client/driving-school/ds.module';
 import { FactoryModule } from './client/factory/factory.module';
+import { FeatureModule } from './client/feature/feature.module';
+import { GamesModule } from './client/games/games.module';
 import { HousingModule } from './client/housing/housing.module';
 import { HudModule } from './client/hud/hud.module';
 import { InventoryModule } from './client/inventory/inventory.module';
@@ -36,12 +42,17 @@ import { StonkModule } from './client/job/stonk/stonk.module';
 import { TaxiModule } from './client/job/taxi/taxi.module';
 import { JobTemporaryModule } from './client/job/temporary/temporary.module';
 import { UpwModule } from './client/job/upw/upw.module';
+import { LocationModule } from './client/location/location.module';
 import { MonitorModule } from './client/monitor/monitor.module';
 import { NuiModule } from './client/nui/nui.module';
 import { ObjectModule } from './client/object/object.module';
+import { PhoneModule } from './client/phone/phone.module';
+import { PickerModule } from './client/picker/picker.module';
 import { PlayerModule } from './client/player/player.module';
+import { QuickInteractionModule } from './client/quick-interaction/interaction.module';
 import { RaceModule } from './client/race/race.module';
 import { RepositoryModule } from './client/repository/repository.module';
+import { SceneModule } from './client/scene/scene.module';
 import { ShopModule } from './client/shop/shop.module';
 import { store } from './client/store/store';
 import { StoreModule } from './client/store/store.module';
@@ -54,7 +65,6 @@ import { VoipModule } from './client/voip/voip.module';
 import { WeaponModule } from './client/weapon/weapon.module';
 import { WeatherModule } from './client/weather/weather.module';
 import { WorldModule } from './client/world/world.module';
-import { ZEventModule } from './client/zevent/zevent.module';
 import { Application } from './core/application';
 import { setService, setServiceInstance, unloadContainer } from './core/container';
 import { ProviderClientLoader } from './core/loader/provider.client.loader';
@@ -67,7 +77,7 @@ async function bootstrap() {
     setService('MiddlewareTickFactory', ChainMiddlewareTickClientFactory);
 
     try {
-        setMaxEventListeners(20);
+        setMaxEventListeners(100);
     } catch {
         /* empty */
     }
@@ -89,10 +99,10 @@ async function bootstrap() {
         NuiModule,
         FoodModule,
         TargetModule,
+        AimModule,
         FightForStyleModule,
         BaunModule,
         StreamModule,
-        ZEventModule,
         AdminModule,
         BennysModule,
         StonkModule,
@@ -125,6 +135,16 @@ async function bootstrap() {
         DMCModule,
         JobTemporaryModule,
         UtilsModule,
+        CameraModule,
+        DoorModule,
+        SceneModule,
+        QuickInteractionModule,
+        FeatureModule,
+        PickerModule,
+        PhoneModule,
+        GamesModule,
+        LocationModule,
+        AnimalModule,
         ...PrivateModules
     );
 

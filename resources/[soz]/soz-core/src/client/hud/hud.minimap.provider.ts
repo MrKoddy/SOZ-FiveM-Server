@@ -1,16 +1,20 @@
+import { POLICE_MINESWEEPER_ROBOT_CAR_MODEL } from '@private/shared/police';
+import { FeatureProvider } from '@public/client/feature/feature.provider';
 import { PlayerUpdate } from '@public/core/decorators/player';
+import { Feature } from '@public/shared/features';
 import { PlayerData } from '@public/shared/player';
 
 import { Once, OnceStep, OnEvent } from '../../core/decorators/event';
 import { Inject } from '../../core/decorators/injectable';
 import { Provider } from '../../core/decorators/provider';
-import { Tick } from '../../core/decorators/tick';
+import { Tick, TickInterval } from '../../core/decorators/tick';
+import { wait } from '../../core/utils';
 import { ClientEvent } from '../../shared/event';
 import { Minimap } from '../../shared/hud';
 import { VehicleSeat } from '../../shared/vehicle/vehicle';
-import { InventoryManager } from '../inventory/inventory.manager';
 import { NuiDispatch } from '../nui/nui.dispatch';
 import { ResourceLoader } from '../repository/resource.loader';
+import { HudWatchProvider } from './hud.watch.provider';
 
 @Provider()
 export class HudMinimapProvider {
@@ -20,21 +24,20 @@ export class HudMinimapProvider {
     @Inject(NuiDispatch)
     private readonly nuiDispatch: NuiDispatch;
 
-    @Inject(InventoryManager)
-    private readonly inventoryManager: InventoryManager;
+    @Inject(HudWatchProvider)
+    private readonly hudWatchProvider: HudWatchProvider;
+
+    @Inject(FeatureProvider)
+    private readonly featureProvider: FeatureProvider;
 
     private minimapHandle: number;
 
-    private _haveGps = false;
-
     private _hasAdminGps = false;
-
     private _dead = false;
-
     private _showHud = true;
+    private _forceGpsInVehicle = false;
 
     private _inVehicle = GetVehiclePedIsIn(PlayerPedId(), false) !== 0;
-
     private _scaledNui = GetResourceKvpInt('soz_scaled_nui') === 1;
 
     public get hasAdminGps(): boolean {
@@ -43,6 +46,11 @@ export class HudMinimapProvider {
 
     public set hasAdminGps(value: boolean) {
         this._hasAdminGps = value;
+        this.updateShowRadar();
+    }
+
+    public forceGpsInVehicle(value: boolean) {
+        this._forceGpsInVehicle = value;
         this.updateShowRadar();
     }
 
@@ -68,30 +76,32 @@ export class HudMinimapProvider {
 
     @OnEvent(ClientEvent.BASE_ENTERED_VEHICLE)
     @OnEvent(ClientEvent.BASE_CHANGE_VEHICLE_SEAT)
-    public onBaseEnteredVehicle(vehicle: number, seat: VehicleSeat): void {
-        this._inVehicle = vehicle && (VehicleSeat.Driver === seat || VehicleSeat.Copilot === seat);
+    public async onBaseEnteredVehicle(vehicle: number, seat: VehicleSeat): Promise<void> {
+        this._inVehicle =
+            vehicle &&
+            (VehicleSeat.Driver === seat || VehicleSeat.Copilot === seat) &&
+            GetEntityModel(vehicle) !== GetHashKey(POLICE_MINESWEEPER_ROBOT_CAR_MODEL);
 
+        this.nuiDispatch.dispatch('hud', 'UpdateMinimap', this.getMinimap(true));
         this.updateShowRadar();
     }
 
     @OnEvent(ClientEvent.BASE_LEFT_VEHICLE)
     public onBaseLeftVehicle(): void {
         this._inVehicle = false;
+
+        this.nuiDispatch.dispatch('hud', 'UpdateMinimap', this.getMinimap());
         this.updateShowRadar();
     }
 
     @PlayerUpdate()
     async onPlayerUpdate(player: PlayerData): Promise<void> {
-        this._haveGps =
-            this.inventoryManager.hasEnoughItem('gps', 1, true) ||
-            this.inventoryManager.hasEnoughItem('halloween_atomic_gps', 1, true);
         this._dead = player?.metadata.isdead;
     }
 
     @Once(OnceStep.NuiLoaded)
     public async start(): Promise<void> {
         ForceCloseTextInputBox();
-        DisplayRadar(false);
 
         AddTextEntry('PM_PANE_CFX', 'SO~g~Z~w~~italic~ ~s~(FiveM)');
         AddTextEntry('FE_THDR_GTAO', 'SO~g~Z~w~~italic~ - Serveur GTA RP Communautaire');
@@ -102,42 +112,95 @@ export class HudMinimapProvider {
         AddTextEntry('PM_SCR_SET', 'PARAMÈTRES');
 
         await this.resourceLoader.loadStreamedTextureDict('soz_minimap');
+        this.minimapHandle = await this.resourceLoader.loadScaleformMovie('minimap');
+
+        DisplayRadar(false);
+
+        await this.updateMinimapPosition();
 
         AddReplaceTexture('platform:/textures/graphics', 'radarmasksm', 'soz_minimap', 'radarmasksm');
         AddReplaceTexture('minimap', 'blips_texturesheet_ng', 'soz_minimap', 'blips_texturesheet_ng');
         AddReplaceTexture('minimap', 'blips_texturesheet_ng_2', 'soz_minimap', 'blips_texturesheet_ng_2');
 
-        this.nuiDispatch.dispatch('hud', 'UpdateMinimap', this.getMinimap());
-        this.minimapHandle = await this.resourceLoader.loadScaleformMovie('minimap');
+        const northBlip = GetNorthRadarBlip();
+        SetBlipAlpha(northBlip, 0);
 
         SetRadarBigmapEnabled(false, false);
     }
 
     @Tick()
     public async enableMinimapHealthArmour(): Promise<void> {
-        if (this.minimapHandle) {
-            BeginScaleformMovieMethod(this.minimapHandle, 'SETUP_HEALTH_ARMOUR');
-            ScaleformMovieMethodAddParamInt(3);
-            EndScaleformMovieMethod();
+        if (!this.minimapHandle) return;
+
+        BeginScaleformMovieMethod(this.minimapHandle, 'SETUP_HEALTH_ARMOUR');
+        ScaleformMovieMethodAddParamInt(3);
+        EndScaleformMovieMethod();
+    }
+
+    private get shouldDisplayRadar(): boolean {
+        if (this._hasAdminGps) return true;
+        if (this.featureProvider.isFeatureEnabled(Feature.WhatIfSecondEpisode)) return false;
+
+        if (!this._showHud) return false;
+        if (this._dead) return false;
+
+        if (this._forceGpsInVehicle) {
+            return this._inVehicle;
         }
+
+        return this._inVehicle && this.hudWatchProvider.haveWatch;
     }
 
-    private updateShowRadar(): void {
-        const showRadar = this._showHud && ((this._inVehicle && this._haveGps && !this._dead) || this._hasAdminGps);
-
-        DisplayRadar(showRadar);
+    private async updateShowRadar(): Promise<void> {
+        DisplayRadar(this.shouldDisplayRadar);
+        await this.updateMinimapPosition();
     }
 
-    @Tick(1000)
-    public async updateMinimap(): Promise<void> {
+    @Tick(TickInterval.EVERY_SECOND)
+    public async updateHud(): Promise<void> {
+        this.nuiDispatch.dispatch('hud', 'UpdateDateTime', {
+            hour: GetClockHours(),
+            minute: GetClockMinutes(),
+            dayOfWeek: GetClockDayOfWeek(),
+        });
+    }
+
+    protected getMinimapOffset(): number {
+        const haveWatch = this.hudWatchProvider.haveWatch;
+        const showStreetName = this.hudWatchProvider.showStreetName;
+
+        return haveWatch && showStreetName ? -0.05 * this.hudWatchProvider.zoom : 0.0;
+    }
+
+    @OnEvent(ClientEvent.UPDATE_MINIMAP_POSITION)
+    public async updateMinimapPosition(): Promise<void> {
+        const offset = this.getMinimapOffset();
+
+        SetMinimapComponentPosition('minimap', 'L', 'B', -0.0045, 0.002 + offset, 0.15, 0.188888);
+        SetMinimapComponentPosition('minimap_mask', 'L', 'B', 0.02, 0.032 + offset, 0.111, 0.159);
+        SetMinimapComponentPosition('minimap_blur', 'L', 'B', -0.03, 0.022 + offset, 0.266, 0.237);
+
+        await this.reloadMinimapSize();
+
         this.nuiDispatch.dispatch('hud', 'UpdateMinimap', this.getMinimap());
     }
 
-    private getMinimap(): Minimap {
+    protected async reloadMinimapSize() {
+        SetRadarBigmapEnabled(true, false);
+        await wait(0);
+        while (IsBigmapActive()) {
+            SetRadarBigmapEnabled(false, false);
+            await wait(0);
+        }
+        return true;
+    }
+
+    private getMinimap(skipRadarCompute = false): Minimap {
         const [x, y] = GetActiveScreenResolution();
         const aspectRatio = GetAspectRatio(false);
         const scaleX = 1.0 / x;
         const scaleY = 1.0 / y;
+        const isRadarHidden = IsRadarHidden() || !this.shouldDisplayRadar;
 
         let rawX;
         let rawY;
@@ -150,7 +213,9 @@ export class HudMinimapProvider {
             width = scaleX * (x / (2.52 * aspectRatio));
             height = scaleY * (y / 2.3374);
         } else {
-            [rawX, rawY] = GetScriptGfxPosition(-0.0045, 0.002 + -0.188888);
+            const offset = this.getMinimapOffset();
+
+            [rawX, rawY] = GetScriptGfxPosition(-0.0045, 0.002 + offset + -0.19);
             width = scaleX * (x / (4 * aspectRatio));
             height = scaleY * (y / 5.674);
         }
@@ -158,16 +223,15 @@ export class HudMinimapProvider {
         ResetScriptGfxAlign();
 
         if (this.scaledNui) {
-            return {
-                X: 0.08091666683321,
-                Y: 0.88549252311906,
-                bottom: 0.97361377796573,
-                height: 0.17624250969333,
-                left: 0.01560416735708,
-                right: 0.15122916630934,
-                top: 0.79737126827239,
-                width: 0.14062499895226,
-            };
+            width = 0.1406249989522621;
+            height = 0.17624250969333802;
+            rawY = 0.796259343624115 + this.getMinimapOffset();
+            rawX = 0.01060426700860262;
+        }
+
+        if (!skipRadarCompute && isRadarHidden) {
+            rawY += height;
+            height = 0;
         }
 
         return {
@@ -179,6 +243,7 @@ export class HudMinimapProvider {
             bottom: rawY + height,
             X: rawX + width / 2,
             Y: rawY + height / 2,
+            isHidden: isRadarHidden,
         };
     }
 }

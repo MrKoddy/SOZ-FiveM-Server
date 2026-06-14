@@ -6,13 +6,14 @@ import {
     Animation,
     AnimationInfo,
     animationOptionsToFlags,
-    AnimationProps,
     AnimationStopReason,
     PlayOptions,
     Scenario,
+    Vfx,
 } from '../../shared/animation';
 import { transformForwardPoint2D, Vector2, Vector3 } from '../../shared/polyzone/vector';
 import { WeaponName } from '../../shared/weapons/weapon';
+import { OrbitalCameraProvider } from '../camera/orbital.camera.provider';
 import { AttachedObjectService } from '../object/attached.object.service';
 import { PlayerService } from '../player/player.service';
 import { ResourceLoader } from '../repository/resource.loader';
@@ -23,6 +24,7 @@ const defaultPlayOptions: PlayOptions = {
     clearTasksBefore: false,
     clearTasksAfter: false,
     cancellable: true,
+    useFreeCam: false,
 };
 
 class AnimationCanceller {
@@ -111,10 +113,10 @@ const doAnimation = async (
     const duration = animation.duration
         ? animation.duration
         : forceDuration
-        ? 1000
-        : animation.options?.repeat
-        ? -1
-        : GetAnimDuration(animation.dictionary, animation.name) * 1000;
+          ? 1000
+          : animation.options?.repeat
+            ? -1
+            : GetAnimDuration(animation.dictionary, animation.name) * 1000;
 
     const blendInSpeed = animation.blendInSpeed ? animation.blendInSpeed : 8.0;
     const blendOutSpeed = animation.blendOutSpeed ? animation.blendOutSpeed : -8.0;
@@ -124,19 +126,40 @@ const doAnimation = async (
     const lockY = animation.lockY ? animation.lockY : false;
     const lockZ = animation.lockZ ? animation.lockZ : false;
 
-    TaskPlayAnim(
-        ped,
-        animation.dictionary,
-        animation.name,
-        blendInSpeed,
-        blendOutSpeed,
-        -1, // always loop, if there is a duration we will stop it manually, so we are sure than animation is always longer than the duration even on slow machines
-        flags,
-        playbackRate,
-        lockX,
-        lockY,
-        lockZ
-    );
+    if (animation.coords) {
+        TaskPlayAnimAdvanced(
+            ped,
+            animation.dictionary,
+            animation.name,
+            animation.coords[0],
+            animation.coords[1],
+            animation.coords[2],
+            0,
+            0,
+            animation.coords[3],
+            blendInSpeed,
+            blendOutSpeed,
+            -1,
+            flags,
+            playbackRate,
+            2,
+            0
+        );
+    } else {
+        TaskPlayAnim(
+            ped,
+            animation.dictionary,
+            animation.name,
+            blendInSpeed,
+            blendOutSpeed,
+            -1, // always loop, if there is a duration we will stop it manually, so we are sure than animation is always longer than the duration even on slow machines
+            flags,
+            playbackRate,
+            lockX,
+            lockY,
+            lockZ
+        );
+    }
 
     // await for animation start
     await waitUntil(async () => IsEntityPlayingAnim(ped, animation.dictionary, animation.name, 3), 1000);
@@ -146,6 +169,7 @@ const doAnimation = async (
     });
 
     return new Promise<AnimationStopReason>(resolve => {
+        SetPedConfigFlag(ped, 104, false);
         if (duration > 0) {
             wait(duration).then(() => {
                 resolve(AnimationStopReason.Finished);
@@ -166,6 +190,7 @@ const doAnimation = async (
             waitUntilPromise.cancel();
         }
 
+        SetPedConfigFlag(ped, 104, true);
         if (IsEntityPlayingAnim(ped, animation.dictionary, animation.name, 3)) {
             StopAnimTask(ped, animation.dictionary, animation.name, 3);
         }
@@ -184,6 +209,9 @@ export class AnimationFactory {
 
     @Inject(AttachedObjectService)
     private attachedObjectService: AttachedObjectService;
+
+    @Inject(OrbitalCameraProvider)
+    private orbitalCameraProvider: OrbitalCameraProvider;
 
     public createAnimation(animation: Animation, options: Partial<PlayOptions> = {}): AnimationRunner {
         return this.createFromCallback(async (animationCanceller, ped) => {
@@ -207,15 +235,18 @@ export class AnimationFactory {
 
             if (animation.props) {
                 for (const prop of animation.props) {
+                    const model = Array.isArray(prop.model)
+                        ? prop.model[Math.floor(Math.random() * prop.model.length)]
+                        : prop.model;
                     const propId = await this.attachedObjectService.attachObjectToPlayer({
                         bone: prop.bone,
-                        model: prop.model,
+                        model: model,
                         position: prop.position,
                         rotation: prop.rotation,
                     });
 
                     if (prop.fx) {
-                        this.fxLoop(propId, prop);
+                        this.fxLoop(propId, prop.fx);
                     }
 
                     props.push(propId);
@@ -265,41 +296,52 @@ export class AnimationFactory {
         }, options);
     }
 
-    private async fxLoop(entity: number, prop: AnimationProps) {
-        if (prop.fx.delay) {
-            await wait(prop.fx.delay);
+    public async fxLoop(entity: number, fx: Vfx) {
+        if (fx.delay) {
+            await wait(fx.delay);
         }
         let index = 0;
+        await this.resourceLoader.loadPtfxAsset(fx.dictionary);
         do {
-            UseParticleFxAsset(prop.fx.dictionary);
+            UseParticleFxAsset(fx.dictionary);
             StartParticleFxLoopedOnEntity(
-                prop.fx.name,
+                fx.name,
                 entity,
-                prop.fx.position[0],
-                prop.fx.position[1],
-                prop.fx.position[2],
-                prop.fx.rotation[0],
-                prop.fx.rotation[1],
-                prop.fx.rotation[2],
-                prop.fx.scale,
+                fx.position[0],
+                fx.position[1],
+                fx.position[2],
+                fx.rotation[0],
+                fx.rotation[1],
+                fx.rotation[2],
+                fx.scale,
                 false,
                 false,
                 false
             );
 
-            if (prop.fx.net) {
+            if (fx.net) {
                 const playerPedId = PlayerPedId();
                 const coords = GetEntityCoords(playerPedId) as Vector3;
                 const playersInrange = this.playerService.getPlayersAround(coords, 100.0, true);
                 if (playersInrange.length) {
-                    TriggerServerEvent(ServerEvent.ANIMATION_FX, ObjToNet(entity), prop.fx, playersInrange);
+                    TriggerServerEvent(ServerEvent.ANIMATION_FX, ObjToNet(entity), fx, playersInrange);
                 }
             }
 
-            if (prop.fx.manualLoop && prop.fx.duration) {
-                await wait(prop.fx.duration[index++ % prop.fx.duration.length]);
+            if (fx.manualLoop && fx.duration) {
+                await wait(fx.duration[index++ % fx.duration.length]);
             }
-        } while (prop.fx.manualLoop && DoesEntityExist(entity));
+        } while (fx.manualLoop && DoesEntityExist(entity));
+        this.resourceLoader.unloadPtfxAsset(fx.dictionary);
+    }
+
+    public async playFx(entity: number, fx: Vfx, range = 100) {
+        const playerPedId = PlayerPedId();
+        const pedCoords = GetEntityCoords(playerPedId) as Vector3;
+        const playersInrange = this.playerService.getPlayersAround(pedCoords, range, false);
+        if (playersInrange.length) {
+            TriggerServerEvent(ServerEvent.ANIMATION_FX, ObjToNet(entity), fx, playersInrange);
+        }
     }
 
     public createScenario(scenario: Scenario, options: Partial<PlayOptions> = {}): AnimationRunner {
@@ -436,6 +478,13 @@ export class AnimationFactory {
             playOptions.ped = PlayerPedId();
         }
 
+        let freeCamEntity: number = null;
+
+        if (playOptions.useFreeCam) {
+            freeCamEntity = playOptions.ped;
+            this.orbitalCameraProvider.createCamera(freeCamEntity, [0, 0, 0.5], 1, 2, true);
+        }
+
         if (playOptions.clearTasksBefore) {
             ClearPedTasksImmediately(playOptions.ped);
             ClearPedSecondaryTask(playOptions.ped);
@@ -452,6 +501,10 @@ export class AnimationFactory {
                 if (playOptions.clearTasksAfter) {
                     ClearPedTasks(playOptions.ped);
                     ClearPedSecondaryTask(playOptions.ped);
+                }
+
+                if (playOptions.useFreeCam) {
+                    this.orbitalCameraProvider.deleteCamera();
                 }
             }),
             animationCanceller,

@@ -1,7 +1,11 @@
+import { SozRole } from '@core/permissions';
+import { VampireGameCollection, VampireGameObjectiveTypePart2, VampireGameRole } from '@public/shared/halloween';
 import { PlayerCharInfo } from '@public/shared/player';
+import { EventInfo } from '@public/shared/scene';
 import { SenateParty, SenatePartyMember } from '@public/shared/senate';
+import { SenatSceneState } from '@public/shared/story/story';
 
-import { SozRole } from '../../core/permissions';
+import { Music } from '../audio';
 import { Component, Outfit, Prop } from '../cloth';
 
 export const MONEY_OPTIONS = [
@@ -41,6 +45,8 @@ export type GameMasterSubMenuState = {
     invisible: boolean;
     adminGPS: boolean;
     adminPoliceLocator: boolean;
+    adminInfiniteAmmo: boolean;
+    adminNoRecoil: boolean;
 };
 
 export type InteractiveSubMenuState = {
@@ -63,6 +69,9 @@ export type DeveloperSubMenuState = {
     noClip: boolean;
     displayCoords: boolean;
     displayMileage: boolean;
+    displayMouseDebug: boolean;
+    doors: boolean;
+    debugPoly: boolean;
 };
 
 export type VehicleSubMenuState = {
@@ -71,9 +80,34 @@ export type VehicleSubMenuState = {
     noSurfaceCalc: boolean;
 };
 
+export type MeteorSubMenuState = {
+    disableNpc: boolean;
+    musics: Record<Music, number>;
+    highWave: boolean;
+    earthQuake: boolean;
+    tornado: boolean;
+    firePropagation: boolean;
+};
+
+export type CeremonySubMenuState = {
+    disableNpc: boolean;
+    scene: SenatSceneState;
+};
+
+export type HalloweenSubMenuState = {
+    started: boolean;
+    excludedPlayers: Partial<AdminPlayer>[];
+    gameDuration: number;
+    roleMaxNumber: Record<VampireGameRole, number>;
+    mortalObjectivePart1: Record<Exclude<VampireGameCollection, 'player'>, number>;
+    mortalObjectivePart2: Record<VampireGameObjectiveTypePart2, number>;
+    mortalObjectivePart3: number;
+    ceremony: CeremonySubMenuState;
+};
+
 export type AdminMenuData = {
-    banner: string;
     permission: SozRole;
+    event: EventInfo;
     characters: Record<string, PlayerCharInfo>;
     parties: SenateParty[];
     state: {
@@ -82,6 +116,9 @@ export type AdminMenuData = {
         skin: SkinSubMenuState;
         developer: DeveloperSubMenuState;
         vehicule: VehicleSubMenuState;
+        meteor: MeteorSubMenuState;
+        halloween: HalloweenSubMenuState;
+        ceremony: CeremonySubMenuState;
     };
 };
 
@@ -97,6 +134,11 @@ export type AdminPlayer = {
     rpFullName: string;
     injuries: number;
     partyMember: SenatePartyMember | null;
+    plate: boolean | null;
+    specialPlate: boolean | null;
+    vampireGameExcluded?: boolean;
+    armorPlates: number;
+    canCraftMissive: boolean;
 };
 
 export type FullAdminPlayer = AdminPlayer & {
@@ -104,4 +146,13 @@ export type FullAdminPlayer = AdminPlayer & {
     heading: number;
     cid: string;
     ped: number;
+};
+
+export type LightAdminPlayer = {
+    id: number; // That's the server id of the player.
+    citizenId: string;
+    name: string;
+    rpFullName: string;
+    coords: number[];
+    heading: number;
 };

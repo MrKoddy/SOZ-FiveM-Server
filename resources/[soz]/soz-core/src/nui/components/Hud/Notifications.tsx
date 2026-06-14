@@ -1,12 +1,18 @@
 import { Transition } from '@headlessui/react';
+import { animated, useSpring } from '@react-spring/web';
 import classNames from 'classnames';
-import { FunctionComponent, useCallback, useEffect, useState } from 'react';
+import cn from 'classnames';
+import { FunctionComponent, useCallback, useEffect, useMemo, useState } from 'react';
+import { useSelector } from 'react-redux';
+import colors from 'tailwindcss/colors';
 
 import { uuidv4 } from '../../../core/utils';
 import { AdvancedNotification, BasicNotification, TPoliceNotification } from '../../../shared/notification';
-import { useHud } from '../../hook/data';
+import { useAssetPath } from '../../hook/assets';
 import { useNuiEvent } from '../../hook/nui';
+import { RootState } from '../../store';
 import { formatText } from '../../utils/gta-format';
+import { GlassMorphismContainer } from '../Styleguide/GlassMorphismContainer';
 
 type NotificationProps = {
     notification: BasicNotification | AdvancedNotification;
@@ -72,17 +78,6 @@ const Notification: FunctionComponent<NotificationProps> = ({ notification, onDe
         [setIsClosing]
     );
 
-    const classes = classNames(
-        'w-full relative px-2 py-3 overflow-hidden mb-2 transition-all rounded text-sm lg:text-lg text-white bg-gradient-to-r from-black/60 to-black/25 border-l-4',
-        {
-            'border-red-500': notification.style === 'error',
-            'border-green-500': notification.style === 'success',
-            'border-blue-500':
-                notification.style !== 'error' && notification.style !== 'success' && notification.style !== 'warning',
-            'border-orange-500': notification.style === 'warning',
-        }
-    );
-
     return (
         <Transition
             show={!isClosing && !isOpening}
@@ -92,32 +87,49 @@ const Notification: FunctionComponent<NotificationProps> = ({ notification, onDe
             leave="transform ease-in duration-300 transition"
             leaveFrom="translate-x-0"
             leaveTo="-translate-x-full"
+            className="relative"
         >
-            <div className={classes}>
-                {isAdvancedNotification(notification) && (
-                    <div className="flex items-center mb-2">
-                        <img
-                            className="w-16"
-                            src={
-                                notification.image.startsWith('http')
-                                    ? notification.image
-                                    : `https://nui-img/${notification.image}/${notification.image}`
-                            }
-                            alt={notification.image}
-                        />
-                        <div className="ml-4 flex flex-col overflow-hidden">
-                            <p dangerouslySetInnerHTML={{ __html: formatText(notification.title) }} />
-                            <p dangerouslySetInnerHTML={{ __html: formatText(notification.subtitle) }} />
+            <div className="w-full overflow-hidden transition-all rounded text-sm lg:text-lg text-white">
+                <GlassMorphismContainer
+                    className="p-3"
+                    borderColor={classNames({
+                        '#ef4444': notification.style === 'error',
+                        '#22c55e': notification.style === 'success',
+                        '#f97316': notification.style === 'warning',
+                        '#3b82f6':
+                            notification.style !== 'error' &&
+                            notification.style !== 'success' &&
+                            notification.style !== 'warning',
+                    })}
+                    borderClassName="rounded-xl"
+                >
+                    {isAdvancedNotification(notification) && (
+                        <div className="flex items-center mb-2">
+                            <img
+                                className="w-16"
+                                src={
+                                    notification.image.startsWith('http')
+                                        ? notification.image
+                                        : `https://nui-img/${notification.image}/${notification.image}`
+                                }
+                                alt={notification.image}
+                            />
+                            <div className="ml-4 flex flex-col overflow-hidden">
+                                <p dangerouslySetInnerHTML={{ __html: formatText(notification.title) }} />
+                                <p dangerouslySetInnerHTML={{ __html: formatText(notification.subtitle) }} />
+                            </div>
                         </div>
-                    </div>
-                )}
-                <p dangerouslySetInnerHTML={{ __html: formatText(notification.message) }} />
+                    )}
+                    <p dangerouslySetInnerHTML={{ __html: formatText(notification.message) }} />
+                </GlassMorphismContainer>
             </div>
         </Transition>
     );
 };
 
 const PoliceNotification: FunctionComponent<PoliceNotificationProps> = ({ notification, onDelete }) => {
+    const { getPath } = useAssetPath();
+
     const [isClosing, setIsClosing] = useState(false);
     const [isOpening, setIsOpening] = useState(true);
 
@@ -186,29 +198,29 @@ const PoliceNotification: FunctionComponent<PoliceNotificationProps> = ({ notifi
         return '';
     };
 
-    const borderColor = (): string => {
+    const borderColor = useMemo((): string => {
         switch (notification.policeStyle) {
             case 'red-alert':
-                return 'border-red-500/70';
+                return colors.red['500'];
             case 'robbery':
-                return 'border-lime-500/70';
+                return colors.lime['500'];
             case 'vandalism':
-                return 'border-yellow-400/70';
+                return colors.yellow['400'];
             case 'racket':
-                return 'border-orange-500/70';
+                return colors.orange['500'];
             case 'shooting':
-                return 'border-indigo-500/70';
+                return colors.indigo['500'];
             case 'auto-theft':
-                return 'border-cyan-500/70';
+                return colors.cyan['500'];
             case 'drug':
-                return 'border-teal-300/70';
+                return colors.teal['300'];
             case 'explosion':
-                return 'border-pink-500/70';
+                return colors.pink['500'];
             case 'default':
             default:
-                return 'border-green-500/70';
+                return colors.green['500'];
         }
-    };
+    }, [notification.policeStyle]);
 
     const textColor = (): string => {
         switch (notification.policeStyle) {
@@ -234,10 +246,6 @@ const PoliceNotification: FunctionComponent<PoliceNotificationProps> = ({ notifi
         }
     };
 
-    const classes = (): string => {
-        return `w-full relative px-2 py-3 overflow-hidden mb-2 transition-all rounded text-sm lg:text-lg text-white bg-[#131313]/70 border-l-8 ${borderColor()}`;
-    };
-
     const hours = (): string => {
         const currentDate = new Date();
 
@@ -251,18 +259,18 @@ const PoliceNotification: FunctionComponent<PoliceNotificationProps> = ({ notifi
     };
 
     const image = (): string => {
-        let image = '/public/images/hud/notification/fdo.webp';
+        let image = getPath('images/hud/notification/fdo.webp');
 
         if (notification.logo === 'lspd') {
-            image = '/public/images/hud/notification/lspd.webp';
+            image = getPath('images/hud/notification/lspd.webp');
         }
 
         if (notification.logo === 'bcso') {
-            image = '/public/images/hud/notification/bcso.webp';
+            image = getPath('images/hud/notification/bcso.webp');
         }
 
         if (notification.logo === 'sasp') {
-            image = '/public/images/hud/notification/sasp.webp';
+            image = getPath('images/hud/notification/sasp.webp');
         }
         return image;
     };
@@ -277,29 +285,44 @@ const PoliceNotification: FunctionComponent<PoliceNotificationProps> = ({ notifi
             leaveFrom="-translate-x-0"
             leaveTo="translate-x-full"
         >
-            <div className={classes()}>
-                <div className="flex items-center mb-2 justify-between">
-                    <div className="flex items-center">
-                        <img className="w-6 mr-4" src={image()} alt="Blason des forces de l'ordre" />
+            <div
+                className={cn(
+                    'w-full relative overflow-hidden mb-2 transition-all rounded text-sm lg:text-lg text-white'
+                )}
+            >
+                <GlassMorphismContainer
+                    className="flex flex-col gap-2 py-2 px-4"
+                    borderColor={borderColor}
+                    borderClassName="rounded-xl"
+                >
+                    <div className="flex gap-2">
+                        <img className="w-6" src={image()} alt="Blason des forces de l'ordre" />
                         <p className="flex items-center uppercase text-base lg:text-xl">
                             <span>Alerte :&nbsp;</span>
                             <span className="font-semibold" dangerouslySetInnerHTML={{ __html: formatText(title()) }} />
-                            <span className="ml-4 normal-case text-sm">#{notification.notificationId}</span>
                         </p>
                     </div>
-                    <div className="flex items-center">
-                        <p className="italic" dangerouslySetInnerHTML={{ __html: hours() }} />
-                        <span className="w-10"></span>
+
+                    <p dangerouslySetInnerHTML={{ __html: formatText(message()) }} />
+
+                    <div className="flex justify-between">
+                        <span>{hours()}</span>
+                        <span className="ml-4 normal-case text-sm">#{notification.notificationId}</span>
                     </div>
-                </div>
-                <p dangerouslySetInnerHTML={{ __html: formatText(message()) }} />
+                </GlassMorphismContainer>
             </div>
         </Transition>
     );
 };
 
 export const Notifications: FunctionComponent = () => {
-    const { minimap } = useHud();
+    const hasWatch = useSelector((state: RootState) => state.hud.hasWatch);
+    const minimap = useSelector((state: RootState) => state.hud.minimap);
+    const settings = useSelector((state: RootState) => state.hud.settings);
+    const showDateTime = useSelector((state: RootState) => state.hud.settings.showDateTime);
+    const showWeather = useSelector((state: RootState) => state.hud.settings.showWeather);
+    const showStreetName = useSelector((state: RootState) => state.hud.settings.showStreetName);
+
     const [notifications, setNotifications] = useState<
         (BasicNotification | AdvancedNotification | TPoliceNotification)[]
     >([]);
@@ -318,6 +341,22 @@ export const Notifications: FunctionComponent = () => {
         [setNotifications]
     );
 
+    const notificationOffset = () => {
+        if (!hasWatch && !minimap.isHidden) {
+            return settings.zoom + 'rem';
+        }
+        if (!hasWatch) {
+            return 10 * settings.zoom + 'rem';
+        }
+        if (hasWatch && (showDateTime || showWeather)) {
+            return 5 * settings.zoom + 'rem';
+        }
+        if (hasWatch && !showStreetName && minimap.isHidden) {
+            return 7 * settings.zoom + 'rem';
+        }
+        return settings.zoom + 'rem';
+    };
+
     useNuiEvent(
         'hud',
         'DrawNotification',
@@ -330,34 +369,44 @@ export const Notifications: FunctionComponent = () => {
         [createNotification]
     );
 
+    const styles = useSpring({
+        from: {
+            top: 0,
+            bottom: '-100vh',
+        },
+        to: {
+            top: 0,
+            bottom: `calc(${100 - minimap.top * 100}vh + ${notificationOffset()})`,
+            left: `calc(100vw * ${minimap.left + 0.004})`,
+            width: `calc(100vw * ${minimap.width})`,
+        },
+    });
+
     return (
-        <div>
-            <div
-                className="absolute flex flex-col-reverse"
+        <>
+            <animated.div
+                className="absolute flex flex-col-reverse gap-4"
                 style={{
-                    top: `calc((100vh * ${minimap.top}) - calc((100vh * ${minimap.height}) * 4) - .5rem )`,
-                    left: `calc(100vw * ${minimap.left + 0.004})`,
-                    height: `calc((100vh * ${minimap.height}) * 4)`,
-                    width: `calc(100vw * ${minimap.width})`,
+                    ...styles,
                     zIndex: 20,
+                    pointerEvents: `none`,
                 }}
             >
-                {notifications.map(
-                    notification =>
-                        !isPoliceNotification(notification) && (
-                            <Notification
-                                key={notification.id}
-                                notification={notification}
-                                onDelete={() => deleteNotification(notification.id)}
-                            />
-                        )
-                )}
-            </div>
+                {notifications
+                    .filter(notification => !isPoliceNotification(notification))
+                    .map(notification => (
+                        <Notification
+                            key={notification.id}
+                            notification={notification}
+                            onDelete={() => deleteNotification(notification.id)}
+                        />
+                    ))}
+            </animated.div>
             <div
-                className="absolute flex flex-col-reverse"
+                className="absolute flex flex-col-reverse gap-4"
                 style={{
                     top: `calc(0.5rem)`,
-                    right: `0`,
+                    right: `1rem`,
                     height: `50vh`,
                     width: `calc(100vw * ${minimap.width * 1.5})`,
                 }}
@@ -373,6 +422,6 @@ export const Notifications: FunctionComponent = () => {
                         )
                 )}
             </div>
-        </div>
+        </>
     );
 };

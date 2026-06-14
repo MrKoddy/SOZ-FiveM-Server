@@ -1,3 +1,5 @@
+import { FeaturesConfig } from '@public/shared/features';
+
 import { JobType } from './job';
 import { Weather } from './weather';
 
@@ -11,10 +13,8 @@ export type GlobalState = {
     halloween: string;
     rain: number;
     snow: boolean;
-    streamUrls: {
-        bennys: string;
-        cinema: string;
-    };
+    streamUrls: Record<string, string>;
+    features: FeaturesConfig;
 };
 
 export const BLACK_SCREEN_URL = 'nui://soz-core/public/dui_twitch_stream.html';

@@ -1,7 +1,10 @@
+import { PermissionService } from '@public/server/permission.service';
+import { expirationVisaDuration } from '@public/shared/player';
+import { TaxLabel, TaxType } from '@public/shared/tax';
+
 import { OnEvent } from '../../../core/decorators/event';
 import { Inject } from '../../../core/decorators/injectable';
 import { Provider } from '../../../core/decorators/provider';
-import { TaxLabel, TaxType } from '../../../shared/bank';
 import { JobTaxTier } from '../../../shared/configuration';
 import { ServerEvent } from '../../../shared/event/server';
 import { JobPermission, JobType } from '../../../shared/job';
@@ -25,6 +28,9 @@ export class GouvProvider {
 
     @Inject(PlayerService)
     private playerService: PlayerService;
+
+    @Inject(PermissionService)
+    private permissionService: PermissionService;
 
     @Inject(Notifier)
     private notifier: Notifier;
@@ -111,6 +117,11 @@ export class GouvProvider {
             return;
         }
 
+        if ((value < 16 || 30 < value) && !this.permissionService.isStaff(source)) {
+            this.notifier.error(source, `La valeur de taxe est en ~r~dehors~s~ des normes présidentielles.`);
+            return;
+        }
+
         if (!(await this.jobService.hasPermission(player, JobType.Gouv, JobPermission.GouvUpdateTax))) {
             return;
         }
@@ -126,5 +137,49 @@ export class GouvProvider {
         const label = TaxLabel[taxType];
 
         this.notifier.notify(source, `Vous avez mis à jour la taxe ~g~"${label}"~s~ à ~g~${value}~s~`);
+    }
+
+    @OnEvent(ServerEvent.GOUV_VALIDATE_IDENTITY)
+    public async onValidateIdentity(source: number, target: number) {
+        const sourcePlayer = this.playerService.getPlayer(source);
+        const targetPlayer = this.playerService.getPlayer(target);
+
+        if (!sourcePlayer || !targetPlayer) {
+            return;
+        }
+
+        if (targetPlayer.created_at + expirationVisaDuration > Date.now()) {
+            this.notifier.error(
+                source,
+                `Impossible ~g~valider~s~ l'identité avant l'expiration du Visa temporaire (${new Date(
+                    targetPlayer.created_at + expirationVisaDuration
+                ).toLocaleString('fr-FR')}).`
+            );
+            return;
+        }
+
+        this.playerService.setPlayerValidated(target, true);
+
+        this.notifier.notify(target, `Votre identité a été ~g~validée~s~.`);
+        this.notifier.notify(source, `Vous avez ~g~validé~s~ l'identité.`);
+    }
+
+    @OnEvent(ServerEvent.GOUV_SENAT_SALARY)
+    public async senatSalary(source: number, value: number) {
+        const player = this.playerService.getPlayer(source);
+
+        if (!player) {
+            return;
+        }
+
+        if (!(await this.jobService.hasPermission(player, JobType.Gouv, JobPermission.GouvSenatSalary))) {
+            return;
+        }
+
+        await this.configurationRepository.update('Gouv', {
+            SenatSalary: value,
+        });
+
+        this.notifier.notify(source, `Vous avez mis à jour le salaire des sénateurs ~g~${value}$~s~.`);
     }
 }

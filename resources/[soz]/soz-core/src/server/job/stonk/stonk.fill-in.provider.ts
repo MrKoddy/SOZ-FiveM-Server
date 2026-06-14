@@ -1,13 +1,16 @@
+import { InventoryFactory } from '@public/server/inventory/inventory.factory';
+
 import { OnEvent } from '../../../core/decorators/event';
 import { Inject } from '../../../core/decorators/injectable';
 import { Provider } from '../../../core/decorators/provider';
 import { Logger } from '../../../core/logger';
 import { ServerEvent } from '../../../shared/event';
+import { isInventoryItemExpired } from '../../../shared/inventory';
 import { JobPermission, JobType } from '../../../shared/job';
 import { StonkBagType, StonkConfig } from '../../../shared/job/stonk';
 import { toVector3Object, Vector3 } from '../../../shared/polyzone/vector';
 import { BankService } from '../../bank/bank.service';
-import { InventoryManager } from '../../inventory/inventory.manager';
+import { Inventory } from '../../inventory/inventory';
 import { ItemService } from '../../item/item.service';
 import { JobService } from '../../job.service';
 import { Monitor } from '../../monitor/monitor';
@@ -20,8 +23,8 @@ export class StonkFillInProvider {
     @Inject(ItemService)
     private itemService: ItemService;
 
-    @Inject(InventoryManager)
-    private inventoryManager: InventoryManager;
+    @Inject(InventoryFactory)
+    private inventoryFactory: InventoryFactory;
 
     @Inject(PlayerService)
     private playerService: PlayerService;
@@ -64,61 +67,60 @@ export class StonkFillInProvider {
             return;
         }
 
-        if (this.numberOfItemsRequired(item, maxBalance, accountName) == 0) {
+        let currentBalance = await this.bankService.getAccountMoney(accountName);
+        if (currentBalance >= maxBalance) {
             this.notifier.notify(source, "C'est déjà ~r~rempli~s~");
             return;
         }
 
         this.notifier.notify(source, 'Vous ~g~commencez~s~ à remplir.', 'success');
 
+        const inventory = await this.inventoryFactory.getPlayerInventory(source);
+
         do {
             const outputItemLabel = this.itemService.getItem(item).label;
-            const [hasResold, fillAmount] = await this.doFillIn(source, item, maxBalance, accountName);
+            const [hasResold, fillAmount] = await this.doFillIn(source, inventory, item, maxBalance, accountName);
 
             if (hasResold) {
-                this.monitor.publish(
-                    'job_stonk_fill_account',
-                    {
-                        item_id: item,
-                        player_source: source,
-                        account_type: 'bank',
-                    },
-                    {
-                        item_label: outputItemLabel,
-                        amount: fillAmount,
-                        position: toVector3Object(GetEntityCoords(GetPlayerPed(source)) as Vector3),
-                    }
-                );
+                this.monitor.traceEvent('job_stonk_fill_account', {
+                    item_id: item,
+                    player_source: source,
+                    account_type: 'bank',
+                    item_label: outputItemLabel,
+                    amount: fillAmount,
+                    position: toVector3Object(GetEntityCoords(GetPlayerPed(source)) as Vector3),
+                });
 
-                const transfer = await this.bankService.transferBankMoney(
+                currentBalance = await this.bankService.getAccountMoney(accountName);
+                const transfer = await this.bankService.transferFarmMoney(
+                    source,
                     StonkConfig.bankAccount.bankRefill,
                     accountName,
-                    StonkConfig.collection[item].refill_value * fillAmount
+                    Math.min(StonkConfig.collection[item].refill_value * fillAmount, maxBalance - currentBalance)
                 );
                 if (!transfer) {
                     this.logger.error(
-                        'Failed to transfer money to safe',
-                        JSON.stringify({
+                        `Failed to transfer money to safe ${JSON.stringify({
                             account_source: StonkConfig.bankAccount.bankRefill,
                             account_destination: accountName,
                             amount: StonkConfig.collection[item].refill_value * fillAmount,
-                        })
+                        })}`
                     );
                 }
 
-                const transferSociety = await this.bankService.transferBankMoney(
+                const transferSociety = await this.bankService.transferFarmMoney(
+                    source,
                     StonkConfig.bankAccount.farm,
                     StonkConfig.bankAccount.safe,
                     StonkConfig.collection[item].society_gain * fillAmount
                 );
                 if (!transferSociety) {
                     this.logger.error(
-                        'Failed to transfer money to safe',
-                        JSON.stringify({
+                        `Failed to transfer money to safe ${JSON.stringify({
                             account_source: StonkConfig.bankAccount.farm,
                             account_destination: StonkConfig.bankAccount.safe,
                             amount: StonkConfig.collection[item].society_gain * fillAmount,
-                        })
+                        })}`
                     );
                 }
 
@@ -127,27 +129,23 @@ export class StonkFillInProvider {
                 this.notifier.notify(source, 'Vous avez ~r~arrêté~s~ de remplir.');
                 return;
             }
-        } while (this.canFillIn(source, item, maxBalance, accountName));
-    }
 
-    private numberOfItemsRequired(item: StonkBagType, maxBalance: number, accountName: string): number {
-        const currentBalance = this.bankService.getAccountMoney(accountName);
-        return Math.floor((maxBalance - currentBalance) / StonkConfig.collection[item].refill_value);
-    }
-
-    private canFillIn(source: number, item: StonkBagType, maxBalance: number, accountName: string): boolean {
-        return (
-            this.inventoryManager.getFirstItemInventory(source, item) !== null &&
-            this.numberOfItemsRequired(item, maxBalance, accountName) > 0
-        );
+            currentBalance = await this.bankService.getAccountMoney(accountName);
+        } while (currentBalance < maxBalance);
     }
 
     private async doFillIn(
         source: number,
+        inventory: Inventory,
         item: StonkBagType,
         maxBalance: number,
         accountName: string
     ): Promise<[boolean, number]> {
+        const preCheckinventoryItem = inventory.findItem(elem => elem.name == item && !isInventoryItemExpired(elem));
+        if (!preCheckinventoryItem) {
+            return [false, 0];
+        }
+
         const { completed } = await this.progressService.progress(
             source,
             'stonk_fill_in',
@@ -169,22 +167,23 @@ export class StonkFillInProvider {
             return [false, 0];
         }
 
-        const items = this.inventoryManager.getFirstItemInventory(source, item);
-        let fillInAmount = this.numberOfItemsRequired(item, maxBalance, accountName);
-
-        if (!items || fillInAmount == 0) {
+        const inventoryItem = inventory.findItem(elem => elem.name == item && !isInventoryItemExpired(elem));
+        if (!inventoryItem) {
             return [false, 0];
         }
 
-        if (fillInAmount > StonkConfig.resell.amount) {
-            fillInAmount = StonkConfig.resell.amount;
+        const currentBalance = await this.bankService.getAccountMoney(accountName);
+        const fillInAmount = Math.min(
+            Math.ceil((maxBalance - currentBalance) / StonkConfig.collection[item].refill_value),
+            StonkConfig.resell.amount,
+            inventoryItem.amount
+        );
+
+        if (fillInAmount == 0) {
+            return [false, 0];
         }
 
-        if (fillInAmount > items.amount) {
-            fillInAmount = items.amount;
-        }
-
-        const removeRequest = this.inventoryManager.removeItemFromInventory(source, item, fillInAmount);
+        const removeRequest = inventory.removeAtSlot(inventoryItem.slot, fillInAmount);
 
         return [removeRequest, fillInAmount];
     }

@@ -1,19 +1,29 @@
-import { Once, OnceStep } from '../../core/decorators/event';
-import { Inject } from '../../core/decorators/injectable';
-import { Provider } from '../../core/decorators/provider';
-import { RepositoryDelete, RepositoryInsert, RepositoryUpdate } from '../../core/decorators/repository';
-import { emitQBRpc } from '../../core/rpc';
-import { PlayerCloakroomItem } from '../../shared/cloth';
-import { ServerEvent } from '../../shared/event/server';
-import { Apartment, isPlayerInsideApartment, Property } from '../../shared/housing/housing';
-import { MenuType } from '../../shared/nui/menu';
-import { RepositoryType } from '../../shared/repository';
-import { BankService } from '../bank/bank.service';
-import { InventoryManager } from '../inventory/inventory.manager';
-import { NuiMenu } from '../nui/nui.menu';
-import { PlayerService } from '../player/player.service';
-import { HousingRepository } from '../repository/housing.repository';
-import { TargetFactory } from '../target/target.factory';
+import { Once, OnceStep } from '@core/decorators/event';
+import { Inject } from '@core/decorators/injectable';
+import { Provider } from '@core/decorators/provider';
+import { RepositoryDelete, RepositoryInsert, RepositoryUpdate } from '@core/decorators/repository';
+import { BankService } from '@public/client/bank/bank.service';
+import { InventoryManager } from '@public/client/inventory/inventory.manager';
+import { NuiMenu } from '@public/client/nui/nui.menu';
+import { PlayerService } from '@public/client/player/player.service';
+import { HousingRepository } from '@public/client/repository/housing.repository';
+import { TargetFactory } from '@public/client/target/target.factory';
+import { HousingService } from '@public/server/housing/housing.service';
+import { PlayerCloakroomItem } from '@public/shared/cloth';
+import { ServerEvent } from '@public/shared/event/server';
+import {
+    Apartment,
+    canUseHousingInAppartment,
+    isApartmentExcludeFromHousing,
+    isPlayerInsideApartment,
+    Property,
+} from '@public/shared/housing/housing';
+import { RepositoryType } from '@public/shared/repository';
+
+import { InventoryType } from '../../shared/inventory';
+import { Vector3 } from '../../shared/polyzone/vector';
+import { HousingMenuProvider } from './housing.menu.provider';
+import { HousingPropertyZoneProvider } from './housing.property.zone.provider';
 
 type PlayerCloakroom = Record<number, PlayerCloakroomItem>;
 
@@ -36,6 +46,15 @@ export class HousingApartmentZoneProvider {
 
     @Inject(NuiMenu)
     private nuiMenu: NuiMenu;
+
+    @Inject(HousingMenuProvider)
+    private housingMenuProvider: HousingMenuProvider;
+
+    @Inject(HousingPropertyZoneProvider)
+    private housingPropertyZoneProvider: HousingPropertyZoneProvider;
+
+    @Inject(HousingService)
+    private housingService: HousingService;
 
     @Once(OnceStep.RepositoriesLoaded)
     public onApartmentZoneLoaded() {
@@ -63,6 +82,10 @@ export class HousingApartmentZoneProvider {
 
     public deleteZoneForApartment(apartment: Apartment) {
         this.targetFactory.removeBoxZone(`housing:apartment:${apartment.id}:exit`);
+        this.deleteOtherzoneForApartment(apartment);
+    }
+
+    public deleteOtherzoneForApartment(apartment: Apartment) {
         this.targetFactory.removeBoxZone(`housing:apartment:${apartment.id}:stash`);
         this.targetFactory.removeBoxZone(`housing:apartment:${apartment.id}:fridge`);
         this.targetFactory.removeBoxZone(`housing:apartment:${apartment.id}:money`);
@@ -76,7 +99,9 @@ export class HousingApartmentZoneProvider {
             this.targetFactory.createForBoxZone(`housing:apartment:${apartment.id}:exit`, apartment.exitZone, [
                 {
                     label: 'Sortir',
-                    icon: 'c:housing/enter.png',
+                    icon: 'housing/enter',
+                    category: 'citizen',
+                    event: 'all',
                     canInteract: () => {
                         const player = this.playerService.getPlayer();
 
@@ -90,14 +115,10 @@ export class HousingApartmentZoneProvider {
                         TriggerServerEvent(ServerEvent.HOUSING_EXIT_APARTMENT, property.id, apartment.id);
                     },
                 },
-            ]);
-        }
-
-        if (apartment.stashZone) {
-            this.targetFactory.createForBoxZone(`housing:apartment:${apartment.id}:stash`, apartment.stashZone, [
                 {
-                    label: 'Coffre de stockage',
-                    icon: 'c:inventory/ouvrir_le_stockage.png',
+                    label: 'Stocker les meubles',
+                    icon: 'magasin/acheter',
+                    category: 'citizen',
                     canInteract: () => {
                         const player = this.playerService.getPlayer();
 
@@ -107,15 +128,48 @@ export class HousingApartmentZoneProvider {
 
                         return (
                             (apartment.senatePartyId !== null || apartment.owner !== null) &&
-                            isPlayerInsideApartment(player)
+                            canUseHousingInAppartment(
+                                player,
+                                apartment,
+                                this.housingPropertyZoneProvider.temporaryAccess
+                            ) &&
+                            this.inventoryManager.hasEnoughItem('zkea_crate')
                         );
                     },
-                    action: () => {
-                        this.inventoryManager.openInventory('house_stash', apartment.identifier, {
-                            apartmentTier: apartment.tier,
-                            propertyId: property.id,
+                    action: async () => {
+                        await this.housingMenuProvider.storeFournitureInApartment({
                             apartmentId: apartment.id,
+                            propertyId: apartment.propertyId,
                         });
+                    },
+                },
+            ]);
+        }
+
+        if (!isApartmentExcludeFromHousing(apartment) && !apartment.shell) {
+            return;
+        }
+
+        this.createOtherZoneForApartment(property.id, apartment);
+    }
+
+    public createOtherZoneForApartment(propertyId: number, apartment: Apartment) {
+        if (apartment.stashZone) {
+            this.targetFactory.createForBoxZone(`housing:apartment:${apartment.id}:stash`, apartment.stashZone, [
+                {
+                    label: 'Coffre de stockage',
+                    icon: 'inventory/ouvrir_le_stockage',
+                    category: 'citizen',
+                    canInteract: () => {
+                        const player = this.playerService.getPlayer();
+                        return this.housingService.canAccessTargetInApartment(player, apartment);
+                    },
+                    action: () => {
+                        this.inventoryManager.openInventory(
+                            InventoryType.HouseStash,
+                            `house_stash_${apartment.identifier}`,
+                            GetEntityCoords(PlayerPedId()) as Vector3
+                        );
                     },
                 },
             ]);
@@ -125,21 +179,18 @@ export class HousingApartmentZoneProvider {
             this.targetFactory.createForBoxZone(`housing:apartment:${apartment.id}:fridge`, apartment.fridgeZone, [
                 {
                     label: 'Frigo',
-                    icon: 'c:inventory/ouvrir_le_stockage.png',
+                    icon: 'food/carrot',
+                    category: 'citizen',
                     canInteract: () => {
                         const player = this.playerService.getPlayer();
-
-                        if (!player) {
-                            return false;
-                        }
-
-                        return (
-                            (apartment.senatePartyId !== null || apartment.owner !== null) &&
-                            isPlayerInsideApartment(player)
-                        );
+                        return this.housingService.canAccessTargetInApartment(player, apartment);
                     },
                     action: () => {
-                        this.inventoryManager.openInventory('house_fridge', apartment.identifier);
+                        this.inventoryManager.openInventory(
+                            InventoryType.HouseFridge,
+                            `house_fridge_${apartment.identifier}`,
+                            GetEntityCoords(PlayerPedId()) as Vector3
+                        );
                     },
                 },
             ]);
@@ -149,18 +200,11 @@ export class HousingApartmentZoneProvider {
             this.targetFactory.createForBoxZone(`housing:apartment:${apartment.id}:money`, apartment.moneyZone, [
                 {
                     label: "Coffre d'argent",
-                    icon: 'c:bank/compte_safe.png',
+                    icon: 'bank/compte_safe',
+                    category: 'citizen',
                     canInteract: () => {
                         const player = this.playerService.getPlayer();
-
-                        if (!player) {
-                            return false;
-                        }
-
-                        return (
-                            (apartment.senatePartyId !== null || apartment.owner !== null) &&
-                            isPlayerInsideApartment(player)
-                        );
+                        return this.housingService.canAccessTargetInApartment(player, apartment);
                     },
                     action: () => {
                         this.bankService.openHouseSafe(apartment);
@@ -173,44 +217,21 @@ export class HousingApartmentZoneProvider {
             this.targetFactory.createForBoxZone(`housing:apartment:${apartment.id}:closet`, apartment.closetZone, [
                 {
                     label: 'Penderie',
-                    icon: 'c:jobs/habiller.png',
+                    icon: 'jobs/habiller',
+                    category: 'citizen',
                     canInteract: () => {
                         const player = this.playerService.getPlayer();
-
-                        if (!player) {
-                            return false;
-                        }
-
-                        return (
-                            (apartment.senatePartyId !== null || apartment.owner !== null) &&
-                            isPlayerInsideApartment(player)
-                        );
+                        return this.housingService.canAccessTargetInApartment(player, apartment);
                     },
                     action: () => {
-                        this.openApartmentCloakroom();
+                        this.inventoryManager.openInventory(
+                            InventoryType.HouseCloakroom,
+                            `house_cloakroom_${apartment.identifier}`,
+                            GetEntityCoords(PlayerPedId()) as Vector3
+                        );
                     },
                 },
             ]);
         }
-    }
-
-    public async openApartmentCloakroom() {
-        const player = this.playerService.getPlayer();
-
-        if (!player) {
-            return;
-        }
-
-        const playerCloakroom = await emitQBRpc<PlayerCloakroom>('soz-character:server:GetPlayerCloakroom');
-
-        if (!playerCloakroom) {
-            return;
-        }
-
-        const cloakroomItems = Object.values(playerCloakroom);
-
-        this.nuiMenu.openMenu(MenuType.HousingCloakroomMenu, {
-            items: cloakroomItems,
-        });
     }
 }

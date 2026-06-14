@@ -5,7 +5,7 @@ import { UpwStation } from '@public/shared/fuel';
 import { JobType } from '@public/shared/job';
 import { getDistance, Vector3 } from '@public/shared/polyzone/vector';
 import { RpcServerEvent } from '@public/shared/rpc';
-import { isVehicleModelElectric, VehicleClassFuelStorageMultiplier, VehicleSeat } from '@public/shared/vehicle/vehicle';
+import { getVehicleMaxFuelStorage, isVehicleModelElectric, VehicleSeat } from '@public/shared/vehicle/vehicle';
 
 import { Once, OnceStep, OnEvent } from '../../core/decorators/event';
 import { Inject } from '../../core/decorators/injectable';
@@ -128,15 +128,11 @@ export class VehicleElectricProvider {
         this.targetFactory.createForModel(this.upwChargerRepository.getModel(), [
             {
                 label: "Recharger à l'énergie fossile",
-                color: JobType.Upw,
-                icon: 'c:fuel/charger.png',
+                icon: 'fuel/charger',
                 blackoutGlobal: true,
                 blackoutJob: JobType.Upw,
                 job: JobType.Upw,
-                canInteract: () => {
-                    const player = this.playerService.getPlayer();
-                    return player && player.job.onduty;
-                },
+                category: 'society',
                 action: entity => {
                     const position = GetEntityCoords(entity) as Vector3;
                     const charger = this.upwChargerRepository.getClosestCharger(position);
@@ -151,15 +147,11 @@ export class VehicleElectricProvider {
             },
             {
                 label: "Recharger à l'énergie hydraulique",
-                color: JobType.Upw,
-                icon: 'c:fuel/charger.png',
+                icon: 'fuel/charger',
                 blackoutGlobal: true,
                 blackoutJob: JobType.Upw,
                 job: JobType.Upw,
-                canInteract: () => {
-                    const player = this.playerService.getPlayer();
-                    return player && player.job.onduty;
-                },
+                category: 'society',
                 action: entity => {
                     const position = GetEntityCoords(entity) as Vector3;
                     const charger = this.upwChargerRepository.getClosestCharger(position);
@@ -173,15 +165,11 @@ export class VehicleElectricProvider {
             },
             {
                 label: "Recharger à l'énergie éolienne",
-                color: JobType.Upw,
-                icon: 'c:fuel/charger.png',
+                icon: 'fuel/charger',
                 blackoutGlobal: true,
                 blackoutJob: JobType.Upw,
                 job: JobType.Upw,
-                canInteract: () => {
-                    const player = this.playerService.getPlayer();
-                    return player && player.job.onduty;
-                },
+                category: 'society',
                 action: entity => {
                     const position = GetEntityCoords(entity) as Vector3;
                     const charger = this.upwChargerRepository.getClosestCharger(position);
@@ -195,15 +183,11 @@ export class VehicleElectricProvider {
             },
             {
                 label: "Recharger à l'énergie solaire",
-                color: JobType.Upw,
-                icon: 'c:fuel/charger.png',
+                icon: 'fuel/charger',
                 blackoutGlobal: true,
                 blackoutJob: JobType.Upw,
                 job: JobType.Upw,
-                canInteract: () => {
-                    const player = this.playerService.getPlayer();
-                    return player && player.job.onduty;
-                },
+                category: 'society',
                 action: entity => {
                     const position = GetEntityCoords(entity) as Vector3;
                     const charger = this.upwChargerRepository.getClosestCharger(position);
@@ -217,22 +201,19 @@ export class VehicleElectricProvider {
             },
             {
                 label: 'État de la station',
-                color: JobType.Upw,
-                icon: 'c:fuel/battery.png',
+                icon: 'fuel/battery',
                 blackoutGlobal: true,
                 blackoutJob: JobType.Upw,
                 job: JobType.Upw,
+                category: 'society',
                 action: (entity: number) => {
                     this.getStationEnergyLevel(entity);
                 },
-                canInteract: () => {
-                    const player = this.playerService.getPlayer();
-                    return player && player.job.onduty;
-                },
             },
             {
-                icon: 'c:fuel/plug.png',
+                icon: 'fuel/plug',
                 label: 'Prendre la prise',
+                category: 'citizen',
                 action: (entity: number) => {
                     this.toggleStationPlug(entity);
                 },
@@ -272,8 +253,9 @@ export class VehicleElectricProvider {
                 blackoutGlobal: true,
             },
             {
-                icon: 'c:fuel/plug.png',
+                icon: 'fuel/plug',
                 label: 'Reposer la prise',
+                category: 'citizen',
                 action: (entity: number) => {
                     this.toggleStationPlug(entity);
                 },
@@ -303,10 +285,12 @@ export class VehicleElectricProvider {
                 blackoutGlobal: true,
             },
         ]);
-        this.targetFactory.createForAllVehicle([
+
+        await this.targetFactory.createForAllVehicle([
             {
                 label: 'Charger le véhicule',
-                icon: 'c:fuel/recharge.png',
+                icon: 'fuel/recharge',
+                category: 'citizen',
                 blackoutGlobal: true,
                 canInteract: (entity: number) => {
                     if (GetEntityHealth(entity) <= 0) {
@@ -331,7 +315,7 @@ export class VehicleElectricProvider {
             this.notifier.notify('La station est pleine !', 'success');
             return;
         }
-        if (!this.inventoryManager.hasEnoughItem(cell, 1)) {
+        if (!this.inventoryManager.hasEnoughItem(cell, 1, true)) {
             this.notifier.notify("Vous n'avez plus de cellule de ce type.", 'warning');
             return;
         }
@@ -419,10 +403,9 @@ export class VehicleElectricProvider {
         }
 
         const vehDef = this.vehicleRepository.getByModelHash(GetEntityModel(vehicle));
-        const storageMultiplier = VehicleClassFuelStorageMultiplier[vehDef?.requiredLicence] || 1.0;
         const condition = await this.vehicleStateService.getVehicleCondition(vehicle);
 
-        if (condition.fuelLevel > 97.0 * storageMultiplier) {
+        if (condition.fuelLevel > 0.97 * getVehicleMaxFuelStorage(vehDef)) {
             this.notifier.notify('Le véhicule est déjà plein.', 'error');
             await this.disableStationPlug();
 

@@ -1,6 +1,6 @@
 import { AnimationService } from '@public/client/animation/animation.service';
 import { Notifier } from '@public/client/notifier';
-import { OnNuiEvent } from '@public/core/decorators/event';
+import { OnEvent, OnNuiEvent } from '@public/core/decorators/event';
 import { Inject } from '@public/core/decorators/injectable';
 import { Provider } from '@public/core/decorators/provider';
 import { emitRpc } from '@public/core/rpc';
@@ -10,6 +10,7 @@ import { RpcServerEvent } from '@public/shared/rpc';
 import { PositiveNumberValidator } from '../../../shared/nui/input';
 import { Ok } from '../../../shared/result';
 import { InputService } from '../../nui/input.service';
+import { PoliceAnimationProvider } from './police.animation.provider';
 
 @Provider()
 export class PoliceJobMenuProvider {
@@ -22,14 +23,10 @@ export class PoliceJobMenuProvider {
     @Inject(Notifier)
     private notifier: Notifier;
 
-    @OnNuiEvent(NuiEvent.PolicePlaceSpike)
-    public async onPlaceSpike() {
-        TriggerServerEvent(ServerEvent.POLICE_PLACE_SPIKE, 'spike');
+    @Inject(PoliceAnimationProvider)
+    private policeAnimationProvider: PoliceAnimationProvider;
 
-        return Ok(true);
-    }
-
-    @OnNuiEvent(NuiEvent.PolicePlaceSpeedZone)
+    @OnEvent(ClientEvent.POLICE_PLACE_SPEED_ZONE)
     public async onNuiPlaceSpeedZone() {
         const distances = Math.floor(
             await this.inputService.askInput({ title: 'Distances (entre 1 et 5 mètre)' }, PositiveNumberValidator)
@@ -57,24 +54,22 @@ export class PoliceJobMenuProvider {
     }
 
     @OnNuiEvent(NuiEvent.RedCall)
-    public redCall(): Promise<void> {
+    public redCall(injector = false): Promise<void> {
         const ped = PlayerPedId();
         const coords = GetEntityCoords(ped);
         const [street, street2] = GetStreetNameAtCoord(coords[0], coords[1], coords[2]);
 
-        if (IsWarningMessageActive() || GetWarningMessageTitleHash() != 1246147334) {
-            let name = GetStreetNameFromHashKey(street);
-            if (street2) {
-                name += ' et ' + GetStreetNameFromHashKey(street2);
-            }
-
-            TriggerEvent(
-                ClientEvent.POLICE_RED_CALL,
-                '555-POLICE',
-                `Code Rouge !!! Un agent a besoin d'aide vers ${name}`,
-                `Code Rouge !!! Un agent a besoin d'aide vers <span {class}>${name}</span>`
-            );
+        let name = GetStreetNameFromHashKey(street);
+        if (street2) {
+            name += ' et ' + GetStreetNameFromHashKey(street2);
         }
+
+        this.policeAnimationProvider.redCall(
+            '555-POLICE',
+            `Code Rouge !!! Un agent a besoin d'aide vers ${name}`,
+            `Code Rouge !!! Un agent a besoin d'aide vers <span {class}>${name}</span>`,
+            injector
+        );
 
         return;
     }

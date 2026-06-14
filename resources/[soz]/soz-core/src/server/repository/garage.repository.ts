@@ -1,4 +1,7 @@
+import { FeatureProvider } from '@public/server/feature/feature.provider';
 import { ClientEvent } from '@public/shared/event/client';
+import { Feature } from '@public/shared/features';
+import { JobType } from '@public/shared/job';
 
 import { GarageList } from '../../config/garage';
 import { Inject, Injectable } from '../../core/decorators/injectable';
@@ -21,6 +24,9 @@ export class GarageRepository extends RepositoryLegacy<Record<string, Garage>> {
     @Inject(PrismaService)
     private prismaService: PrismaService;
 
+    @Inject(FeatureProvider)
+    private featureProvider: FeatureProvider;
+
     protected async load(): Promise<Record<string, Garage>> {
         const garageList: Record<string, Garage> = {};
 
@@ -29,6 +35,15 @@ export class GarageRepository extends RepositoryLegacy<Record<string, Garage>> {
                 id,
                 ...GarageList[id],
             };
+
+            if (
+                this.featureProvider.isFeatureEnabled(Feature.WhatIfFirstEpisode) &&
+                garageList[id].type === GarageType.Job &&
+                garageList[id].job === JobType.LSPD
+            ) {
+                garageList[id].job = JobType.SASP;
+                garageList[id].name = garageList[id].name.replace('LSPD', 'SASP');
+            }
         }
 
         const houseProperties = await this.prismaService.housing_property.findMany({
@@ -38,6 +53,8 @@ export class GarageRepository extends RepositoryLegacy<Record<string, Garage>> {
         });
 
         for (const houseProperty of houseProperties) {
+            if (!houseProperty.garage_zone || !houseProperty.entry_zone) continue;
+
             garageList[houseProperty.identifier] = this.garageFromDB(
                 houseProperty.identifier,
                 houseProperty.garage_zone,
@@ -76,11 +93,19 @@ export class GarageRepository extends RepositoryLegacy<Record<string, Garage>> {
         };
     }
 
-    public async updateAddGarage(identifier: string, garage_zone: string, entry_zone: string) {
+    public async updateAddHouseGarage(identifier: string, garage_zone: string, entry_zone: string) {
         const garageList = await this.get();
 
         garageList[identifier] = this.garageFromDB(identifier, garage_zone, entry_zone);
 
         TriggerLatentClientEvent(ClientEvent.VEHICLE_GARAGE_UPDATE, -1, 16 * 1024, identifier, garageList[identifier]);
+    }
+
+    public async updateAddGarage(garage: Garage) {
+        const garageList = await this.get();
+
+        garageList[garage.id] = garage;
+
+        TriggerLatentClientEvent(ClientEvent.VEHICLE_GARAGE_UPDATE, -1, 16 * 1024, garage.id, garageList[garage.id]);
     }
 }

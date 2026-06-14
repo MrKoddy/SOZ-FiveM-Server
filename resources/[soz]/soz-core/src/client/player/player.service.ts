@@ -3,10 +3,11 @@ import { DrugSkill } from '@private/shared/drugs';
 import { PlayerLoader } from '@public/core/loader/player.loader';
 import { PatientClothes } from '@public/shared/job/lsmc';
 import { getDistance, Vector3 } from '@public/shared/polyzone/vector';
+import { Ear } from '@public/shared/voip';
 
 import { Outfit } from '../../shared/cloth';
 import { ClientEvent, ServerEvent } from '../../shared/event';
-import { FakeId, PlayerClientState, PlayerData, PlayerLicenceType } from '../../shared/player';
+import { FakeId, PlayerClientState, PlayerData, PlayerLicenceType, PlayerPedHash } from '../../shared/player';
 import { Notifier } from '../notifier';
 import { NuiDispatch } from '../nui/nui.dispatch';
 import { Qbcore } from '../qbcore';
@@ -27,9 +28,12 @@ export class PlayerService {
         isEscorting: false,
         isHandcuffed: false,
         isInHub: false,
+        isInGameHub: false,
+        isInGame: false,
         isInHospital: false,
         isInShop: false,
         isInventoryBusy: false,
+        isKnockedOut: false,
         disableMoneyCase: false,
         hasPrisonerClothes: false,
         isWearingPatientOutfit: false,
@@ -37,6 +41,24 @@ export class PlayerService {
         isLooted: false,
         escorting: null,
         carryBox: false,
+        halloweenRole: null,
+        inCyberHeist: false,
+        nbArmorPlates: 0,
+        maxArmorPlates: 0,
+        usedArmorPlates: 0,
+        radioShortRange: {
+            enabled: false,
+            primary: {
+                ear: Ear.Both,
+                frequency: 0,
+                volume: 50,
+            },
+            secondary: {
+                ear: Ear.Both,
+                frequency: 0,
+                volume: 50,
+            },
+        },
     };
 
     @Inject(Qbcore)
@@ -79,14 +101,11 @@ export class PlayerService {
 
     public setState(state: PlayerClientState) {
         this.state = { ...state };
+        this.nuiDispatch.dispatch('hud', 'UpdateArmorPlates', this.state.nbArmorPlates);
     }
 
     public updateState(state: Partial<PlayerClientState>) {
         TriggerServerEvent(ServerEvent.PLAYER_UPDATE_STATE, state);
-    }
-
-    public isOnDuty(): boolean {
-        return this.player.job.onduty;
     }
 
     /**
@@ -128,7 +147,13 @@ export class PlayerService {
     }
 
     public canDoAction(): boolean {
-        return !this.state.isDead && !this.state.isHandcuffed && !this.state.isZipped && !this.state.isEscorting;
+        return (
+            !this.state.isDead &&
+            !this.state.isHandcuffed &&
+            !this.state.isZipped &&
+            !this.state.isEscorting &&
+            !this.state.isKnockedOut
+        );
     }
 
     public getPlayersAround(
@@ -205,5 +230,13 @@ export class PlayerService {
 
     public isPushing() {
         return this.pushing;
+    }
+
+    public get isMale() {
+        return this.getPlayer().skin.Model.Hash === PlayerPedHash.Male;
+    }
+
+    public get isFemale() {
+        return this.getPlayer().skin.Model.Hash === PlayerPedHash.Female;
     }
 }

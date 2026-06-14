@@ -1,9 +1,11 @@
 import { Inject, Injectable } from '../../core/decorators/injectable';
 import { Logger } from '../../core/logger';
+import { Feature } from '../../shared/features';
 import { FuelStation, FuelStationType, FuelType } from '../../shared/fuel';
 import { JobType } from '../../shared/job';
 import { Vector3, Vector4 } from '../../shared/polyzone/vector';
 import { PrismaService } from '../database/prisma.service';
+import { FeatureProvider } from '../feature/feature.provider';
 import { RepositoryLegacy } from './repository';
 
 /**
@@ -40,11 +42,20 @@ export class FuelStationRepository extends RepositoryLegacy<Record<string, FuelS
     @Inject(Logger)
     private logger: Logger;
 
+    @Inject(FeatureProvider)
+    private featureProvider: FeatureProvider;
+
     protected async load(): Promise<Record<string, FuelStation>> {
         const stations = await this.prismaService.fuel_storage.findMany();
         const fuelStations: Record<string, FuelStation> = {};
+        const whatIf = this.featureProvider.isFeatureEnabled(Feature.WhatIfFirstEpisode);
 
         for (const station of stations) {
+            //meteor
+            if (station.station == 'Station6') {
+                continue;
+            }
+
             try {
                 const stationPosition = JSON.parse(station.position) as { x: number; y: number; z: number; w?: number };
                 const stationZone = JSON.parse(station.zone) as DatabaseZone;
@@ -72,12 +83,12 @@ export class FuelStationRepository extends RepositoryLegacy<Record<string, FuelS
                     type: station.type as FuelStationType,
                     position,
                     zone,
-                    stock: station.stock,
+                    stock: whatIf ? 10_000 : station.stock,
                     price: station.price,
-                    job: station.owner ? (station.owner as JobType) : null,
+                    job: whatIf && station.owner === JobType.LSPD ? JobType.SASP : (station.owner as JobType) ?? null,
                 };
             } catch (e) {
-                this.logger.error('cannot load station: ', station.station, e);
+                this.logger.error(`cannot load station: ${station.station} ${e}`);
             }
         }
 

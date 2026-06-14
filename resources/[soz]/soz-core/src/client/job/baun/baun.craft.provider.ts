@@ -4,11 +4,11 @@ import { ItemService } from '@public/client/item/item.service';
 import { Notifier } from '@public/client/notifier';
 import { InputService } from '@public/client/nui/input.service';
 import { ProgressService } from '@public/client/progress.service';
-import { ClientEvent, ServerEvent } from '@public/shared/event';
+import { ServerEvent } from '@public/shared/event';
 import { JobType } from '@public/shared/job';
 import { PositiveNumberValidator } from '@public/shared/nui/input';
 
-import { Once, OnceStep, OnEvent } from '../../../core/decorators/event';
+import { Once, OnceStep } from '../../../core/decorators/event';
 import { Inject } from '../../../core/decorators/injectable';
 import { Provider } from '../../../core/decorators/provider';
 import { baunCraftZones } from '../../../shared/job/baun';
@@ -35,11 +35,10 @@ export class BaunCraftProvider {
 
     @Once(OnceStep.PlayerLoaded)
     public setupBaunCraftZone() {
-        this.craftService.createBtargetZoneCraft(baunCraftZones, 'c:/baun/craft.png', 'Confectionner', JobType.Baun);
+        this.craftService.createBtargetZoneCraft(baunCraftZones, 'baun/craft', 'Confectionner', JobType.Baun);
     }
 
-    @OnEvent(ClientEvent.BAUN_ICE_CUBE, false)
-    public async onIceCube() {
+    public async craftIceCube() {
         const max = this.inventoryManager.getItemCount('water_bottle', true);
 
         const val = await this.inputService.askInput(
@@ -72,9 +71,7 @@ export class BaunCraftProvider {
                     repeat: true,
                 },
             },
-            {
-                useAnimationService: true,
-            }
+            {}
         );
 
         if (!completed) {

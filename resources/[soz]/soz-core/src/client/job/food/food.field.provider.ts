@@ -38,88 +38,32 @@ export class FoodFieldProvider {
                 this.targetFactory.createForPolygoneZone(id, polygone, [
                     {
                         label: 'Récolter',
-                        color: 'food',
-                        icon: 'c:food/collecter.png',
+                        icon: 'food/collecter',
                         blackoutGlobal: true,
                         blackoutJob: JobType.Food,
                         job: JobType.Food,
-                        canInteract: entity => {
-                            const player = this.playerService.getPlayer();
-
-                            if (!player) {
-                                return false;
-                            }
-
-                            if (!this.jobService.hasPermission(JobType.Food, JobPermission.FoodHarvest)) {
-                                return false;
-                            }
-
-                            if (IsEntityAVehicle(entity)) {
-                                return false;
-                            }
-
-                            if (IsEntityAPed(entity)) {
-                                return false;
-                            }
-
-                            return player.job.onduty;
-                        },
+                        category: 'society',
+                        canInteract: entity =>
+                            !IsEntityAVehicle(entity) &&
+                            !IsEntityAPed(entity) &&
+                            this.jobService.hasPermission(JobType.Food, JobPermission.Harvest),
                         action: () => {
                             this.collectIngredients(type as FoodFieldType, index);
                         },
                     },
                     {
                         label: 'Récolter de la Zeed',
-                        color: 'crimi',
-                        icon: 'c:crimi/zeed.png',
-                        canInteract: entity => {
-                            if (IsEntityAVehicle(entity)) {
-                                return false;
-                            }
-
-                            if (IsEntityAPed(entity)) {
-                                return false;
-                            }
-
-                            return this.playerService.hasDrugSkill(DrugSkill.Botaniste);
-                        },
+                        icon: 'crimi/zeed',
+                        category: 'criminal',
+                        canInteract: entity =>
+                            !IsEntityAVehicle(entity) &&
+                            !IsEntityAPed(entity) &&
+                            this.playerService.hasDrugSkill(DrugSkill.Botaniste),
                         action: this.harvestZeed.bind(this),
                     },
                 ]);
             }
         }
-
-        this.targetFactory.createForBoxZone(
-            'food_milk_harvest',
-            {
-                center: [2416.83, 4994.29, 46.5],
-                length: 1,
-                width: 5.0,
-                heading: 133.3,
-                minZ: 45.5,
-                maxZ: 49.5,
-            },
-            [
-                {
-                    label: 'Récupérer',
-                    color: 'food',
-                    icon: 'c:food/collecter.png',
-                    blackoutGlobal: true,
-                    blackoutJob: JobType.Food,
-                    job: JobType.Food,
-                    canInteract: () => {
-                        const player = this.playerService.getPlayer();
-
-                        if (!player) {
-                            return false;
-                        }
-
-                        return player.job.onduty;
-                    },
-                    action: this.harvestMilk.bind(this),
-                },
-            ]
-        );
     }
 
     public async collectIngredients(type: FoodFieldType, index: string) {
@@ -132,13 +76,5 @@ export class FoodFieldProvider {
 
     public harvestZeed() {
         TriggerEvent(ClientEvent.DRUGS_HARVEST_ZEED, { location: 'food' });
-    }
-
-    public harvestMilk() {
-        if (IsPedInAnyVehicle(PlayerPedId(), false)) {
-            return;
-        }
-
-        TriggerServerEvent(ServerEvent.FOOD_MILK_COLLECT, GetClockHours());
     }
 }

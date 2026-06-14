@@ -1,9 +1,13 @@
+import { InventoryFactory } from '@public/server/inventory/inventory.factory';
+
 import { Once, OnEvent } from '../../core/decorators/event';
 import { Inject } from '../../core/decorators/injectable';
 import { Provider } from '../../core/decorators/provider';
 import { ServerEvent } from '../../shared/event';
-import { CommonItem, InventoryItem } from '../../shared/item';
-import { InventoryManager } from '../inventory/inventory.manager';
+import { InventoryItem } from '../../shared/inventory';
+import { CommonItem } from '../../shared/item';
+import { isErr } from '../../shared/result';
+import { Inventory } from '../inventory/inventory';
 import { Notifier } from '../notifier';
 import { PlayerDiseaseProvider } from '../player/player.disease.provider';
 import { PlayerService } from '../player/player.service';
@@ -15,8 +19,8 @@ export class ItemHealthProvider {
     @Inject(ItemService)
     private item: ItemService;
 
-    @Inject(InventoryManager)
-    private inventoryManager: InventoryManager;
+    @Inject(InventoryFactory)
+    private inventoryFactory: InventoryFactory;
 
     @Inject(ProgressService)
     private progressService: ProgressService;
@@ -32,16 +36,8 @@ export class ItemHealthProvider {
 
     private usedAntiDepressant = new Set<string>();
 
-    public async useFlaskPee(source: number, item: CommonItem, inventoryItem: InventoryItem) {
-        if (
-            !this.inventoryManager.removeItemFromInventory(
-                source,
-                item.name,
-                1,
-                inventoryItem.metadata,
-                inventoryItem.slot
-            )
-        ) {
+    public async useFlaskPee(source: number, item: CommonItem, inventoryItem: InventoryItem, inventory: Inventory) {
+        if (!inventory.removeAtSlot(inventoryItem.slot, 1)) {
             return;
         }
 
@@ -55,8 +51,7 @@ export class ItemHealthProvider {
             return;
         }
 
-        const { success, reason } = this.inventoryManager.addItemToInventory(
-            source,
+        const result = inventory.add(
             'flask_pee_full',
             1,
             {
@@ -65,35 +60,32 @@ export class ItemHealthProvider {
             null
         );
 
-        if (!success) {
-            this.notifier.notify(source, 'Impossible de remplir la fiole: ' + reason, 'error');
+        if (isErr(result)) {
+            this.notifier.notify(source, 'Impossible de remplir la fiole: ' + result.err, 'error');
         } else {
             this.notifier.notify(source, "Fiole remplie jusqu'à la dernière goutte", 'success');
         }
     }
 
-    private async useAntidepressant(source: number, item: CommonItem, inventoryItem: InventoryItem) {
+    private async useAntidepressant(
+        source: number,
+        item: CommonItem,
+        inventoryItem: InventoryItem,
+        inventory: Inventory
+    ) {
         const player = this.playerService.getPlayer(source);
 
         if (!player) {
             return;
         }
 
-        if (
-            !this.inventoryManager.removeItemFromInventory(
-                source,
-                item.name,
-                1,
-                inventoryItem.metadata,
-                inventoryItem.slot
-            )
-        ) {
-            return;
-        }
-
         if (this.usedAntiDepressant.has(player.citizenid)) {
             this.notifier.notify(source, 'Vous avez déjà pris un antidépresseur.', 'error');
 
+            return;
+        }
+
+        if (!inventory.removeAtSlot(inventoryItem.slot, 1)) {
             return;
         }
 
@@ -109,7 +101,9 @@ export class ItemHealthProvider {
 
     @OnEvent(ServerEvent.LSMC_BLOOD_FILL_FLASK)
     public async useFlaskBlood(source: number, target: number) {
-        if (!this.inventoryManager.removeItemFromInventory(source, 'flask_blood_empty', 1)) {
+        const inventory = await this.inventoryFactory.getPlayerInventory(source);
+
+        if (!inventory.remove('flask_blood_empty', 1)) {
             return;
         }
 
@@ -127,8 +121,7 @@ export class ItemHealthProvider {
             return;
         }
 
-        const { success, reason } = this.inventoryManager.addItemToInventory(
-            source,
+        const result = inventory.add(
             'flask_blood_full',
             1,
             {
@@ -137,29 +130,21 @@ export class ItemHealthProvider {
             null
         );
 
-        if (!success) {
-            this.notifier.notify(source, 'Impossible de remplir la fiole: ' + reason, 'error');
+        if (isErr(result)) {
+            this.notifier.notify(source, 'Impossible de remplir la fiole: ' + result.err, 'error');
         } else {
             this.notifier.notify(source, "Fiole remplie jusqu'à la dernière goutte", 'success');
         }
     }
 
-    public useAntiacide(source: number, item: CommonItem, inventoryItem: InventoryItem) {
+    public async useAntiacide(source: number, item: CommonItem, inventoryItem: InventoryItem, inventory: Inventory) {
         const player = this.playerService.getPlayer(source);
 
         if (!player) {
             return;
         }
 
-        if (
-            !this.inventoryManager.removeItemFromInventory(
-                source,
-                item.name,
-                1,
-                inventoryItem.metadata,
-                inventoryItem.slot
-            )
-        ) {
+        if (!inventory.removeAtSlot(inventoryItem.slot, 1)) {
             return;
         }
 

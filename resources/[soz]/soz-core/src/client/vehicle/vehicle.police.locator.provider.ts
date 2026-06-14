@@ -1,5 +1,6 @@
 import { Inject } from '@public/core/decorators/injectable';
 import { emitRpc } from '@public/core/rpc';
+import { StateSelector } from '@public/server/store/store';
 import { JobType } from '@public/shared/job';
 import { RpcServerEvent } from '@public/shared/rpc';
 
@@ -32,6 +33,13 @@ export class VehiclePoliceLocator {
     private locationBlips = new Map<string, number>();
     private adminEnabled = false;
 
+    private cityInBlackout = false;
+
+    @StateSelector(state => state.global.blackoutLevel)
+    public onBlackoutChange(blackoutLevel: number) {
+        this.cityInBlackout = blackoutLevel >= 3;
+    }
+
     private clear() {
         this.entityBlips.forEach(blip => RemoveBlip(blip));
         this.entityBlips.clear();
@@ -39,10 +47,14 @@ export class VehiclePoliceLocator {
         this.locationBlips.clear();
     }
 
-    private getSpriteFromModel(model: string) {
+    private getSpriteFromModel(model: string, stolen: boolean) {
         const hash = GetHashKey(model);
         if (IsThisModelACar(hash)) {
-            return 56;
+            if (stolen) {
+                return 225;
+            } else {
+                return 56;
+            }
         } else if (IsThisModelABoat(hash)) {
             return 755;
         } else if (IsThisModelAHeli(hash)) {
@@ -54,7 +66,11 @@ export class VehiclePoliceLocator {
         } else if (IsThisModelABike(hash) || IsThisModelABicycle(hash)) {
             return 661;
         } else {
-            return 56;
+            if (stolen) {
+                return 225;
+            } else {
+                return 56;
+            }
         }
     }
 
@@ -67,7 +83,7 @@ export class VehiclePoliceLocator {
     }
 
     private customBlip(blip: number, veh: VehicleLocation) {
-        SetBlipSprite(blip, this.getSpriteFromModel(veh.model));
+        SetBlipSprite(blip, this.getSpriteFromModel(veh.model, veh.stolen));
         SetBlipColour(blip, color[veh.job]);
         SetBlipAsShortRange(blip, true);
 
@@ -100,7 +116,7 @@ export class VehiclePoliceLocator {
             }
 
             const vehState = await this.vehicleStateService.getVehicleState(vehicule);
-            if (!vehState.policeLocatorEnabled) {
+            if (this.cityInBlackout || !vehState.policeLocatorEnabled) {
                 this.clear();
                 return;
             }

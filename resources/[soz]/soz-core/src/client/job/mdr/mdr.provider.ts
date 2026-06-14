@@ -1,10 +1,12 @@
 import { Once, OnceStep, OnEvent, OnNuiEvent } from '@core/decorators/event';
 import { Inject } from '@core/decorators/injectable';
 import { Provider } from '@core/decorators/provider';
+import { FeatureProvider } from '@public/client/feature/feature.provider';
 import { Notifier } from '@public/client/notifier';
 import { ResourceLoader } from '@public/client/repository/resource.loader';
 import { VehicleRadarProvider } from '@public/client/vehicle/vehicle.radar.provider';
 import { ClientEvent, NuiEvent, ServerEvent } from '@public/shared/event';
+import { Feature } from '@public/shared/features';
 import { JobPermission, JobType } from '@public/shared/job';
 import { MenuType } from '@public/shared/nui/menu';
 
@@ -13,6 +15,7 @@ import { NuiMenu } from '../../nui/nui.menu';
 import { PlayerService } from '../../player/player.service';
 import { TargetFactory } from '../../target/target.factory';
 import { JobService } from '../job.service';
+import { PoliceAnimationProvider } from '../police/police.animation.provider';
 
 @Provider()
 export class MandatoryProvider {
@@ -40,6 +43,12 @@ export class MandatoryProvider {
     @Inject(JobService)
     private jobService: JobService;
 
+    @Inject(PoliceAnimationProvider)
+    private policeAnimationProvider: PoliceAnimationProvider;
+
+    @Inject(FeatureProvider)
+    private featureProvider: FeatureProvider;
+
     @Once(OnceStep.PlayerLoaded)
     public setupMdrJob() {
         this.createBlips();
@@ -56,13 +65,11 @@ export class MandatoryProvider {
             },
             [
                 {
-                    icon: 'c:stonk/collecter.png',
+                    icon: 'stonk/collecter',
                     label: 'Réhabilitation des billets',
+                    category: 'society',
                     canInteract: () => {
-                        return (
-                            this.playerService.isOnDuty() &&
-                            this.jobService.hasPermission(JobType.MDR, JobPermission.MdrMarkedMoneyCleaning)
-                        );
+                        return this.jobService.hasPermission(JobType.MDR, JobPermission.MdrMarkedMoneyCleaning);
                     },
                     job: JobType.MDR,
                     action: () => {
@@ -84,11 +91,14 @@ export class MandatoryProvider {
 
         this.nuiMenu.openMenu(MenuType.MandatoryJobMenu, {
             displayRadar: this.vehicleRadarProvider.displayRadar,
-            onDuty: this.playerService.isOnDuty(),
         });
     }
 
     private createBlips() {
+        if (this.featureProvider.isFeatureEnabled(Feature.WhatIfFirstEpisode)) {
+            return;
+        }
+
         this.blipFactory.create('jobs:mdr', {
             name: 'Mandatory',
             coords: { x: -550.72, y: -194.66, z: 38.87 },
@@ -104,24 +114,22 @@ export class MandatoryProvider {
     }
 
     @OnNuiEvent(NuiEvent.RedCallMendatory)
-    public redCall(): Promise<void> {
+    public redCall(injector = false): Promise<void> {
         const ped = PlayerPedId();
         const coords = GetEntityCoords(ped);
         const [street, street2] = GetStreetNameAtCoord(coords[0], coords[1], coords[2]);
 
-        if (IsWarningMessageActive() || GetWarningMessageTitleHash() != 1246147334) {
-            let name = GetStreetNameFromHashKey(street);
-            if (street2) {
-                name += ' et ' + GetStreetNameFromHashKey(street2);
-            }
-
-            TriggerEvent(
-                ClientEvent.POLICE_RED_CALL,
-                '555-POLICE',
-                `Code Rouge !!! Un membre de Mandatory a besoin d'aide vers ${name}`,
-                `Code Rouge !!! Un membre de Mandatory a besoin d'aide vers <span {class}>${name}</span>`
-            );
+        let name = GetStreetNameFromHashKey(street);
+        if (street2) {
+            name += ' et ' + GetStreetNameFromHashKey(street2);
         }
+
+        this.policeAnimationProvider.redCall(
+            '555-POLICE',
+            `Code Rouge !!! Un membre de Mandatory a besoin d'aide vers ${name}`,
+            `Code Rouge !!! Un membre de Mandatory a besoin d'aide vers <span {class}>${name}</span>`,
+            injector
+        );
 
         return;
     }

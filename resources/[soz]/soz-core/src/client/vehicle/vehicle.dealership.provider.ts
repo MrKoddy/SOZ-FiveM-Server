@@ -1,9 +1,11 @@
+import { GangService } from '@private/client/gang/gang.service';
 import { AnimationService } from '@public/client/animation/animation.service';
 import { Monitor } from '@public/client/monitor/monitor';
 import { Tick, TickInterval } from '@public/core/decorators/tick';
 import { wait } from '@public/core/utils';
 import { ServerEvent } from '@public/shared/event';
 import { PUBLIC_SERVICES } from '@public/shared/job';
+import { PlayerLicenceType } from '@public/shared/player';
 
 import { getRandomInt } from '../../../src/shared/random';
 import {
@@ -19,7 +21,7 @@ import { Inject } from '../../core/decorators/injectable';
 import { Provider } from '../../core/decorators/provider';
 import { emitRpc } from '../../core/rpc';
 import { NuiEvent } from '../../shared/event';
-import { Feature, isFeatureEnabled } from '../../shared/features';
+import { Feature } from '../../shared/features';
 import { JobPermission } from '../../shared/job';
 import { MenuType } from '../../shared/nui/menu';
 import { getDistance, Vector3 } from '../../shared/polyzone/vector';
@@ -30,6 +32,7 @@ import { AuctionVehicle, ShowVehicle } from '../../shared/vehicle/auction';
 import { Vehicle, VehicleDealershipMenuData } from '../../shared/vehicle/vehicle';
 import { BlipFactory } from '../blip';
 import { PedFactory } from '../factory/ped.factory';
+import { FeatureProvider } from '../feature/feature.provider';
 import { JobService } from '../job/job.service';
 import { Notifier } from '../notifier';
 import { InputService } from '../nui/input.service';
@@ -77,6 +80,12 @@ export class VehicleDealershipProvider {
     @Inject(Monitor)
     public monitor: Monitor;
 
+    @Inject(FeatureProvider)
+    private featureProvider: FeatureProvider;
+
+    @Inject(GangService)
+    private gangService: GangService;
+
     private lastVehicleShowroom: number | null = null;
 
     private secondPastInZone = -1;
@@ -99,9 +108,16 @@ export class VehicleDealershipProvider {
     };
 
     @Tick(20)
-    public async onTick() {
+    public async onDisplayVehicleTick() {
+        const playerPed = PlayerPedId();
+        const coords = GetEntityCoords(playerPed) as Vector3;
+
         for (const [, vehicle] of Object.entries(this.electricShowVehicles)) {
             if (vehicle.entity === null) {
+                return;
+            }
+
+            if (getDistance(vehicle.position, coords)) {
                 return;
             }
 
@@ -115,7 +131,11 @@ export class VehicleDealershipProvider {
     @Once(OnceStep.Start)
     public async onStart() {
         for (const [dealership, config] of Object.entries(DealershipConfig)) {
-            if (!isFeatureEnabled(Feature.Boat) && dealership === DealershipType.Boat) {
+            if (!this.featureProvider.isFeatureEnabled(Feature.Boat) && dealership === DealershipType.Boat) {
+                continue;
+            }
+
+            if (!config.ped) {
                 continue;
             }
 
@@ -146,10 +166,15 @@ export class VehicleDealershipProvider {
                 target: {
                     options: [
                         {
-                            icon: 'c:dealership/list.png',
+                            icon: 'dealership/list',
                             label: 'Accéder au catalogue',
+                            category: 'citizen',
                             blackoutGlobal: true,
                             action: () => {
+                                if (dealership !== DealershipType.Boat && this.gangService.isHC()) {
+                                    this.notifier.error('Je refuse de servir des ~r~criminels~s~ comme vous.');
+                                    return;
+                                }
                                 this.openDealership(dealership as DealershipType, config);
                             },
                             canInteract: () => true,
@@ -180,8 +205,9 @@ export class VehicleDealershipProvider {
             target: {
                 options: [
                     {
-                        icon: 'c:dealership/list.png',
+                        icon: 'dealership/list',
                         label: 'Accéder au catalogue',
+                        category: 'citizen',
                         action: () => {
                             this.openJobDealership();
                         },
@@ -239,9 +265,10 @@ export class VehicleDealershipProvider {
 
             this.targetFactory.createForBoxZone(`auction_${name}`, auction.windows, [
                 {
-                    icon: 'c:dealership/bid.png',
+                    icon: 'dealership/bid',
                     label: 'Voir la vente',
-                    canInteract: () => true,
+                    category: 'citizen',
+                    canInteract: () => !this.gangService.isHC(),
                     action: () => {
                         this.openLuxuryDealership(name);
                     },
@@ -361,13 +388,15 @@ export class VehicleDealershipProvider {
     @OnNuiEvent<{ vehicle: Vehicle; dealershipId: string; dealership: DealershipConfigItem }>(
         NuiEvent.VehicleDealershipBuyVehicle
     )
-    public async buyVehicle({ vehicle, dealershipId, dealership }): Promise<void> {
+    public async buyVehicle({ vehicle, dealershipId }): Promise<void> {
         let parkingPlace = null;
 
-        if (dealershipId === DealershipType.Job) {
+        if (dealershipId === DealershipType.Job && vehicle.requiredLicence != PlayerLicenceType.Boat) {
             const freePlaces = [];
 
-            for (const parkingPlace of DealershipJob.parkingPlaces) {
+            for (const parkingPlace of DealershipJob.parkingPlaces.filter(
+                elem => !vehicle.requiredLicence || elem.data.vehicleTypes[vehicle.requiredLicence]
+            )) {
                 if (
                     !IsPositionOccupied(
                         parkingPlace.center[0],
@@ -396,13 +425,7 @@ export class VehicleDealershipProvider {
             parkingPlace = getRandomItem(freePlaces);
         }
 
-        const bought = await emitRpc(
-            RpcServerEvent.VEHICLE_DEALERSHIP_BUY,
-            vehicle,
-            dealershipId,
-            dealership,
-            parkingPlace
-        );
+        const bought = await emitRpc(RpcServerEvent.VEHICLE_DEALERSHIP_BUY, vehicle, dealershipId, parkingPlace);
 
         if (bought) {
             this.clearMenu();
@@ -585,7 +608,7 @@ export class VehicleDealershipProvider {
 
     async spwanStaticsGuard() {
         for (const guard of luxuryStaticGuard) {
-            await this.pedFactory.createPed(guard);
+            await this.pedFactory.createPedOnGrid(guard);
         }
     }
 
@@ -627,7 +650,7 @@ export class VehicleDealershipProvider {
         TaskCombatPed(guardNPC, playerPed, 0, 16);
 
         this.currentGuardNet = PedToNet(guardNPC);
-        this.monitor.publish('luxury_guard_spawn', {}, {});
+        this.monitor.traceEvent('luxury_guard_spawn', {});
         TriggerServerEvent(ServerEvent.LUXURY_CREATED_GUARD, this.currentGuardNet);
     }
 
@@ -643,7 +666,7 @@ export class VehicleDealershipProvider {
         ) {
             if (IsPedArmed(playerPed, 1 | 2 | 4)) {
                 const player = this.playerService.getPlayer();
-                if (player && !(PUBLIC_SERVICES.includes(player.job.id) && this.playerService.isOnDuty())) {
+                if (player && !(PUBLIC_SERVICES.includes(player.job.id) && player.job.onduty)) {
                     this.secondPastInZone++;
                     resetTimer = false;
                 }

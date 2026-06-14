@@ -1,10 +1,15 @@
+import { Feature } from '@public/shared/features';
+import { Bunkers } from '@public/shared/utils/bunkers';
+
 import { Once, OnceStep } from '../../core/decorators/event';
 import { Inject } from '../../core/decorators/injectable';
 import { Provider } from '../../core/decorators/provider';
 import { JobPermission, JobType } from '../../shared/job';
 import { Zone } from '../../shared/polyzone/box.zone';
+import { TargetOption } from '../../shared/target';
+import { FeatureProvider } from '../feature/feature.provider';
 import { PlayerService } from '../player/player.service';
-import { TargetFactory, TargetOptions } from '../target/target.factory';
+import { TargetFactory } from '../target/target.factory';
 import { JobService } from './job.service';
 
 const DutyZoneConfig: Zone<JobType>[] = [
@@ -88,6 +93,15 @@ const DutyZoneConfig: Zone<JobType>[] = [
         maxZ: 40.22,
     },
     {
+        data: JobType.MDR,
+        center: [243.42, -1091.71, 30.19],
+        length: 0.6,
+        width: 3.2,
+        minZ: 29.19,
+        maxZ: 29.74,
+        heading: 179.79,
+    },
+    {
         data: JobType.Taxi,
         center: [903.31, -157.89, 74.17],
         length: 1.0,
@@ -125,12 +139,12 @@ const DutyZoneConfig: Zone<JobType>[] = [
     },
     {
         data: JobType.Food,
-        center: [-1876.2, 2059.5, 141.0],
-        length: 0.6,
-        width: 0.7,
-        minZ: 140.75,
-        maxZ: 141.5,
-        heading: 70.25,
+        center: [-1867.11, 2063.59, 141.57],
+        length: 3.0,
+        width: 0.4,
+        heading: 89.05,
+        minZ: 140.97,
+        maxZ: 142.17,
     },
     {
         data: JobType.Baun,
@@ -195,6 +209,7 @@ const DutyZoneConfig: Zone<JobType>[] = [
         maxZ: 35.68,
         heading: 0.0,
     },
+    // Vinewood
     {
         data: JobType.LSPD,
         center: [615.900574, 15.299749, 82.797417],
@@ -203,6 +218,16 @@ const DutyZoneConfig: Zone<JobType>[] = [
         minZ: 82.697417,
         maxZ: 82.897417,
         heading: 58,
+    },
+    // Mission Row
+    {
+        data: JobType.LSPD,
+        center: [441.9, -979.64, 31.34],
+        length: 0.8,
+        width: 1.4,
+        minZ: 30.34,
+        maxZ: 30.94,
+        heading: -0.41,
     },
     {
         data: JobType.BCSO,
@@ -231,7 +256,68 @@ const DutyZoneConfig: Zone<JobType>[] = [
         maxZ: 30.99,
         heading: 159.31,
     },
+    {
+        data: JobType.LSCS,
+        center: [1132.37, -490.36, 65.16],
+        length: 0.8,
+        width: 1.8,
+        heading: 151.27,
+        minZ: 64.16,
+        maxZ: 66.16,
+    },
+
+    // MIRROR PARK
+    {
+        data: JobType.LSPD,
+        center: [1132.37, -490.36, 65.16],
+        length: 0.8,
+        width: 1.8,
+        heading: 151.27,
+        minZ: 64.16,
+        maxZ: 66.16,
+    },
+    // {
+    //     data: JobType.BCSO,
+    //     center: [1132.37, -490.36, 65.16],
+    //     length: 0.8,
+    //     width: 1.8,
+    //     heading: 151.27,
+    //     minZ: 64.16,
+    //     maxZ: 66.16,
+    // },
+    // {
+    //     data: JobType.SASP,
+    //     center: [1132.37, -490.36, 65.16],
+    //     length: 0.8,
+    //     width: 1.8,
+    //     heading: 151.27,
+    //     minZ: 64.16,
+    //     maxZ: 66.16,
+    // },
+    {
+        data: JobType.Casino,
+        center: [960.09, 34.8, 72.69],
+        length: 0.6,
+        width: 2.8,
+        heading: 147.8,
+        minZ: 71.69,
+        maxZ: 72.29,
+    },
 ];
+
+const DutyZoneConfigWhatIf: Zone<JobType>[] = [
+    {
+        data: JobType.SASP,
+        center: [615.900574, 15.299749, 82.797417],
+        length: 0.45,
+        width: 0.35,
+        minZ: 82.697417,
+        maxZ: 82.897417,
+        heading: 58,
+    },
+];
+
+const BunkerDutyZone = ['xm_prop_base_staff_desk_01', 'v_corp_officedesk'];
 
 const DutyPedConfig: Partial<Record<JobType, number>> = {};
 
@@ -246,11 +332,21 @@ export class JobDutyProvider {
     @Inject(JobService)
     private jobService: JobService;
 
+    @Inject(FeatureProvider)
+    private featureProvider: FeatureProvider;
+
     @Once(OnceStep.PlayerLoaded)
     public async onDutyLoad() {
         let i = 0;
 
-        for (const duty of DutyZoneConfig) {
+        for (let duty of DutyZoneConfig) {
+            if (this.featureProvider.isFeatureEnabled(Feature.WhatIfFirstEpisode)) {
+                const override = DutyZoneConfigWhatIf.find(elem => elem.data == duty.data);
+                if (override) {
+                    duty = override;
+                }
+            }
+
             this.targetFactory.createForBoxZone(`job:duty:${duty.data}:${i}`, duty, this.getDutyZoneTarget(duty.data));
 
             i++;
@@ -259,44 +355,73 @@ export class JobDutyProvider {
         for (const [job, ped] of Object.entries(DutyPedConfig)) {
             this.targetFactory.createForModel(ped, this.getDutyZoneTarget(job as JobType));
         }
+
+        for (const model of BunkerDutyZone) {
+            this.targetFactory.createForModel(model, this.getBunkerDutyZoneTarget());
+        }
     }
 
-    getDutyZoneTarget(job: JobType): TargetOptions[] {
+    getDutyZoneTarget(job: JobType): TargetOption[] {
         return [
             {
-                type: 'server',
-                event: 'QBCore:ToggleDuty',
-                icon: 'fas fa-sign-in-alt',
+                icon: 'jobs/duty',
                 label: 'Prise de service',
+                category: 'society',
                 canInteract: () => {
-                    return !this.playerService.isOnDuty();
+                    const player = this.playerService.getPlayer();
+                    return player.job.id == job && !player.job.onduty;
                 },
-                job,
+                action: () => {
+                    TriggerServerEvent('QBCore:ToggleDuty');
+                },
             },
             {
-                type: 'server',
-                event: 'QBCore:ToggleDuty',
-                icon: 'fas fa-sign-in-alt',
+                icon: 'jobs/duty',
                 label: 'Fin de service',
-                canInteract: () => {
-                    return this.playerService.isOnDuty();
+                category: 'society',
+                action: () => {
+                    TriggerServerEvent('QBCore:ToggleDuty');
                 },
                 job,
             },
             {
-                icon: 'fas fa-users',
+                icon: 'global/users',
                 label: 'Employé(e)s en service',
+                category: 'society',
+                canInteract: () => {
+                    const player = this.playerService.getPlayer();
+                    return this.jobService.hasPermission(player.job.id, JobPermission.OnDutyView);
+                },
                 action: () => {
                     TriggerServerEvent('QBCore:GetEmployOnDuty');
                 },
+                job,
+            },
+        ];
+    }
+
+    getBunkerDutyZoneTarget(): TargetOption[] {
+        return [
+            {
+                icon: 'jobs/duty',
+                label: 'Prise de service',
+                category: 'society',
                 canInteract: () => {
                     const player = this.playerService.getPlayer();
-                    return (
-                        this.playerService.isOnDuty() &&
-                        this.jobService.hasPermission(player.job.id, JobPermission.OnDutyView)
-                    );
+                    if (!player || player.job.id == JobType.Food) {
+                        return;
+                    }
+
+                    const intId = GetInteriorFromEntity(PlayerPedId());
+
+                    if (!Bunkers.map(b => b.interiorId).includes(intId)) {
+                        return false;
+                    }
+                    return !player.job.onduty;
                 },
-                job,
+                action: () => {
+                    TriggerServerEvent('QBCore:ToggleDuty');
+                },
             },
         ];
     }

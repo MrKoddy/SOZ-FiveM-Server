@@ -1,18 +1,29 @@
 import { FunctionComponent } from 'react';
 
 import { JobLabel } from '../../../shared/job';
-import { PlayerData } from '../../../shared/player';
+import { expirationVisaDuration, PlayerData } from '../../../shared/player';
+import { useAssetPath } from '../../hook/assets';
 import { Mugshot } from '../Player/Mugshot';
 
 type IdentityCardProps = {
     player: PlayerData;
 };
 
+const FORMAT_LOCALIZED: Intl.DateTimeFormatOptions = {
+    day: 'numeric',
+    month: 'numeric',
+    year: 'numeric',
+};
+
 export const IdentityCard: FunctionComponent<IdentityCardProps> = ({ player }) => {
+    const { getPath } = useAssetPath();
+
     return (
         <div
             style={{
-                backgroundImage: `url(/public/images/identity/identity.webp)`,
+                backgroundImage: player.is_validated
+                    ? `url(${getPath(`images/identity/identity.webp`)})`
+                    : `url(${getPath(`images/identity/identity_temp.webp`)})`,
             }}
             className="bg-contain bg-no-repeat aspect-[855/539] h-[340px]"
         >
@@ -47,6 +58,17 @@ export const IdentityCard: FunctionComponent<IdentityCardProps> = ({ player }) =
                         <h3 className="text-xs leading-none">Numéro de téléphone</h3>
                         <p className="uppercase leading-none">{player.charinfo.phone}</p>
                     </div>
+                    {!player.is_validated && (
+                        <div>
+                            <h3 className="text-xs leading-none">Date d'expiration</h3>
+                            <p className="uppercase leading-none">
+                                {new Date(player.created_at + expirationVisaDuration).toLocaleDateString(
+                                    'fr-FR',
+                                    FORMAT_LOCALIZED
+                                )}
+                            </p>
+                        </div>
+                    )}
                 </div>
             </div>
         </div>

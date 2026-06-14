@@ -5,7 +5,7 @@ import { Exportable } from '../../core/decorators/exports';
 import { Inject } from '../../core/decorators/injectable';
 import { Provider } from '../../core/decorators/provider';
 import { NuiEvent } from '../../shared/event';
-import { AskInput, ValidateInput } from '../../shared/nui/input';
+import { AskInput, PositiveNumberValidator, ValidateInput } from '../../shared/nui/input';
 import { Err, isErr, Ok, Result } from '../../shared/result';
 import { NuiDispatch } from './nui.dispatch';
 
@@ -19,6 +19,8 @@ export class InputService {
     private currentInputValidate: ValidateInput<any> | null = null;
 
     public async askInput<T = string>(input: AskInput, validate: ValidateInput<T> | null = null): Promise<T | null> {
+        await wait(100);
+
         const promise = new Promise<T>(resolve => {
             this.currentInputResolve = resolve;
         });
@@ -81,6 +83,9 @@ export class InputService {
 
     @OnNuiEvent(NuiEvent.InputSet)
     public async onInput(input: string): Promise<Result<any, string>> {
+        if (!this.currentInputResolve) {
+            return Ok(null);
+        }
         if (this.currentInputValidate) {
             const result = this.currentInputValidate(input);
 
@@ -97,5 +102,15 @@ export class InputService {
         this.currentInputResolve = null;
 
         return Ok(null);
+    }
+
+    @OnNuiEvent(NuiEvent.AskInput)
+    public async askNuiInput(input: AskInput) {
+        return this.askInput(input);
+    }
+
+    @OnNuiEvent(NuiEvent.AskInputNumber)
+    public async askNuiInputNumber(input: AskInput) {
+        return this.askInput(input, PositiveNumberValidator);
     }
 }

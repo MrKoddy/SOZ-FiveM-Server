@@ -1,15 +1,18 @@
 import { ServerEvent } from '@public/shared/event';
+import { Feature } from '@public/shared/features';
 
 import { Once, OnceStep } from '../../core/decorators/event';
 import { Inject } from '../../core/decorators/injectable';
 import { Provider } from '../../core/decorators/provider';
 import { JobPermission, JobType } from '../../shared/job';
 import { ShopConfig, ShopProduct } from '../../shared/shop';
-import { BossShop } from '../../shared/shop/boss';
+import { BossShop, BossShopWhatIf } from '../../shared/shop/boss';
+import { TargetOption } from '../../shared/target';
+import { FeatureProvider } from '../feature/feature.provider';
 import { InventoryManager } from '../inventory/inventory.manager';
 import { ItemService } from '../item/item.service';
 import { JobService } from '../job/job.service';
-import { TargetFactory, TargetOptions } from '../target/target.factory';
+import { TargetFactory } from '../target/target.factory';
 
 @Provider()
 export class BossShopProvider {
@@ -25,17 +28,19 @@ export class BossShopProvider {
     @Inject(JobService)
     private jobService: JobService;
 
+    @Inject(FeatureProvider)
+    private featureProvider: FeatureProvider;
+
     public getHydratedProducts(products: ShopProduct[]) {
-        const hydratedProducts = products.map((product, id) => ({
+        return products.map(product => ({
             ...this.itemService.getItem(product.id),
-            ...product,
-            slot: id + 1,
+            price: product.price,
+            metadata: product.metadata,
         }));
-        return hydratedProducts;
     }
 
-    private getOrders(shop: ShopConfig & { job: JobType }): TargetOptions[] {
-        const ret: TargetOptions[] = [];
+    private getOrders(shop: ShopConfig & { job: JobType }): TargetOption[] {
+        const ret: TargetOption[] = [];
         if (!shop.orders) {
             return ret;
         }
@@ -44,9 +49,10 @@ export class BossShopProvider {
             const item = this.itemService.getItem(order.id);
             ret.push({
                 label: 'Commander un ' + item.label + ' (' + order.price + '$)',
-                icon: 'c:shop/' + order.id + '.png',
+                icon: 'shop/' + order.id,
                 job: shop.job,
                 blackoutGlobal: true,
+                category: 'society',
                 canInteract: () => {
                     return this.jobService.hasPermission(shop.job, JobPermission.SocietyShop);
                 },
@@ -61,23 +67,28 @@ export class BossShopProvider {
     @Once(OnceStep.PlayerLoaded)
     setupBossShop() {
         BossShop.forEach(shop => {
+            if (this.featureProvider.isFeatureEnabled(Feature.WhatIfFirstEpisode)) {
+                const override = BossShopWhatIf.find(elem => elem.name == shop.name);
+                if (override) {
+                    shop = override;
+                }
+            }
+
             this.targetFactory.createForBoxZone(
                 `shops:boss:${shop.name}`,
                 shop.zone,
                 [
                     {
                         label: 'Récupérer du matériel',
-                        icon: 'fas fa-briefcase',
+                        icon: 'shop/briefcase',
                         job: shop.job,
                         blackoutGlobal: true,
+                        category: 'society',
                         canInteract: () => {
                             return this.jobService.hasPermission(shop.job, JobPermission.SocietyShop);
                         },
                         action: () => {
-                            this.inventoryManager.openShopInventory(
-                                this.getHydratedProducts(shop.products),
-                                'menu_shop_society'
-                            );
+                            this.inventoryManager.openShopInventory(this.getHydratedProducts(shop.products), 'Société');
                         },
                     },
                     ...this.getOrders(shop),

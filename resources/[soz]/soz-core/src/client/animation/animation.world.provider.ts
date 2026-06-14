@@ -1,9 +1,11 @@
+import { PlayerPedHash } from '@public/shared/player';
 import { getDistance, Vector3, Vector4 } from '@public/shared/polyzone/vector';
 
 import { BarbecueList, EntityConfig, LoungerTargetList, SeatsTargetList } from '../../config/worldinterraction';
 import { Once, OnceStep } from '../../core/decorators/event';
 import { Inject } from '../../core/decorators/injectable';
 import { Provider } from '../../core/decorators/provider';
+import { PlayerService } from '../player/player.service';
 import { TargetFactory } from '../target/target.factory';
 import { AnimationService } from './animation.service';
 
@@ -14,6 +16,9 @@ export class SeatAnimationProvider {
 
     @Inject(AnimationService)
     private animationService: AnimationService;
+
+    @Inject(PlayerService)
+    private playerService: PlayerService;
 
     public Relative2Absolute(Ox: number, Oy: number, heading: number): [number, number] {
         heading = heading * (Math.PI / 180);
@@ -59,7 +64,7 @@ export class SeatAnimationProvider {
         return [x + x2, y + y2, z + Offset[2], heading + Offset[3]];
     }
 
-    public async playSitAnimation(
+    public async playSitScenario(
         entity: number,
         scenario: string,
         isSittingScenario: boolean,
@@ -70,12 +75,63 @@ export class SeatAnimationProvider {
         const heading = GetEntityHeading(ped);
         const seatPosition = this.calculateSeatPosition(entity, position);
 
-        await this.animationService.playScenario({
-            name: scenario,
-            position: seatPosition,
-            isSittingScenario,
-            shouldTeleport,
-        });
+        await this.animationService.playScenario(
+            {
+                name: scenario,
+                position: seatPosition,
+                isSittingScenario,
+                shouldTeleport,
+            },
+            { useFreeCam: true }
+        );
+
+        if (shouldTeleport) {
+            SetPedCoordsKeepVehicle(ped, position[0], position[1], position[2]);
+            SetEntityHeading(ped, heading);
+        }
+    }
+
+    public async playSitAnimation(entity: number, shouldTeleport: boolean) {
+        const ped = PlayerPedId();
+        const position = GetEntityCoords(ped) as Vector3;
+        const heading = GetEntityHeading(ped);
+        const seatPosition = this.calculateSeatPosition(entity, position);
+        const seatPositionEnter = GetOffsetFromEntityInWorldCoords(entity, 0, -0.5, 1.0);
+
+        await this.animationService.playAnimation(
+            {
+                enter: {
+                    coords: [seatPositionEnter[0], seatPositionEnter[1], seatPositionEnter[2], seatPosition[3]],
+                    dictionary: 'amb@prop_human_seat_chair@female@legs_crossed@enter',
+                    name: 'enter_fwd',
+                    options: {
+                        freezeLastFrame: true,
+                        ignoreGravity: true,
+                    },
+                    duration: 2500,
+                },
+                base: {
+                    coords: [seatPosition[0], seatPosition[1], seatPosition[2], seatPosition[3]],
+                    dictionary: 'amb@prop_human_seat_chair@female@legs_crossed@base',
+                    name: 'base',
+                    options: {
+                        repeat: true,
+                        ignoreGravity: true,
+                    },
+                },
+                exit: {
+                    coords: [seatPosition[0], seatPosition[1], seatPosition[2], seatPosition[3]],
+                    dictionary: 'amb@prop_human_seat_chair@female@legs_crossed@exit',
+                    name: 'exit_fwd',
+                    options: {
+                        ignoreGravity: true,
+                        turnOffCollision: true,
+                    },
+                    duration: 2500,
+                },
+            },
+            { useFreeCam: true }
+        );
 
         if (shouldTeleport) {
             SetPedCoordsKeepVehicle(ped, position[0], position[1], position[2]);
@@ -89,10 +145,20 @@ export class SeatAnimationProvider {
             SeatsTargetList,
             [
                 {
+                    icon: 'global/chair',
                     label: "S'asseoir",
-                    icon: 'fas fa-chair',
-                    action: async entity =>
-                        this.playSitAnimation(entity, 'PROP_HUMAN_SEAT_CHAIR_MP_PLAYER', true, true),
+                    category: 'citizen',
+                    action: async entity => {
+                        const player = this.playerService.getPlayer();
+                        if (!player) {
+                            return;
+                        }
+                        if (player.skin.Model.Hash === PlayerPedHash.Male) {
+                            this.playSitScenario(entity, 'PROP_HUMAN_SEAT_CHAIR_MP_PLAYER', true, true);
+                        } else {
+                            this.playSitAnimation(entity, true);
+                        }
+                    },
                 },
             ],
             1.2
@@ -101,10 +167,11 @@ export class SeatAnimationProvider {
             SeatsTargetList,
             [
                 {
+                    icon: 'global/beer',
                     label: "S'asseoir et Boire",
-                    icon: 'fas fa-beer',
+                    category: 'citizen',
                     action: async entity =>
-                        this.playSitAnimation(entity, 'PROP_HUMAN_SEAT_CHAIR_DRINK_BEER', false, true),
+                        this.playSitScenario(entity, 'PROP_HUMAN_SEAT_CHAIR_DRINK_BEER', false, true),
                 },
             ],
             1.2
@@ -113,9 +180,10 @@ export class SeatAnimationProvider {
             SeatsTargetList,
             [
                 {
+                    icon: 'food/hamburger',
                     label: "S'asseoir et Manger",
-                    icon: 'fas fa-hamburger',
-                    action: async entity => this.playSitAnimation(entity, 'PROP_HUMAN_SEAT_CHAIR_FOOD', false, true),
+                    category: 'citizen',
+                    action: async entity => this.playSitScenario(entity, 'PROP_HUMAN_SEAT_CHAIR_FOOD', false, true),
                 },
             ],
             1.2
@@ -124,9 +192,10 @@ export class SeatAnimationProvider {
             LoungerTargetList,
             [
                 {
+                    icon: 'global/umbrella-beach',
                     label: "S'allonger",
-                    icon: 'fas fa-umbrella-beach',
-                    action: async entity => this.playSitAnimation(entity, 'PROP_HUMAN_SEAT_SUNLOUNGER', false, false),
+                    category: 'citizen',
+                    action: async entity => this.playSitScenario(entity, 'PROP_HUMAN_SEAT_SUNLOUNGER', false, false),
                 },
             ],
             1.4
@@ -135,9 +204,10 @@ export class SeatAnimationProvider {
             BarbecueList,
             [
                 {
+                    icon: 'food/stroopwafel',
                     label: 'Cuisiner',
-                    icon: 'fas fa-stroopwafel',
-                    action: async entity => this.playSitAnimation(entity, 'PROP_HUMAN_BBQ', false, false),
+                    category: 'citizen',
+                    action: async entity => this.playSitScenario(entity, 'PROP_HUMAN_BBQ', false, false),
                 },
             ],
             1.0

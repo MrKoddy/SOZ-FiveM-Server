@@ -1,11 +1,13 @@
 import { OnEvent } from '@public/core/decorators/event';
+import { InventoryFactory } from '@public/server/inventory/inventory.factory';
 import { ServerEvent } from '@public/shared/event';
 
 import { Inject } from '../../../core/decorators/injectable';
 import { Provider } from '../../../core/decorators/provider';
-import { Feature, isFeatureEnabled } from '../../../shared/features';
+import { Feature } from '../../../shared/features';
+import { ADD_ERROR_MESSAGE } from '../../../shared/inventory';
 import { ScenarioState } from '../../../shared/story/story';
-import { InventoryManager } from '../../inventory/inventory.manager';
+import { FeatureProvider } from '../../feature/feature.provider';
 import { Notifier } from '../../notifier';
 import { PlayerService } from '../../player/player.service';
 
@@ -17,12 +19,17 @@ export class Halloween2023Scenario2Provider {
     @Inject(Notifier)
     private notifier: Notifier;
 
-    @Inject(InventoryManager)
-    private inventoryManager: InventoryManager;
+    @Inject(InventoryFactory)
+    private inventoryFactory: InventoryFactory;
+
+    @Inject(FeatureProvider)
+    private featureProvider: FeatureProvider;
 
     @OnEvent(ServerEvent.STORY_HALLOWEEN_2023_SCENARIO_2)
-    public onScenario2(source: number, step?: number) {
-        if (!isFeatureEnabled(Feature.Halloween2023Scenario2)) {
+    public async onScenario2(source: number, step?: number) {
+        const inventory = await this.inventoryFactory.getPlayerInventory(source);
+
+        if (!this.featureProvider.isFeatureEnabled(Feature.Halloween2023Scenario2)) {
             return;
         }
 
@@ -59,7 +66,7 @@ export class Halloween2023Scenario2Provider {
                 });
                 break;
             case 4:
-                this.inventoryManager.removeItemFromInventory(source, 'halloween_damned_wine');
+                inventory.remove('halloween_damned_wine', 1, false);
                 this.playerService.setPlayerMetadata(source, 'halloween2023', {
                     ...player.metadata.halloween2023,
                     scenario2: {
@@ -80,11 +87,11 @@ export class Halloween2023Scenario2Provider {
                 });
                 break;
             case 6:
-                if (!this.inventoryManager.canCarryItem(source, 'halloween_alien_artifact', 1)) {
-                    this.notifier.notify(source, `Tu n'as pas assez de place dans ton inventaire.`, 'error');
+                if (!inventory.canCarryItem('halloween_alien_artifact', 1)) {
+                    this.notifier.notify(source, ADD_ERROR_MESSAGE['not_enough_space'], 'error');
                     return;
                 }
-                this.inventoryManager.addItemToInventory(source, 'halloween_alien_artifact', 1);
+                inventory.add('halloween_alien_artifact', 1);
                 this.notifier.notify(source, `Vous avez récupéré un étrange artéfact.`, 'success');
 
                 this.playerService.setPlayerMetadata(source, 'halloween2023', {
@@ -97,12 +104,12 @@ export class Halloween2023Scenario2Provider {
                 });
                 break;
             case 7:
-                if (!this.inventoryManager.canCarryItem(source, 'halloween2023_story', 1)) {
-                    this.notifier.notify(source, `Tu n'as pas assez de place dans ton inventaire.`, 'error');
+                if (!inventory.canCarryItem('halloween2023_story', 1)) {
+                    this.notifier.notify(source, ADD_ERROR_MESSAGE['not_enough_space'], 'error');
                     return;
                 }
-                this.inventoryManager.addItemToInventory(source, 'halloween2023_story', 1);
-                this.inventoryManager.removeItemFromInventory(source, 'halloween_alien_artifact');
+                inventory.add('halloween2023_story', 1);
+                inventory.remove('halloween_alien_artifact', 1, false);
 
                 this.playerService.setPlayerMetadata(source, 'halloween2023', {
                     ...player.metadata.halloween2023,

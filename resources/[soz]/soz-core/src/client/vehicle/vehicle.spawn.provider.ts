@@ -82,6 +82,15 @@ export class VehicleSpawnProvider {
         volatile: VehicleVolatileState,
         condition: VehicleCondition
     ): Promise<boolean> {
+        let tryCount = 0;
+        while (!NetworkDoesEntityExistWithNetworkId(networkId) || !NetworkDoesNetworkIdExist(networkId)) {
+            console.log('Fail try', tryCount);
+            await wait(0);
+            if (tryCount++ > 100) {
+                break;
+            }
+        }
+
         if (!NetworkDoesEntityExistWithNetworkId(networkId) || !NetworkDoesNetworkIdExist(networkId)) {
             this.logger.error(`network id ${networkId} does not exist, cannot spawn vehicle`);
 
@@ -323,8 +332,8 @@ export class VehicleSpawnProvider {
             TaskWarpPedIntoVehicle(ped, vehicle, -1);
         }
 
-        if (volatile.plate) {
-            SetVehicleNumberPlateText(vehicle, volatile.plate);
+        if (volatile.fakeplate || volatile.plate) {
+            SetVehicleNumberPlateText(vehicle, volatile.fakeplate ?? volatile.plate);
         }
 
         this.vehicleStateService.setVehicleState(vehicle, volatile, true);
@@ -356,5 +365,21 @@ export class VehicleSpawnProvider {
         DeleteEntity(vehicle);
 
         return true;
+    }
+
+    @OnEvent(ClientEvent.VEHICLE_RELEASE)
+    async releaseVehicle(netId: number) {
+        if (!NetworkDoesNetworkIdExist(netId)) {
+            return;
+        }
+
+        const vehicle = NetworkGetEntityFromNetworkId(netId);
+
+        if (!DoesEntityExist(vehicle)) {
+            return;
+        }
+
+        SetEntityAsNoLongerNeeded(vehicle);
+        return;
     }
 }

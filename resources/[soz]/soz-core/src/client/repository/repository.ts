@@ -1,6 +1,8 @@
 import { Inject } from '@core/decorators/injectable';
 import { RepositoryLoader } from '@core/loader/repository.loader';
-import { emitRpc } from '@core/rpc';
+import { emitRpcTimeout } from '@core/rpc';
+import { Logger } from '@public/core/logger';
+import { deepCopy } from '@public/shared/utils/array';
 import { applyPatch, Operation } from 'fast-json-patch';
 
 import { RepositoryConfig, RepositoryMapping, RepositoryType } from '../../shared/repository';
@@ -9,10 +11,13 @@ import { RpcServerEvent } from '../../shared/rpc';
 export abstract class Repository<
     T extends keyof RepositoryMapping,
     K extends keyof RepositoryConfig[T] = keyof RepositoryConfig[T],
-    V = RepositoryMapping[T]
+    V = RepositoryMapping[T],
 > {
     @Inject(RepositoryLoader)
     private repositoryLoader: RepositoryLoader;
+
+    @Inject(Logger)
+    private logger: Logger;
 
     private data: Record<K, V> = {} as Record<K, V>;
 
@@ -21,7 +26,11 @@ export abstract class Repository<
     public isInitialized = false;
 
     async init(): Promise<Record<K, V>> {
-        this.data = (await emitRpc(RpcServerEvent.REPOSITORY_GET_DATA_2, this.type)) as Record<K, V>;
+        try {
+            this.data = (await emitRpcTimeout(RpcServerEvent.REPOSITORY_GET_DATA_2, 10_000, this.type)) as Record<K, V>;
+        } catch (e) {
+            this.logger.error('Failed to init repo ' + this.type + ': ' + e);
+        }
         this.isInitialized = true;
 
         return this.data;
@@ -35,7 +44,7 @@ export abstract class Repository<
             const key = operation.path.split('/')[1] || null;
 
             if (key) {
-                changedValues[key] = this.data[key] || null;
+                changedValues[key] = deepCopy(this.data[key]);
             }
         }
 
@@ -45,19 +54,23 @@ export abstract class Repository<
             const previousValue = changedValues[key];
             const newValue = this.data[key] || null;
 
-            if (previousValue === null) {
+            if (previousValue == null) {
                 this.repositoryLoader.trigger(this.type, 'insert', newValue);
             }
 
-            if (newValue === null) {
+            if (newValue == null) {
                 this.repositoryLoader.trigger(this.type, 'delete', previousValue);
             }
 
-            if (previousValue !== null && newValue !== null) {
-                this.repositoryLoader.trigger(this.type, 'update', newValue);
+            if (previousValue != null && newValue != null) {
+                this.repositoryLoader.trigger(this.type, 'update', newValue, previousValue);
             }
         }
 
+        return this.data;
+    }
+
+    public raw(): Record<K, V> {
         return this.data;
     }
 

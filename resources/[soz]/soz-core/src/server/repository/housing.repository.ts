@@ -1,4 +1,6 @@
 import { housing_apartment, housing_property } from '@prisma/client';
+import { ServerEvent } from '@public/shared/event/server';
+import { ApartementTiers } from '@public/shared/housing/housing';
 
 import { Inject, Injectable } from '../../core/decorators/injectable';
 import { Apartment, Property } from '../../shared/housing/housing';
@@ -23,7 +25,7 @@ export class HousingRepository extends Repository<RepositoryType.Housing> {
             where: {
                 OR: [
                     {
-                        owner: citizenId,
+                        tenant: citizenId,
                     },
                     {
                         roommate: citizenId,
@@ -35,6 +37,55 @@ export class HousingRepository extends Repository<RepositoryType.Housing> {
         return apartment > 0;
     }
 
+    public async getPlayerApartment(citizenId: string): Promise<Apartment | null> {
+        const apartment = await this.prismaService.housing_apartment.findFirst({
+            where: {
+                OR: [
+                    {
+                        tenant: citizenId,
+                    },
+                    {
+                        roommate: citizenId,
+                    },
+                ],
+            },
+        });
+
+        return apartment ? this.serializeApartment(apartment) : null;
+    }
+
+    public async getAllOwnedPlayerApartmentForTaxes(): Promise<Apartment[]> {
+        const apartments = await this.prismaService.housing_apartment.findMany({
+            where: {
+                AND: [
+                    {
+                        owner: { not: null },
+                    },
+                    {
+                        housing_taxe_enabled: true,
+                    },
+                ],
+            },
+        });
+
+        return this.serializeApartments(apartments);
+    }
+
+    public async getAllApartmentForCitizenId(citizenId: string): Promise<Apartment[]> {
+        const dbApartments = await this.prismaService.housing_apartment.findMany({
+            where: {
+                owner: citizenId,
+            },
+        });
+
+        const apartments: Apartment[] = [];
+        for (const apartement of dbApartments) {
+            apartments.push(this.serializeApartment(apartement));
+        }
+
+        return apartments;
+    }
+
     public async clearApartment(apartmentId: number): Promise<void> {
         const apartment = await this.prismaService.housing_apartment.update({
             where: {
@@ -42,8 +93,13 @@ export class HousingRepository extends Repository<RepositoryType.Housing> {
             },
             data: {
                 owner: null,
+                tenant: null,
                 roommate: null,
                 tier: 0,
+                money_tier: 0,
+                park_tier: 0,
+                cloth_tier: 0,
+                shell: true,
                 has_parking_place: 0,
             },
         });
@@ -54,8 +110,13 @@ export class HousingRepository extends Repository<RepositoryType.Housing> {
 
         if (existingApartment) {
             existingApartment.owner = null;
+            existingApartment.tenant = null;
             existingApartment.roommate = null;
             existingApartment.tier = 0;
+            existingApartment.money_tier = 0;
+            existingApartment.park_tier = 0;
+            existingApartment.cloth_tier = 0;
+            existingApartment.shell = true;
             existingApartment.hasParkingPlace = false;
         }
     }
@@ -74,6 +135,37 @@ export class HousingRepository extends Repository<RepositoryType.Housing> {
             apartment.owner;
     }
 
+    public async setApartmentOwnerAndTenant(citizenId: string, apartmentId: number): Promise<void> {
+        const apartment = await this.prismaService.housing_apartment.update({
+            where: {
+                id: apartmentId,
+            },
+            data: {
+                owner: citizenId,
+                tenant: citizenId,
+            },
+        });
+
+        this.data[apartment.property_id].apartments.find(apartment => apartment.id === apartmentId).owner =
+            apartment.owner;
+        this.data[apartment.property_id].apartments.find(apartment => apartment.id === apartmentId).tenant =
+            apartment.tenant;
+    }
+
+    public async setApartmentTenant(citizenId: string | null, apartmentId: number): Promise<void> {
+        const apartment = await this.prismaService.housing_apartment.update({
+            where: {
+                id: apartmentId,
+            },
+            data: {
+                tenant: citizenId,
+            },
+        });
+
+        this.data[apartment.property_id].apartments.find(apartment => apartment.id === apartmentId).tenant =
+            apartment.tenant;
+    }
+
     public async setApartmentRoommate(citizenId: string | null, apartmentId: number): Promise<void> {
         const apartment = await this.prismaService.housing_apartment.update({
             where: {
@@ -86,6 +178,21 @@ export class HousingRepository extends Repository<RepositoryType.Housing> {
 
         this.data[apartment.property_id].apartments.find(apartment => apartment.id === apartmentId).roommate =
             apartment.roommate;
+    }
+
+    public async setApartmentWarrantAccess(apartmentId: number, minutes: number = 120): Promise<void> {
+        const apartment = await this.prismaService.housing_apartment.update({
+            where: {
+                id: apartmentId,
+            },
+            data: {
+                search_warrant_access: new Date(Date.now() + minutes * 60_000),
+            },
+        });
+
+        this.data[apartment.property_id].apartments.find(
+            apartment => apartment.id === apartmentId
+        ).search_warrant_access = apartment.search_warrant_access.getTime();
     }
 
     public async getApartmentByIdentifier(identifier: string): Promise<Apartment | null> {
@@ -108,6 +215,10 @@ export class HousingRepository extends Repository<RepositoryType.Housing> {
         }
 
         return null;
+    }
+
+    public async getPropertyById(propertyId: number): Promise<Property | null> {
+        return await this.find(propertyId);
     }
 
     public async getApartment(propertyId: number, apartmentId: number): Promise<[Property | null, Apartment | null]> {
@@ -209,18 +320,34 @@ export class HousingRepository extends Repository<RepositoryType.Housing> {
             apartment.price;
     }
 
-    public async setApartmentTier(apartmentId: number, tier: number): Promise<void> {
+    public async setApartmentTier(apartmentId: number, apartmentTier: Partial<ApartementTiers>): Promise<void> {
+        const apartmentDb = await this.prismaService.housing_apartment.update({
+            where: {
+                id: apartmentId,
+            },
+            data: apartmentTier,
+        });
+
+        const apartment = this.data[apartmentDb.property_id].apartments.find(apartment => apartment.id === apartmentId);
+        apartment.tier = apartmentDb.tier;
+        apartment.money_tier = apartmentDb.money_tier;
+        apartment.park_tier = apartmentDb.park_tier;
+        apartment.cloth_tier = apartmentDb.cloth_tier;
+
+        TriggerEvent(ServerEvent.BANK_REFRESH_ACCOUNT, apartment.identifier);
+    }
+
+    public async setApartmentTaxe(apartmentId: number, shouldTaxe: boolean): Promise<void> {
         const apartment = await this.prismaService.housing_apartment.update({
             where: {
                 id: apartmentId,
             },
-            data: {
-                tier,
-            },
+            data: { housing_taxe_enabled: shouldTaxe },
         });
 
-        this.data[apartment.property_id].apartments.find(apartment => apartment.id === apartmentId).tier =
-            apartment.tier;
+        this.data[apartment.property_id].apartments.find(
+            apartment => apartment.id === apartmentId
+        ).housing_taxe_enabled = apartment.housing_taxe_enabled;
     }
 
     public async setApartmentHasParking(apartmentId: number, hasParkingPlace: boolean): Promise<void> {
@@ -307,6 +434,20 @@ export class HousingRepository extends Repository<RepositoryType.Housing> {
         }
     }
 
+    public async updateApartmentShell(apartmentId: number, propertyId: number, shellEnable: boolean) {
+        await this.prismaService.housing_apartment.update({
+            where: {
+                id: apartmentId,
+                property_id: propertyId,
+            },
+            data: {
+                shell: shellEnable,
+            },
+        });
+
+        this.data[propertyId].apartments.find(apartment => apartment.id === apartmentId).shell = shellEnable;
+    }
+
     public async removeApartment(apartmentId: number): Promise<void> {
         const apartment = await this.prismaService.housing_apartment.delete({
             where: {
@@ -344,7 +485,7 @@ export class HousingRepository extends Repository<RepositoryType.Housing> {
         this.data[propertyId][`${type}Zone`] = zone;
 
         if (dbZone.garage_zone && dbZone.entry_zone) {
-            this.garageRepository.updateAddGarage(dbZone.identifier, dbZone.garage_zone, dbZone.entry_zone);
+            this.garageRepository.updateAddHouseGarage(dbZone.identifier, dbZone.garage_zone, dbZone.entry_zone);
         }
     }
 
@@ -383,6 +524,16 @@ export class HousingRepository extends Repository<RepositoryType.Housing> {
         };
     }
 
+    private serializeApartments(apartments: housing_apartment[]): Apartment[] {
+        const serializedApartments = [];
+
+        for (const apartment of apartments) {
+            serializedApartments.push(this.serializeApartment(apartment));
+        }
+
+        return serializedApartments;
+    }
+
     private serializeApartment(apartment: housing_apartment): Apartment {
         const insideCord = JSON.parse(apartment.inside_coord);
 
@@ -393,6 +544,7 @@ export class HousingRepository extends Repository<RepositoryType.Housing> {
             label: apartment.label,
             price: apartment.price,
             owner: apartment.owner,
+            tenant: apartment.tenant,
             roommate: apartment.roommate,
             position: insideCord ? [insideCord.x, insideCord.y, insideCord.z, insideCord.w] : null,
             exitZone: createZoneFromLegacyData(JSON.parse(apartment.exit_zone)),
@@ -401,8 +553,14 @@ export class HousingRepository extends Repository<RepositoryType.Housing> {
             closetZone: createZoneFromLegacyData(JSON.parse(apartment.closet_zone)),
             moneyZone: createZoneFromLegacyData(JSON.parse(apartment.money_zone)),
             tier: apartment.tier,
+            money_tier: apartment.money_tier,
+            park_tier: apartment.park_tier,
+            cloth_tier: apartment.cloth_tier,
+            shell: apartment.shell,
             hasParkingPlace: apartment.has_parking_place === 1,
             senatePartyId: apartment.senate_party_id || null,
+            search_warrant_access: apartment.search_warrant_access?.getTime() ?? 0,
+            housing_taxe_enabled: apartment.housing_taxe_enabled,
         };
     }
 }

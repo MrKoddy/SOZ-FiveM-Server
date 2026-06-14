@@ -1,3 +1,7 @@
+import { GamesProvider } from '@public/client/games/games.provider';
+import { Feature } from '@public/shared/features';
+import { UpwPollution } from '@public/shared/job/upw';
+
 import { Once, OnceStep, OnEvent } from '../../core/decorators/event';
 import { Inject } from '../../core/decorators/injectable';
 import { Provider } from '../../core/decorators/provider';
@@ -6,16 +10,17 @@ import { wait } from '../../core/utils';
 import { Disease } from '../../shared/disease';
 import { ClientEvent, ServerEvent } from '../../shared/event';
 import { PlayerData } from '../../shared/player';
-import { PollutionLevel } from '../../shared/pollution';
 import { AnimationService } from '../animation/animation.service';
+import { FeatureProvider } from '../feature/feature.provider';
+import { UpwPollutionProvider } from '../job/upw/upw.pollution.provider';
 import { Notifier } from '../notifier';
-import { Pollution } from '../pollution';
+import { BlurService } from '../utils/blur.service';
 import { PlayerService } from './player.service';
 
-const DISEASE_RANGE: Record<PollutionLevel, number> = {
-    [PollutionLevel.Low]: 2000,
-    [PollutionLevel.Neutral]: 1000,
-    [PollutionLevel.High]: 500,
+const DISEASE_RANGE: Record<UpwPollution, number> = {
+    [UpwPollution.Low]: 2000,
+    [UpwPollution.Neutral]: 1000,
+    [UpwPollution.High]: 500,
 };
 
 @Provider()
@@ -29,8 +34,17 @@ export class PlayerDiseaseProvider {
     @Inject(Notifier)
     private notifier: Notifier;
 
-    @Inject(Pollution)
-    private pollution: Pollution;
+    @Inject(UpwPollutionProvider)
+    private upwPollutionProvider: UpwPollutionProvider;
+
+    @Inject(BlurService)
+    private blurService: BlurService;
+
+    @Inject(GamesProvider)
+    private readonly gamesProvider: GamesProvider;
+
+    @Inject(FeatureProvider)
+    private featureProvider: FeatureProvider;
 
     private currentDisease: Disease = false;
 
@@ -38,21 +52,29 @@ export class PlayerDiseaseProvider {
 
     private async fluLoop(): Promise<void> {
         while (this.currentDisease === 'grippe') {
+            if (this.gamesProvider.areAnyGameRunning()) {
+                return;
+            }
+
             const [playerPed, distance] = this.playerService.getClosestPlayer();
             const playerServerId = GetPlayerServerId(playerPed);
-            const propagation = Math.round(Math.random() * 4);
+            const propagation = Math.random() < 0.33333;
 
-            if (playerServerId != -1 && distance < 4.5 && propagation == 0) {
+            if (playerServerId != -1 && distance < 4.5 && propagation) {
                 TriggerServerEvent(ServerEvent.PLAYER_SET_CURRENT_DISEASE, 'grippe', playerServerId);
             }
 
-            await wait(1000 * 60);
+            await wait(1000 * 10);
         }
     }
 
     private async commonColdLoop(): Promise<void> {
         while (this.currentDisease === 'rhume') {
-            TriggerScreenblurFadeIn(100);
+            if (this.gamesProvider.areAnyGameRunning()) {
+                return;
+            }
+
+            this.blurService.add('rhume', 100);
 
             await this.animationService.playAnimation(
                 {
@@ -71,7 +93,7 @@ export class PlayerDiseaseProvider {
                 }
             );
 
-            TriggerScreenblurFadeOut(100);
+            this.blurService.remove('rhume', 100);
 
             await wait(1000 * 10);
         }
@@ -79,6 +101,10 @@ export class PlayerDiseaseProvider {
 
     private async backPainLoop(): Promise<void> {
         while (this.currentDisease === 'backpain') {
+            if (this.gamesProvider.areAnyGameRunning()) {
+                return;
+            }
+
             DisableControlAction(0, 21, true);
             DisableControlAction(0, 22, true);
 
@@ -88,6 +114,10 @@ export class PlayerDiseaseProvider {
 
     private async intoxicationLoop(): Promise<void> {
         while (this.currentDisease === 'intoxication') {
+            if (this.gamesProvider.areAnyGameRunning()) {
+                return;
+            }
+
             await this.animationService.playAnimation(
                 {
                     base: {
@@ -110,6 +140,10 @@ export class PlayerDiseaseProvider {
 
     private async dyspepsiaLoop(): Promise<void> {
         while (this.currentDisease === 'dyspepsie') {
+            if (this.gamesProvider.areAnyGameRunning()) {
+                return;
+            }
+
             await this.animationService.playAnimation(
                 {
                     base: {
@@ -133,7 +167,8 @@ export class PlayerDiseaseProvider {
     @OnEvent(ClientEvent.LSMC_DISEASE_APPLY_CURRENT_EFFECT)
     public applyCurrentDiseaseEffect(disease: Disease) {
         if (!disease) {
-            TriggerScreenblurFadeOut(120);
+            this.blurService.remove('grippe', 120);
+            this.blurService.remove('rhume', 120);
             ClearPedTasks(PlayerPedId());
 
             this.currentDisease = false;
@@ -154,7 +189,7 @@ export class PlayerDiseaseProvider {
         }
 
         if (disease === 'grippe') {
-            TriggerScreenblurFadeIn(100);
+            this.blurService.add('grippe', 100);
 
             this.notifier.notify('Vous avez la grippe.');
             this.currentDiseaseLoop = this.fluLoop();
@@ -182,11 +217,19 @@ export class PlayerDiseaseProvider {
     public async diseaseLoop(): Promise<void> {
         const player = this.playerService.getPlayer();
 
+        if (this.gamesProvider.areAnyGameRunning()) {
+            return;
+        }
+
+        if (this.featureProvider.isFeatureEnabled(Feature.WhatIfSecondEpisode)) {
+            return;
+        }
+
         if (player === null || player.metadata.godmode || player.metadata.isdead) {
             return;
         }
 
-        const range = Math.max(DISEASE_RANGE[this.pollution.getPollutionLevel()], 10);
+        const range = Math.max(DISEASE_RANGE[this.upwPollutionProvider.getPollutionLevel()], 10);
         const diseaseApply = Math.round(Math.random() * range);
 
         if (diseaseApply == 1) {

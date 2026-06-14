@@ -1,8 +1,9 @@
-import { useItems } from '@public/nui/hook/data';
+import { useItems, usePlayer } from '@public/nui/hook/data';
 import { CraftCategory, CraftRecipe } from '@public/shared/craft/craft';
 import { FunctionComponent, useEffect, useState } from 'react';
 
 import { NuiEvent } from '../../../shared/event';
+import { JobLabel } from '../../../shared/job';
 import { MenuType } from '../../../shared/nui/menu';
 import { fetchNui } from '../../fetch';
 import { CraftInputs } from '../Shared/CraftInputs';
@@ -28,16 +29,16 @@ type BahamaUnicornStateProps = {
             displayFurnitureBlip: boolean;
             displayResellBlip: boolean;
             displaySnackBlip: boolean;
+            displayBeerBlip: boolean;
         };
-        onDuty: boolean;
     };
 };
 
 export const BahamaUnicornJobMenu: FunctionComponent<BahamaUnicornStateProps> = ({ data }) => {
-    const banner = 'https://nui-img/soz/menu_job_baun';
     const [state, setState] = useState(null);
     const [currentRecipe, setCurrentRecipe] = useState<CraftRecipe>();
     const items = useItems();
+    const player = usePlayer();
 
     useEffect(() => {
         if (data && data.state) {
@@ -54,11 +55,11 @@ export const BahamaUnicornJobMenu: FunctionComponent<BahamaUnicornStateProps> = 
         await fetchNui(NuiEvent.BaunDisplayBlip, { blip: key, value });
     };
 
-    if (!data.onDuty) {
+    if (!player.job.onduty) {
         return (
             <Menu type={MenuType.BahamaUnicornJobMenu}>
                 <MainMenu>
-                    <MenuTitle banner={banner}></MenuTitle>
+                    <MenuTitle title={JobLabel.baun} />
                     <MenuContent>
                         <MenuItemText>Vous n'êtes pas en service.</MenuItemText>
                     </MenuContent>
@@ -70,7 +71,7 @@ export const BahamaUnicornJobMenu: FunctionComponent<BahamaUnicornStateProps> = 
     return (
         <Menu type={MenuType.BahamaUnicornJobMenu}>
             <MainMenu>
-                <MenuTitle banner={banner}></MenuTitle>
+                <MenuTitle title={JobLabel.baun} />
                 <MenuContent>
                     {Object.keys(data.recipes).map(category => (
                         <MenuItemSubMenuLink
@@ -103,6 +104,12 @@ export const BahamaUnicornJobMenu: FunctionComponent<BahamaUnicornStateProps> = 
                         Afficher la récolte de snacks
                     </MenuItemCheckbox>
                     <MenuItemCheckbox
+                        checked={state.displayBeerBlip}
+                        onChange={value => displayBlip('displayBeerBlip', value)}
+                    >
+                        Afficher l'adresse du brasseur de bière
+                    </MenuItemCheckbox>
+                    <MenuItemCheckbox
                         checked={state.displayResellBlip}
                         onChange={value => displayBlip('displayResellBlip', value)}
                     >
@@ -112,8 +119,8 @@ export const BahamaUnicornJobMenu: FunctionComponent<BahamaUnicornStateProps> = 
             </MainMenu>
             {Object.entries(data.recipes).map(([name, category]) => (
                 <SubMenu id={`recipe_${name}`}>
-                    <MenuTitle banner={banner}>{`Livre de recettes ${name}`}</MenuTitle>
-                    <MenuContent>
+                    <MenuTitle title={JobLabel.baun} />
+                    <MenuContent subtitle={`Livre de recettes ${name}`}>
                         <MenuItemSelect title="" titleWidth={0}>
                             {Object.entries(category.recipes).map(([output, recipe]) => (
                                 <MenuItemSelectOption

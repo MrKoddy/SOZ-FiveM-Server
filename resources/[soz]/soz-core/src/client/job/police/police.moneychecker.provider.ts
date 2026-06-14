@@ -16,13 +16,22 @@ import { RpcServerEvent } from '@public/shared/rpc';
 const moneycheckerInfos = [
     {
         job: JobType.LSPD,
-        position: [586.82, 13.41, 76.63] as Vector3,
-        length: 2.4,
-        width: 0.8,
-        heading: 350,
-        minZ: 76.63,
-        maxZ: 77.63,
+        position: [1165.92, -466.76, 60.28] as Vector3,
+        length: 0.6,
+        width: 0.6,
+        heading: 166.64,
+        minZ: 60.08,
+        maxZ: 60.68,
     },
+    // {
+    //     job: JobType.BCSO,
+    //     position: [1165.92, -466.76, 60.28] as Vector3,
+    //     length: 0.6,
+    //     width: 0.6,
+    //     heading: 166.64,
+    //     minZ: 60.08,
+    //     maxZ: 60.68,
+    // },
     {
         job: JobType.BCSO,
         position: [1857.69, 3687.39, 30.27] as Vector3,
@@ -53,9 +62,10 @@ export class PoliceMoneyCheckerProvider {
 
     @Once(OnceStep.Start)
     public async onStart() {
+        let i = 0;
         for (const moneycheckerInfo of moneycheckerInfos) {
             this.targetFactory.createForBoxZone(
-                `${moneycheckerInfo.job}:moneychecker`,
+                `police:moneychecker_` + i++,
                 {
                     center: moneycheckerInfo.position,
                     length: moneycheckerInfo.length,
@@ -67,15 +77,15 @@ export class PoliceMoneyCheckerProvider {
                 [
                     {
                         label: 'Analyser',
-                        color: moneycheckerInfo.job,
-                        icon: 'c:police/fouiller.png',
+                        icon: 'police/fouiller',
                         job: moneycheckerInfo.job,
                         blackoutGlobal: true,
                         blackoutJob: moneycheckerInfo.job,
+                        category: 'society',
                         canInteract: () => {
                             const [player, distance] = this.playerService.getClosestPlayer();
 
-                            return this.playerService.getPlayer().job.onduty && player != -1 && distance <= 2.0;
+                            return player != -1 && distance <= 2.0;
                         },
                         action: async () => {
                             const [player, distance] = this.playerService.getClosestPlayer();

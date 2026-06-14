@@ -33,7 +33,7 @@ export const MenuRentBoat: FunctionComponent = () => {
     return (
         <Menu type={MenuType.RentBoat}>
             <MainMenu>
-                <MenuTitle banner="https://nui-img/soz/menu_rent_boat">Location de bateaux</MenuTitle>
+                <MenuTitle title="Location de bateaux" />
                 <MenuContent>
                     <MenuItemButton onConfirm={() => returnBoat()}>Rendre le bateau</MenuItemButton>
                     <MenuItemSelect
@@ -42,6 +42,7 @@ export const MenuRentBoat: FunctionComponent = () => {
                         onConfirm={async (index, color) => {
                             await fetchNui(NuiEvent.BoatRent, color);
                         }}
+                        description={`Location : $1450 (Caution : $1000)`}
                     >
                         {Object.entries(Colors).map(([colorName, colorId]) => (
                             <MenuItemSelectOption value={colorId} key={`color_${colorId}`}>

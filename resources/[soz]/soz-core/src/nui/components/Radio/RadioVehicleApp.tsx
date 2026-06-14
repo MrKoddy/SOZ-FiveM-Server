@@ -6,6 +6,7 @@ import { NuiEvent } from '../../../shared/event';
 import { Control } from '../../../shared/input';
 import { Ear, RadioChannelType, RadioWithVolumeClick } from '../../../shared/voip';
 import { fetchNui } from '../../fetch';
+import { useAssetPath } from '../../hook/assets';
 import { useNuiEvent, useNuiFocus } from '../../hook/nui';
 import CloseIcon from '../../icons/voip/close.svg';
 import HeadphoneIcon from '../../icons/voip/headphone.svg';
@@ -19,6 +20,8 @@ export const RadioVehicleApp: FunctionComponent = () => {
     const [currentChannelType, setCurrentChannelType] = useState<RadioChannelType>(RadioChannelType.Primary);
     const [inVolumeClickMode, setInVolumeClickMode] = useState(false);
     const { control, handleSubmit, setValue } = useForm<{ frequency: string }, any, { frequency: string }>();
+
+    const { getPath } = useAssetPath();
 
     useNuiEvent('radio_vehicle', 'Open', radio => {
         setRadio(radio);
@@ -48,7 +51,17 @@ export const RadioVehicleApp: FunctionComponent = () => {
         radio !== null,
         radio !== null,
         radio !== null,
-        radio !== null ? [Control.Attack, Control.NextCamera] : []
+        radio !== null
+            ? [
+                  Control.Attack,
+                  Control.Aim,
+                  Control.VehicleAim,
+                  Control.VehicleAttack,
+                  Control.VehiclePassengerAttack,
+                  Control.VehiclePassengerAim,
+                  Control.NextCamera,
+              ]
+            : []
     );
 
     useEffect(() => {
@@ -125,7 +138,7 @@ export const RadioVehicleApp: FunctionComponent = () => {
                 <img
                     className="absolute w-full h-full"
                     style={{ zIndex: 5 }}
-                    src="/public/images/radio/vehicle.webp"
+                    src={getPath('images/radio/vehicle.webp')}
                     alt="radio"
                 />
                 <div

@@ -1,5 +1,6 @@
 import { Module } from '../../../core/decorators/module';
 import { PoliceAnimationProvider } from './police.animation.provider';
+import { PoliceCameraProvider } from './police.camera.provider';
 import { PoliceCloakRoomProvider } from './police.cloakroom.provider';
 import { PoliceFineProvider } from './police.fine.provider';
 import { PoliceJobMenuProvider } from './police.jobMenu.provider';
@@ -7,6 +8,8 @@ import { PoliceLicenceProvider } from './police.licence.provider';
 import { PoliceMoneyCheckerProvider } from './police.moneychecker.provider';
 import { PolicePlayerProvider } from './police.player.provider';
 import { PoliceProvider } from './police.provider';
+import { PoliceSearchWarrantProvider } from './police.search_warrant.provider';
+import { PoliceSecretProvider } from './police.secret.provider';
 import { PoliceSirenProvider } from './police.siren.provider';
 import { PoliceSpeedZoneProvider } from './police.speedzone.provider';
 import { PoliceSpikeProvider } from './police.spike.provider';
@@ -26,6 +29,9 @@ import { PoliceVehicleProvider } from './police.vehicle.provider';
         PoliceSpikeProvider,
         PoliceAnimationProvider,
         PoliceSpeedZoneProvider,
+        PoliceSearchWarrantProvider,
+        PoliceCameraProvider,
+        PoliceSecretProvider,
     ],
 })
 export class PoliceModule {}

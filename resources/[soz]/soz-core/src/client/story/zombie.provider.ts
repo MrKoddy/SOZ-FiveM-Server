@@ -2,7 +2,10 @@ import { On } from '@core/decorators/event';
 import { Inject } from '@core/decorators/injectable';
 import { Provider } from '@core/decorators/provider';
 import { ResourceLoader } from '@public/client/repository/resource.loader';
-import { Feature, isFeatureEnabled } from '@public/shared/features';
+import { Feature } from '@public/shared/features';
+
+import { getRandomItem } from '../../shared/random';
+import { FeatureProvider } from '../feature/feature.provider';
 
 // For some reason populationPedCreating does not use int32 for model hash
 // so cannot use GetHashKey
@@ -50,20 +53,42 @@ const Animals = [
     2910340283, // A_C_Westy
 ];
 
-const zombieModel = 'u_m_y_zombie_01';
+export const ZombieModels = {
+    G_M_M_Zombie_01: true,
+    U_M_Y_Zombie_01: true,
+    G_M_M_Zombie_02: true,
+    G_M_M_Zombie_03: true,
+    G_M_M_Zombie_04: true,
+    G_M_M_Zombie_05: true,
+    IG_Zombie_DJ_01: true,
+
+    A_C_Deer_02: false,
+    //A_C_Coyote_02: false,
+    //A_C_Pug_02: false,
+    A_C_Boar_02: false,
+    A_C_MtLion_02: false,
+};
 
 @Provider()
 export class ZombieProvider {
     @Inject(ResourceLoader)
     private resourceLoader: ResourceLoader;
 
+    @Inject(FeatureProvider)
+    private featureProvider: FeatureProvider;
+
     @On('populationPedCreating')
     public async onStart(x: number, y: number, z: number, model: number, setters) {
-        if (!isFeatureEnabled(Feature.Halloween)) {
+        if (
+            !this.featureProvider.isFeatureEnabled(Feature.Halloween) &&
+            !this.featureProvider.isFeatureEnabled(Feature.WhatIfSecondEpisode)
+        ) {
             return;
         }
 
         if (!Animals.includes(model)) {
+            const zombieModel = getRandomItem(Object.keys(ZombieModels).filter(elem => ZombieModels[elem]));
+
             await this.resourceLoader.loadModel(zombieModel);
 
             setters.setModel(zombieModel);

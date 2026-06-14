@@ -1,4 +1,5 @@
-import { InventoryManager } from '@public/server/inventory/inventory.manager';
+import { VehicleBusinessProvider } from '@private/server/gang/business.vehicle.provider';
+import { InventoryFactory } from '@public/server/inventory/inventory.factory';
 
 import { OnEvent } from '../../../core/decorators/event';
 import { Inject } from '../../../core/decorators/injectable';
@@ -33,12 +34,17 @@ export class BennysVehicleProvider {
     @Inject(Monitor)
     private monitor: Monitor;
 
-    @Inject(InventoryManager)
-    private inventoryManager: InventoryManager;
+    @Inject(InventoryFactory)
+    private inventoryFactory: InventoryFactory;
+
+    @Inject(VehicleBusinessProvider)
+    private vehicleBusinessProvider: VehicleBusinessProvider;
 
     @OnEvent(ServerEvent.BENNYS_REPAIR_VEHICLE_ENGINE)
     public async onRepairVehicleEngine(source: number, vehicleNetworkId: number) {
-        if (!this.inventoryManager.hasEnoughItem(source, 'repair_part_motor', 1)) {
+        const inventory = await this.inventoryFactory.getPlayerInventory(source);
+
+        if (!inventory.hasEnoughItem('repair_part_motor', 1, true)) {
             this.notifier.error(source, `Vous n'avez pas de pièce de réparation moteur.`);
 
             return;
@@ -52,7 +58,9 @@ export class BennysVehicleProvider {
             return;
         }
 
-        this.inventoryManager.removeItemFromInventory(source, 'repair_part_motor', 1);
+        if (!inventory.remove('repair_part_motor', 1, false)) {
+            return;
+        }
 
         this.notifier.notify(source, `Le moteur a été réparé.`);
 
@@ -60,22 +68,19 @@ export class BennysVehicleProvider {
             engineHealth: 1000,
         });
 
-        this.monitor.publish(
-            'job_bennys_repair_vehicle',
-            {
-                player_source: source,
-                repair_type: 'engine',
-            },
-            {
-                vehicle_plate: state.volatile.plate,
-                position: toVector3Object(GetEntityCoords(GetPlayerPed(source)) as Vector3),
-            }
-        );
+        this.monitor.traceEvent('job_bennys_repair_vehicle', {
+            player_source: source,
+            repair_type: 'engine',
+            vehicle_plate: state.volatile.plate,
+            position: toVector3Object(GetEntityCoords(GetPlayerPed(source)) as Vector3),
+        });
     }
 
     @OnEvent(ServerEvent.BENNYS_REPAIR_VEHICLE_BODY)
     public async onRepairVehicleEngineBody(source: number, vehicleNetworkId: number) {
-        if (!this.inventoryManager.hasEnoughItem(source, 'repair_part_body', 1)) {
+        const inventory = await this.inventoryFactory.getPlayerInventory(source);
+
+        if (!inventory.hasEnoughItem('repair_part_body', 1, true)) {
             this.notifier.error(source, `Vous n'avez pas de pièce de réparation carosserie.`);
 
             return;
@@ -89,7 +94,9 @@ export class BennysVehicleProvider {
             return;
         }
 
-        this.inventoryManager.removeItemFromInventory(source, 'repair_part_body', 1);
+        if (!inventory.remove('repair_part_body', 1, false)) {
+            return;
+        }
 
         this.notifier.notify(source, `La carrosserie a été réparée.`);
 
@@ -100,22 +107,21 @@ export class BennysVehicleProvider {
             dirtLevel: 0,
         });
 
-        this.monitor.publish(
-            'job_bennys_repair_vehicle',
-            {
-                player_source: source,
-                repair_type: 'body',
-            },
-            {
-                vehicle_plate: state.volatile.plate,
-                position: toVector3Object(GetEntityCoords(GetPlayerPed(source)) as Vector3),
-            }
-        );
+        this.vehicleBusinessProvider.repairVehicule(vehicleNetworkId);
+
+        this.monitor.traceEvent('job_bennys_repair_vehicle', {
+            player_source: source,
+            repair_type: 'body',
+            vehicle_plate: state.volatile.plate,
+            position: toVector3Object(GetEntityCoords(GetPlayerPed(source)) as Vector3),
+        });
     }
 
     @OnEvent(ServerEvent.BENNYS_REPAIR_VEHICLE_TANK)
     public async onRepairVehicleEngineTank(source: number, vehicleNetworkId: number) {
-        if (!this.inventoryManager.hasEnoughItem(source, 'repair_part_fuel_tank', 1)) {
+        const inventory = await this.inventoryFactory.getPlayerInventory(source);
+
+        if (!inventory.hasEnoughItem('repair_part_fuel_tank', 1, true)) {
             this.notifier.error(source, `Vous n'avez pas de pièce de réparation réservoir.`);
 
             return;
@@ -129,7 +135,9 @@ export class BennysVehicleProvider {
             return;
         }
 
-        this.inventoryManager.removeItemFromInventory(source, 'repair_part_fuel_tank', 1);
+        if (!inventory.remove('repair_part_fuel_tank', 1, false)) {
+            return;
+        }
 
         this.notifier.notify(source, `Le réservoir d'essence a été réparé.`);
 
@@ -137,17 +145,12 @@ export class BennysVehicleProvider {
             tankHealth: 1000,
         });
 
-        this.monitor.publish(
-            'job_bennys_repair_vehicle',
-            {
-                player_source: source,
-                repair_type: 'tank',
-            },
-            {
-                vehicle_plate: state.volatile.plate,
-                position: toVector3Object(GetEntityCoords(GetPlayerPed(source)) as Vector3),
-            }
-        );
+        this.monitor.traceEvent('job_bennys_repair_vehicle', {
+            player_source: source,
+            repair_type: 'tank',
+            vehicle_plate: state.volatile.plate,
+            position: toVector3Object(GetEntityCoords(GetPlayerPed(source)) as Vector3),
+        });
     }
 
     @OnEvent(ServerEvent.BENNYS_REPAIR_VEHICLE_WHEEL)
@@ -198,17 +201,12 @@ export class BennysVehicleProvider {
             tireBurstState: {},
         });
 
-        this.monitor.publish(
-            'job_bennys_repair_vehicle',
-            {
-                player_source: source,
-                repair_type: 'wheel',
-            },
-            {
-                vehicle_plate: state.volatile.plate,
-                position: toVector3Object(GetEntityCoords(GetPlayerPed(source)) as Vector3),
-            }
-        );
+        this.monitor.traceEvent('job_bennys_repair_vehicle', {
+            player_source: source,
+            repair_type: 'wheel',
+            vehicle_plate: state.volatile.plate,
+            position: toVector3Object(GetEntityCoords(GetPlayerPed(source)) as Vector3),
+        });
     }
 
     private async doRepairVehicle(
@@ -283,15 +281,10 @@ export class BennysVehicleProvider {
             dirtLevel: 0,
         });
 
-        this.monitor.publish(
-            'job_bennys_clean_vehicle',
-            {
-                player_source: source,
-            },
-            {
-                vehicle_plate: state.volatile.plate,
-                position: toVector3Object(GetEntityCoords(GetPlayerPed(source)) as Vector3),
-            }
-        );
+        this.monitor.traceEvent('job_bennys_clean_vehicle', {
+            player_source: source,
+            vehicle_plate: state.volatile.plate,
+            position: toVector3Object(GetEntityCoords(GetPlayerPed(source)) as Vector3),
+        });
     }
 }

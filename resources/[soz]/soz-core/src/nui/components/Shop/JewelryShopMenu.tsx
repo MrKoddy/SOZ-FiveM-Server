@@ -3,9 +3,9 @@ import { useNuiEvent } from '@public/nui/hook/nui';
 import { NuiEvent } from '@public/shared/event';
 import { MenuType } from '@public/shared/nui/menu';
 import { JewelryShopItem, ShopJewelryContent } from '@public/shared/shop';
+import { TaxType } from '@public/shared/tax';
 import { FunctionComponent } from 'react';
 
-import { TaxType } from '../../../shared/bank';
 import { useGetPrice } from '../../hook/price';
 import {
     MainMenu,
@@ -26,7 +26,6 @@ type MenuJewelryShopStateProps = {
 };
 
 export const JewelryShopMenu: FunctionComponent<MenuJewelryShopStateProps> = ({ catalog }) => {
-    const banner = 'https://nui-img/soz/menu_shop_jewelry';
     const getPrice = useGetPrice();
 
     useNuiEvent('menu', 'Backspace', () => {
@@ -40,7 +39,7 @@ export const JewelryShopMenu: FunctionComponent<MenuJewelryShopStateProps> = ({ 
     return (
         <Menu type={MenuType.JewelryShop}>
             <MainMenu>
-                <MenuTitle banner={banner}> Bijoutier </MenuTitle>
+                <MenuTitle title="Bijoutier" />
                 <MenuContent>
                     <MenuItemCheckbox
                         onChange={check => {
@@ -56,8 +55,8 @@ export const JewelryShopMenu: FunctionComponent<MenuJewelryShopStateProps> = ({ 
             </MainMenu>
             {Object.entries(catalog.shop_content).map(([catName, cat]) => (
                 <SubMenu key={cat.categoryId} id={String(cat.categoryId)}>
-                    <MenuTitle banner={banner}> {catName} </MenuTitle>
-                    <MenuContent>
+                    <MenuTitle title="Bijoutier" />
+                    <MenuContent subtitle={catName}>
                         {Object.keys(cat.items).map(subCatName => (
                             <MenuItemSubMenuLink id={(String(cat.categoryId) + String(subCatName)).replace(/\s/g, '')}>
                                 {subCatName}
@@ -69,8 +68,8 @@ export const JewelryShopMenu: FunctionComponent<MenuJewelryShopStateProps> = ({ 
             {Object.values(catalog.shop_content).map(cat =>
                 Object.entries(cat.items).map(([subCatName, subCat]) => (
                     <SubMenu id={(String(cat.categoryId) + String(subCatName)).replace(/\s/g, '')}>
-                        <MenuTitle banner={banner}> {subCatName} </MenuTitle>
-                        <MenuContent>
+                        <MenuTitle title="Bijoutier" />
+                        <MenuContent subtitle={subCatName}>
                             {Object.entries(subCat).map(([drawable, next]) => (
                                 <MenuItemSelect
                                     key={parseInt(drawable)}

@@ -7,9 +7,12 @@ import { Provider } from '../../core/decorators/provider';
 import { Logger } from '../../core/logger';
 import { wait } from '../../core/utils';
 import { ServerEvent } from '../../shared/event';
-import { Feature, isFeatureEnabled } from '../../shared/features';
+import { Feature } from '../../shared/features';
 import { ApiClient } from '../api/api.client';
 import { PrismaService } from '../database/prisma.service';
+import { FeatureProvider } from '../feature/feature.provider';
+import { UpwFacilityProvider } from '../job/upw/upw.facility.provider';
+import { PhoneAppNewsProvider } from '../phone/apps/phone.app.news.provider';
 import { PlayerCleanService } from '../player/player.clean.service';
 import { QBCore } from '../qbcore';
 import { Store } from '../store/store';
@@ -44,6 +47,15 @@ export class RebootProvider {
     @Inject('Store')
     private store: Store;
 
+    @Inject(FeatureProvider)
+    private featureProvider: FeatureProvider;
+
+    @Inject(UpwFacilityProvider)
+    private upwFacilityProvider: UpwFacilityProvider;
+
+    @Inject(PhoneAppNewsProvider)
+    private readonly phoneNewsProvider: PhoneAppNewsProvider;
+
     @OnEvent(ServerEvent.FIVEM_PLAYER_CONNECTING)
     public onPlayerConnecting(source, name, setKickReason, deferrals) {
         deferrals.defer();
@@ -53,6 +65,26 @@ export class RebootProvider {
         }
 
         deferrals.done();
+    }
+
+    public async kickAll(message: string) {
+        this.isClosed = true;
+
+        await this.prismaService.playerVehicle.updateMany({
+            where: {
+                state: PlayerVehicleState.Out,
+            },
+            data: {
+                state: PlayerVehicleState.Destroyed,
+                parkingtime: Math.round(Date.now() / 1000),
+            },
+        });
+
+        const players = this.qbCore.getPlayersSources();
+
+        for (const source of players) {
+            DropPlayer(source.toString(), message);
+        }
     }
 
     @Command('reboot', {
@@ -106,22 +138,24 @@ export class RebootProvider {
             },
         });
 
-        exports['soz-bank'].saveAccounts();
-        exports['soz-upw'].saveUpw();
-        exports['soz-inventory'].saveInventories();
-        exports['soz-inventory'].stopSyncInventories();
+        this.upwFacilityProvider.saveLoop();
 
-        const ids = await this.playerCleanService.getPlayerToCleans();
-        const [houseOwnerCount, houseRoommateCount] = await this.playerCleanService.cleanPlayerHouses(ids);
+        if (
+            !this.featureProvider.isFeatureEnabled(Feature.WhatIfFirstEpisode) &&
+            !this.featureProvider.isFeatureEnabled(Feature.SummerDisabling)
+        ) {
+            const ids = await this.playerCleanService.getPlayerToCleans();
+            const [houseOwnerCount, houseRoommateCount] = await this.playerCleanService.cleanPlayerHouses(ids);
 
-        this.logger.info(`[reboot] Houses owner cleaned: ${houseOwnerCount}`);
-        this.logger.info(`[reboot] Houses roommate cleaned: ${houseRoommateCount}`);
+            this.logger.info(`[reboot] Houses owner cleaned: ${houseOwnerCount}`);
+            this.logger.info(`[reboot] Houses roommate cleaned: ${houseRoommateCount}`);
+        }
     }
 
-    @Command('thunder', {
+    @Command('rebootWithThunder', {
         role: 'admin',
     })
-    private async thunder() {
+    private async rebootWithThunder() {
         this.weatherProvider.setWeatherUpdate(false);
 
         await this.sendRebootMessage(15);
@@ -141,7 +175,7 @@ export class RebootProvider {
 
         this.store.dispatch.global.update({ blackout: true });
 
-        if (isFeatureEnabled(Feature.HalloweenReboot)) {
+        if (this.featureProvider.isFeatureEnabled(Feature.HalloweenReboot)) {
             this.weatherProvider.setWeather('HALLOWEEN');
             await wait(60 * 1000);
 
@@ -190,7 +224,7 @@ export class RebootProvider {
         await this.apiClient.removeRebootMessage();
         await this.apiClient.addRebootMessage(minutes);
 
-        exports['soz-phone'].createNewsBroadcast({
+        await this.phoneNewsProvider.createNews(null, {
             type: `reboot_${minutes}`,
             message: `Un ouragan arrive à toute allure ! Il devrait frapper le coeur de San Andreas d'ici ${minutes} minutes. Veuillez ranger vos véhicules et vous abriter ! Votre sécurité est primordiale.`,
             reporter: 'San Andreas Météo',

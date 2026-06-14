@@ -10,7 +10,6 @@ import { Provider } from '@public/core/decorators/provider';
 import { CAYO } from '@public/shared/cayo';
 import { Component, GlovesItem } from '@public/shared/cloth';
 import { ClientEvent, NuiEvent, ServerEvent } from '@public/shared/event';
-import { MenuType } from '@public/shared/nui/menu';
 import { Vector3, Vector4 } from '@public/shared/polyzone/vector';
 import { ClothingShopID, ClothingShopItem } from '@public/shared/shop';
 
@@ -18,7 +17,6 @@ import { AnimationService } from '../animation/animation.service';
 import { CameraService } from '../camera';
 import { ClothingService } from '../clothing/clothing.service';
 import { NuiDispatch } from '../nui/nui.dispatch';
-import { NuiMenu } from '../nui/nui.menu';
 import { PlayerService } from '../player/player.service';
 import { ResourceLoader } from '../repository/resource.loader';
 import { ClothingShopRepository } from '../repository/shop.repository';
@@ -36,9 +34,6 @@ export class ClothingShopProvider {
 
     @Inject(PlayerService)
     private playerService: PlayerService;
-
-    @Inject(NuiMenu)
-    private nuiMenu: NuiMenu;
 
     @Inject(CameraService)
     private cameraService: CameraService;
@@ -66,6 +61,10 @@ export class ClothingShopProvider {
 
     private currentShop: string = undefined;
 
+    public isInShop(): boolean {
+        return !!this.currentShop;
+    }
+
     @On(ClientEvent.SHOP_OPEN_MENU)
     public async openShop(brand: ShopBrand, shop: string) {
         if (
@@ -77,9 +76,8 @@ export class ClothingShopProvider {
             return;
         }
 
-        const { shop: shop_content, content: shop_categories } = await this.clothingShopRepository.getShopContent(
-            brand
-        );
+        const { shop: shop_content, content: shop_categories } =
+            await this.clothingShopRepository.getShopContent(brand);
 
         if (!shop_content) {
             this.logger.error(`Shop ${brand} not initialized`);
@@ -91,7 +89,7 @@ export class ClothingShopProvider {
         const under_types = this.underTypesShopRepository.getAllUnderTypes();
         this.currentShop = shop;
         await this.setupShop();
-        this.nuiMenu.openMenu(MenuType.ClothShop, {
+        this.nuiDispatch.dispatch('cloth_shop', 'SetCatalog', {
             brand,
             shop_content,
             shop_categories,
@@ -101,6 +99,10 @@ export class ClothingShopProvider {
     }
 
     public async setupShop(skipIntro = false) {
+        if (!this.currentShop) {
+            return;
+        }
+
         const ped = PlayerPedId();
         const [x, y, z, w] = ShopsConfig[this.currentShop].positionInShop;
         // binco4 and binco7 and binco2 are bugged on walkToCoordsAvoidObstacles. Use waltkToCoords instead
@@ -131,7 +133,7 @@ export class ClothingShopProvider {
     @OnNuiEvent(NuiEvent.ClothShopToggleCamera)
     public async onToggleCamera(check: boolean) {
         if (check) {
-            await this.cameraService.deleteCamera();
+            this.cameraService.deleteAllCameras();
         } else {
             await this.setupShop(true);
         }
@@ -143,17 +145,10 @@ export class ClothingShopProvider {
         if (!product) {
             return;
         }
+
         if (product.components && !product.correspondingDrawables) {
             for (const [compId, comp] of Object.entries(product.components)) {
-                const drawable = comp.Drawable;
-                const texture = comp.Texture;
-                SetPedComponentVariation(ped, parseInt(compId), drawable, texture, 0);
-                if (Number(compId) == Component.Mask) {
-                    const hair = this.clothingService.displayHairWithMask(drawable)
-                        ? this.playerService.getPlayer().skin.Hair.HairType
-                        : 0;
-                    SetPedComponentVariation(ped, Component.Hair, hair, 0, 0);
-                }
+                this.clothingService.applyComponentWithFix(parseInt(compId), comp);
             }
         }
         if (product.props) {
@@ -166,29 +161,37 @@ export class ClothingShopProvider {
         // Adapt the torso to the undershirt if selected
         const playerModel = GetEntityModel(ped);
         const player = this.playerService.getPlayer();
-        const baseTorsoDrawable =
-            ProperTorsos[playerModel][player.cloth_config.BaseClothSet.Components[Component.Tops].Drawable];
+
+        const torsoCollection =
+            ProperTorsos[playerModel][player.cloth_config.BaseClothSet.Components[Component.Tops].Collection] ?? {};
+        const baseTorsoDrawable = torsoCollection[player.cloth_config.BaseClothSet.Components[Component.Tops].Drawable];
         const nakedTorsoDrawable = player.cloth_config.NakedClothSet.Components[Component.Torso].Drawable;
         if (baseTorsoDrawable == null) {
             return;
         }
         if (product.undershirtType) {
             // show the current top of the player to avoid a naked torso
-            SetPedComponentVariation(
-                ped,
-                Component.Tops,
-                player.cloth_config.BaseClothSet.Components[Component.Tops].Drawable,
-                player.cloth_config.BaseClothSet.Components[Component.Tops].Texture,
-                0
-            );
-            if (UndershirtCategoryNeedingReplacementTorso[playerModel][product.undershirtType] != null) {
-                SetPedComponentVariation(
+            if (player.cloth_config.BaseClothSet.Components[Component.Tops].Collection) {
+                SetPedCollectionComponentVariation(
                     ped,
-                    Component.Torso,
-                    UndershirtCategoryNeedingReplacementTorso[playerModel][product.undershirtType][baseTorsoDrawable],
-                    0,
+                    Component.Tops,
+                    player.cloth_config.BaseClothSet.Components[Component.Tops].Collection,
+                    player.cloth_config.BaseClothSet.Components[Component.Tops].Drawable,
+                    player.cloth_config.BaseClothSet.Components[Component.Tops].Texture,
                     0
                 );
+            } else {
+                SetPedComponentVariation(
+                    ped,
+                    Component.Tops,
+                    player.cloth_config.BaseClothSet.Components[Component.Tops].Drawable,
+                    player.cloth_config.BaseClothSet.Components[Component.Tops].Texture,
+                    0
+                );
+            }
+            const replacement = UndershirtCategoryNeedingReplacementTorso[playerModel][product.undershirtType];
+            if (replacement != null && replacement[baseTorsoDrawable] != null) {
+                SetPedComponentVariation(ped, Component.Torso, replacement[baseTorsoDrawable], 0, 0);
             } else {
                 SetPedComponentVariation(ped, Component.Torso, baseTorsoDrawable, 0, 0);
             }
@@ -242,14 +245,13 @@ export class ClothingShopProvider {
         TriggerEvent('soz-character:Client:ApplyCurrentClothConfig');
     }
 
-    @OnNuiEvent<{ menuType: MenuType }>(NuiEvent.MenuClosed)
-    public async onMenuClose({ menuType }) {
-        if (menuType !== MenuType.ClothShop) {
-            return;
-        }
+    @OnNuiEvent(NuiEvent.ClothingShopClose)
+    public async onMenuClose() {
+        this.nuiDispatch.dispatch('cloth_shop', 'SetCatalog', undefined);
+
         TriggerEvent('soz-character:Client:ApplyCurrentSkin');
         TriggerEvent('soz-character:Client:ApplyCurrentClothConfig');
-        await this.cameraService.deleteCamera();
+        await this.cameraService.deleteAllCameras();
         await this.animationService.clearShopAnimations(PlayerPedId());
         this.currentShop = undefined;
         FreezeEntityPosition(PlayerPedId(), false);
@@ -270,8 +272,8 @@ export class ClothingShopProvider {
     }
 
     @Exportable('DisplayHairWithMask')
-    displayHairWithMask(maskDrawable: number): boolean {
-        return this.clothingService.displayHairWithMask(maskDrawable);
+    displayHairWithMask(maskDrawable: number, collection: string): boolean {
+        return this.clothingService.displayHairWithMask(maskDrawable, collection);
     }
 
     @Exportable('GetGloves')

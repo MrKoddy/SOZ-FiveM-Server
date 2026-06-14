@@ -1,11 +1,15 @@
+import { Inject, Injectable } from '@core/decorators/injectable';
+import { InventoryManager } from '@public/client/inventory/inventory.manager';
+import { wait } from '@public/core/utils';
+import { InventoryItem } from '@public/shared/inventory';
 import { VehicleSeat } from '@public/shared/vehicle/vehicle';
 
-import { Inject, Injectable } from '../../core/decorators/injectable';
-import { InventoryItem } from '../../shared/item';
 import { GlobalWeaponConfig, WeaponConfig, WeaponName, Weapons } from '../../shared/weapons/weapon';
 import { PlayerService } from '../player/player.service';
+import { WeaponHolsterProvider } from './weapon.holster.provider';
 
 const MONEY_CASE_HASH = GetHashKey('WEAPON_BRIEFCASE');
+const unarmed = GetHashKey('WEAPON_UNARMED');
 
 const backVeh = [
     GetHashKey('stockade'),
@@ -42,18 +46,46 @@ const farBackVeh = [GetHashKey('bison'), GetHashKey('dubsta3')];
 export class WeaponService {
     private currentWeapon: InventoryItem | null = null;
     private disabledReasons = new Set<string>();
+    private inAnimation = false;
+
+    private adminInfiniteAmmo = false;
+    private adminDisableRecoil = false;
+
+    @Inject(InventoryManager)
+    private inventoryManager: InventoryManager;
 
     @Inject(PlayerService)
     private playerService: PlayerService;
 
+    @Inject(WeaponHolsterProvider)
+    private weaponHolsterProvider: WeaponHolsterProvider;
+
+    public getAdminDisableRecoilDisabled() {
+        return this.adminDisableRecoil;
+    }
+
+    public setAdminDisableRecoilDisabled(value: boolean) {
+        this.adminDisableRecoil = value;
+    }
+
+    public getAdminInfiniteAmmo() {
+        return this.adminInfiniteAmmo;
+    }
+
+    public setAdminInfiniteAmmo(value: boolean) {
+        this.adminInfiniteAmmo = value;
+    }
+
     getWeaponFromSlot(slot: number): InventoryItem | null {
-        return Object.values(this.playerService.getPlayer().items).find(
-            item => item.type === 'weapon' && item.slot === slot
-        );
+        return this.inventoryManager.getItemAtSlot(slot);
     }
 
     getCurrentWeapon(): InventoryItem | null {
         return this.currentWeapon;
+    }
+
+    updateCurrentWeapon(weapon: InventoryItem) {
+        this.currentWeapon = weapon;
     }
 
     async set(weapon: InventoryItem) {
@@ -62,6 +94,11 @@ export class WeaponService {
         }
 
         const player = PlayerPedId();
+
+        if (this.currentWeapon != null && this.currentWeapon.metadata.serial !== weapon.metadata.serial) {
+            await this.clear();
+        }
+
         const weaponHash = GetHashKey(weapon.name);
         const ammo = weapon.metadata.ammo >= 0 ? weapon.metadata.ammo : 0;
 
@@ -80,30 +117,50 @@ export class WeaponService {
         }
 
         SetPedAmmo(player, weaponHash, ammo);
-        SetCurrentPedWeapon(player, weaponHash, true);
+        if (this.adminInfiniteAmmo) {
+            SetPedAmmo(player, weaponHash, 999);
+            SetPedInfiniteAmmo(player, true, weaponHash);
+        }
+        SetCurrentPedWeapon(player, weaponHash, false);
     }
 
     async clear() {
-        const player = PlayerPedId();
+        const ped = PlayerPedId();
+
+        //await this.weaponHolsterProvider.storeWeapon(this.playerService.getPlayer(), ped);
+        const inAnimation = this.inAnimation;
+        this.inAnimation = true;
+
+        SetCurrentPedWeapon(ped, unarmed, false);
+        await wait(1300);
+
+        if (!inAnimation) {
+            this.inAnimation = false;
+        }
+
         if (this.currentWeapon) {
             const currhash = GetHashKey(this.currentWeapon.name);
             if (currhash !== GetHashKey(WeaponName.UNARMED)) {
-                RemoveWeaponFromPed(player, currhash);
+                RemoveWeaponFromPed(ped, currhash);
             }
         }
         this.currentWeapon = null;
 
-        const [, hash] = GetCurrentPedWeapon(player, false);
+        const [, hash] = GetCurrentPedWeapon(ped, false);
 
         if (hash !== GetHashKey(WeaponName.UNARMED) && hash !== MONEY_CASE_HASH) {
-            SetCurrentPedWeapon(player, GetHashKey(WeaponName.UNARMED), true);
-            RemoveWeaponFromPed(player, hash);
+            SetCurrentPedWeapon(ped, GetHashKey(WeaponName.UNARMED), true);
+            RemoveWeaponFromPed(ped, hash);
         }
     }
 
     getMaxAmmoInClip(): number {
         if (!this.currentWeapon) {
             return 0;
+        }
+
+        if (this.adminInfiniteAmmo) {
+            return 999;
         }
 
         const player = PlayerPedId();
@@ -113,9 +170,11 @@ export class WeaponService {
     }
 
     async recoil() {
-        if (!this.currentWeapon) {
-            return;
-        }
+        if (this.adminDisableRecoil) return;
+        if (!this.currentWeapon) return;
+
+        const ped = PlayerPedId();
+        const veh = GetVehiclePedIsIn(ped, false);
 
         const recoil = this.getWeaponConfig(this.currentWeapon.name)?.recoil ?? 0;
         const recoilHorizontal = Math.random() - 0.5;
@@ -128,8 +187,6 @@ export class WeaponService {
 
         let backveh = 0;
         if (GetFollowVehicleCamViewMode() == 4) {
-            const ped = PlayerPedId();
-            const veh = GetVehiclePedIsIn(ped, false);
             if (veh) {
                 const model = GetEntityModel(veh);
                 if (backVeh.includes(model)) {
@@ -151,7 +208,7 @@ export class WeaponService {
         const pitch = GetGameplayCamRelativePitch();
         const heading = GetGameplayCamRelativeHeading();
 
-        SetGameplayCamRelativeRotation(heading + recoilX + backveh, pitch + recoilY, 1.0);
+        SetGameplayCamRelativeRotation(heading + recoilX + backveh, pitch + recoilY, veh ? 0.0 : 1.0);
     }
 
     getWeaponConfig(weaponName: string): WeaponConfig | null {
@@ -165,5 +222,9 @@ export class WeaponService {
         } else {
             this.disabledReasons.delete(reason);
         }
+    }
+
+    public isInAnimation() {
+        return this.inAnimation;
     }
 }

@@ -1,9 +1,11 @@
 import { Once, OnEvent } from '@core/decorators/event';
 import { Provider } from '@core/decorators/provider';
 import { Inject } from '@public/core/decorators/injectable';
+import { PlayerUpdate } from '@public/core/decorators/player';
 import { Tick, TickInterval } from '@public/core/decorators/tick';
 import { uuidv4 } from '@public/core/utils';
 import { ClientEvent, ServerEvent } from '@public/shared/event';
+import { PlayerData } from '@public/shared/player';
 import { getDistance, Vector3 } from '@public/shared/polyzone/vector';
 import { TowRope } from '@public/shared/vehicle/tow.rope';
 import { VehicleClass, VehicleSeat } from '@public/shared/vehicle/vehicle';
@@ -30,58 +32,65 @@ export class VehicleTowProvider {
     private from = 0;
     private fromOffset = 0;
 
+    private async useTowCable(entity: number, item: string) {
+        if (!this.from) {
+            if (GetVehicleClass(entity) == VehicleClass.Helicopters) {
+                this.fromOffset = 0.0;
+            } else {
+                this.fromOffset = this.getOffset(entity);
+            }
+
+            const ropePosition = GetOffsetFromEntityInWorldCoords(entity, 0.0, this.fromOffset, 0.0) as Vector3;
+            const hook = await this.ropeService.createNewRope(
+                ropePosition,
+                entity,
+                6,
+                MAX_LENGTH_ROPE,
+                'prop_v_hook_s',
+                'ropeFamily3'
+            );
+            if (!hook) {
+                return;
+            }
+            this.from = entity;
+        } else {
+            const towRope: TowRope = {
+                id: uuidv4(),
+                netId1: NetworkGetNetworkIdFromEntity(this.from),
+                offset1: this.fromOffset,
+                netId2: NetworkGetNetworkIdFromEntity(entity),
+                offset2: this.getOffset(entity),
+            };
+
+            TriggerServerEvent(ServerEvent.VEHICLE_TOW_ROPE_ADD, towRope, item);
+            this.ropeService.deleteRope();
+            this.from = 0;
+        }
+    }
+
     @Once()
     public onStart() {
         this.targetFactort.createForAllVehicle([
             {
                 label: 'Attacher cable de remorquage',
-                icon: 'c:mechanic/Attacher.png',
-                canInteract: entity => entity != this.from,
-                action: async entity => {
-                    if (!this.from) {
-                        if (GetVehicleClass(entity) == VehicleClass.Helicopters) {
-                            this.fromOffset = 0.0;
-                        } else {
-                            this.fromOffset = this.getOffset(entity);
-                        }
-
-                        const ropePosition = GetOffsetFromEntityInWorldCoords(
-                            entity,
-                            0.0,
-                            this.fromOffset,
-                            0.0
-                        ) as Vector3;
-                        const hook = await this.ropeService.createNewRope(
-                            ropePosition,
-                            entity,
-                            6,
-                            MAX_LENGTH_ROPE,
-                            'prop_v_hook_s',
-                            'ropeFamily3'
-                        );
-                        if (!hook) {
-                            return;
-                        }
-                        this.from = entity;
-                    } else {
-                        const towRope: TowRope = {
-                            id: uuidv4(),
-                            netId1: NetworkGetNetworkIdFromEntity(this.from),
-                            offset1: this.fromOffset,
-                            netId2: NetworkGetNetworkIdFromEntity(entity),
-                            offset2: this.getOffset(entity),
-                        };
-
-                        TriggerServerEvent(ServerEvent.VEHICLE_TOW_ROPE_ADD, towRope);
-                        this.ropeService.deleteRope();
-                        this.from = 0;
-                    }
-                },
+                icon: 'mechanic/Attacher',
+                category: 'citizen',
                 item: 'tow_cable',
+                canInteract: entity => entity != this.from,
+                action: async entity => await this.useTowCable(entity, 'tow_cable'),
+            },
+            {
+                label: 'Attacher cable de remorquage',
+                icon: 'mechanic/Attacher',
+                category: 'criminal',
+                item: 'artisanal_tow_cable',
+                canInteract: entity => entity != this.from,
+                action: async entity => this.useTowCable(entity, 'artisanal_tow_cable'),
             },
             {
                 label: 'Annuler le Remorquage',
-                icon: 'c:mechanic/Attacher.png',
+                icon: 'mechanic/Attacher',
+                category: 'citizen',
                 canInteract: entity => entity == this.from,
                 action: () => {
                     this.ropeService.deleteRope();
@@ -90,7 +99,8 @@ export class VehicleTowProvider {
             },
             {
                 label: 'Détacher le cable de remorquage',
-                icon: 'c:mechanic/Attacher.png',
+                icon: 'mechanic/Attacher',
+                category: 'citizen',
                 canInteract: entity => {
                     const netId = NetworkGetNetworkIdFromEntity(entity);
                     return this.towRopeRepository.get(rope => rope.netId1 == netId || rope.netId2 == netId).length > 0;
@@ -111,6 +121,15 @@ export class VehicleTowProvider {
     public async onEnteringVehicle() {
         if (this.from) {
             this.ropeService.deleteRope();
+        }
+    }
+
+    @PlayerUpdate()
+    public async onPlayerUpdate(player: PlayerData) {
+        if (player.metadata.isdead || player.metadata.ishandcuffed) {
+            if (this.from) {
+                this.ropeService.deleteRope();
+            }
         }
     }
 

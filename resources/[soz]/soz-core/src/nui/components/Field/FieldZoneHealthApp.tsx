@@ -1,7 +1,7 @@
 import classNames from 'classnames';
 import { Fragment, FunctionComponent } from 'react';
 
-import { Field } from '../../../shared/field';
+import { isItemField, ItemField } from '../../../shared/field';
 import { FoodFields, FoodFieldType } from '../../../shared/job/food';
 import { OIL_FIELDS } from '../../../shared/job/oil';
 import { AbstractZone } from '../../../shared/polyzone/abstract.zone';
@@ -30,7 +30,7 @@ export const FieldZoneHealthApp: FunctionComponent = () => {
 
     return (
         <div className="w-full h-full">
-            <div className="absolute flex bottom-10 justify-center items-center w-full">
+            <div className="absolute flex bottom-24 justify-center items-center w-full">
                 {Object.keys(FoodFields).map((foodFieldType, i) => {
                     const field = FoodFields[foodFieldType as FoodFieldType];
 
@@ -45,6 +45,10 @@ export const FieldZoneHealthApp: FunctionComponent = () => {
                                 const fieldData = fields[identifier];
 
                                 if (!fieldData) {
+                                    return null;
+                                }
+
+                                if (!isItemField(fieldData)) {
                                     return null;
                                 }
 
@@ -79,6 +83,10 @@ export const FieldZoneHealthApp: FunctionComponent = () => {
                         return null;
                     }
 
+                    if (!isItemField(fieldData)) {
+                        return null;
+                    }
+
                     if (fieldData.owner !== player.job.id) {
                         return null;
                     }
@@ -95,7 +103,7 @@ export const FieldZoneHealthApp: FunctionComponent = () => {
 };
 
 type FieldZoneHealthProps = {
-    field: Field;
+    field: ItemField;
     zone: AbstractZone;
     type: FoodFieldType | 'oil';
 };

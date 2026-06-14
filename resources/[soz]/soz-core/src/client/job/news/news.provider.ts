@@ -1,3 +1,6 @@
+import { FeatureProvider } from '@public/client/feature/feature.provider';
+import { Feature } from '@public/shared/features';
+
 import { Once, OnceStep, OnEvent } from '../../../core/decorators/event';
 import { Inject } from '../../../core/decorators/injectable';
 import { Provider } from '../../../core/decorators/provider';
@@ -12,7 +15,15 @@ import { Notifier } from '../../notifier';
 import { ObjectProvider } from '../../object/object.provider';
 import { PlayerPositionProvider } from '../../player/player.position.provider';
 import { PlayerService } from '../../player/player.service';
+import { InteractionProvider } from '../../quick-interaction/interaction.provider';
 import { TargetFactory } from '../../target/target.factory';
+
+const RemovableObjects = [
+    GetHashKey('prop_ld_greenscreen_01'),
+    GetHashKey('prop_tv_cam_02'),
+    GetHashKey('prop_kino_light_01'),
+    GetHashKey('v_ilev_fos_mic'),
+];
 
 @Provider()
 export class NewsProvider {
@@ -34,10 +45,20 @@ export class NewsProvider {
     @Inject(PlayerPositionProvider)
     private playerPositionProvider: PlayerPositionProvider;
 
+    @Inject(InteractionProvider)
+    private interactionProvider: InteractionProvider;
+
+    @Inject(FeatureProvider)
+    private featureProvider: FeatureProvider;
+
     private currentZone: Vector4 = null;
 
     @Once(OnceStep.PlayerLoaded)
     public async onTwitchNewsLoad() {
+        if (this.featureProvider.isFeatureEnabled(Feature.WhatIfFirstEpisode)) {
+            return;
+        }
+
         this.blipFactory.create('jobs:news', {
             coords: { x: -589.86, y: -930.61, z: 23.82 },
             name: 'Twitch News',
@@ -52,19 +73,21 @@ export class NewsProvider {
             scale: 0.9,
         });
 
-        this.targetFactory.createForModel(
-            ['prop_ld_greenscreen_01', 'prop_tv_cam_02', 'prop_kino_light_01', 'v_ilev_fos_mic'],
-            [
+        RemovableObjects.forEach(model => {
+            this.interactionProvider.createInteractionForModels(
+                model,
                 {
                     label: 'Récupérer',
-                    icon: 'c:jobs/recuperer.png',
                     job: { [JobType.News]: 0, [JobType.YouNews]: 0 },
                     action: object => {
                         this.objectProvider.collectObject(object);
                     },
                 },
-            ]
-        );
+                undefined,
+                0.8,
+                1.2
+            );
+        });
 
         this.targetFactory.createForBoxZone(
             'jobs:news:farm',
@@ -78,15 +101,14 @@ export class NewsProvider {
             [
                 {
                     label: 'Imprimer',
-                    color: 'news',
-                    icon: 'c:news/imprimer.png',
+                    icon: 'news/imprimer',
+                    category: 'society',
                     action: () => {
                         TriggerServerEvent(ServerEvent.NEWS_NEWSPAPER_FARM);
                     },
                     job: JobType.News,
                     canInteract: () => {
                         return false;
-                        //return this.playerService.isOnDuty();
                     },
                 },
             ]
@@ -105,15 +127,14 @@ export class NewsProvider {
             [
                 {
                     label: 'Imprimer',
-                    color: 'you-news',
-                    icon: 'c:news/imprimer.png',
+                    icon: 'news/imprimer',
+                    category: 'society',
                     action: () => {
                         TriggerServerEvent(ServerEvent.NEWS_NEWSPAPER_FARM);
                     },
                     job: JobType.YouNews,
                     canInteract: () => {
                         return false;
-                        //return this.playerService.isOnDuty();
                     },
                 },
             ]
@@ -130,7 +151,8 @@ export class NewsProvider {
                 {
                     label: 'Rentrer dans le studio',
                     item: 'press_card',
-                    icon: 'c:housing/enter.png',
+                    icon: 'housing/enter',
+                    category: 'society',
                     action: () => {
                         this.playerPositionProvider.teleportPlayerToPosition(StudioEnterZone);
                     },
@@ -148,7 +170,8 @@ export class NewsProvider {
             [
                 {
                     label: 'Sortir du studio',
-                    icon: 'c:housing/enter.png',
+                    icon: 'housing/enter',
+                    category: 'society',
                     action: () => {
                         this.playerPositionProvider.teleportPlayerToPosition(StudioExitZone);
                     },
@@ -186,15 +209,12 @@ export class NewsProvider {
             [
                 {
                     label: 'Livrer',
-                    color: player.job.id,
-                    icon: 'c:news/livrer.png',
+                    icon: 'news/livrer',
+                    category: 'society',
                     action: () => {
                         TriggerServerEvent(ServerEvent.NEWS_NEWSPAPER_SOLD);
                     },
                     job: player.job.id,
-                    canInteract: () => {
-                        return this.playerService.isOnDuty();
-                    },
                 },
             ]
         );

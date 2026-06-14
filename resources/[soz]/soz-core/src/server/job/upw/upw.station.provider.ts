@@ -3,7 +3,8 @@ import { Inject } from '@public/core/decorators/injectable';
 import { Provider } from '@public/core/decorators/provider';
 import { Rpc } from '@public/core/decorators/rpc';
 import { PrismaService } from '@public/server/database/prisma.service';
-import { InventoryManager } from '@public/server/inventory/inventory.manager';
+import { FeatureProvider } from '@public/server/feature/feature.provider';
+import { InventoryFactory } from '@public/server/inventory/inventory.factory';
 import { ItemService } from '@public/server/item/item.service';
 import { JobService } from '@public/server/job.service';
 import { Monitor } from '@public/server/monitor/monitor';
@@ -14,6 +15,7 @@ import { ProgressService } from '@public/server/player/progress.service';
 import { RepositoryProvider } from '@public/server/repository/repository.provider';
 import { UpwChargerRepository } from '@public/server/repository/upw.charger.repository';
 import { ClientEvent, ServerEvent } from '@public/shared/event';
+import { Feature } from '@public/shared/features';
 import { UpwCharger, UpwStation } from '@public/shared/fuel';
 import { JobPermission, JobType } from '@public/shared/job';
 import { UPW_CHARGER_REFILL_VALUES } from '@public/shared/job/upw';
@@ -21,6 +23,7 @@ import { getDistance, Vector3 } from '@public/shared/polyzone/vector';
 import { RpcServerEvent } from '@public/shared/rpc';
 
 import { joaat } from '../../../shared/joaat';
+import { BankService } from '../../bank/bank.service';
 import { ObjectProvider } from '../../object/object.provider';
 
 @Provider()
@@ -40,8 +43,8 @@ export class UpwStationProvider {
     @Inject(ItemService)
     private itemService: ItemService;
 
-    @Inject(InventoryManager)
-    private inventoryManager: InventoryManager;
+    @Inject(InventoryFactory)
+    private inventoryFactory: InventoryFactory;
 
     @Inject(ProgressService)
     private progressService: ProgressService;
@@ -61,6 +64,12 @@ export class UpwStationProvider {
     @Inject(Monitor)
     private monitor: Monitor;
 
+    @Inject(BankService)
+    private bankService: BankService;
+
+    @Inject(FeatureProvider)
+    private featureProvider: FeatureProvider;
+
     @Once(OnceStep.Start)
     public async onStart() {
         this.itemService.setItemUseCallback('car_charger', this.useCarCharger.bind(this));
@@ -68,7 +77,13 @@ export class UpwStationProvider {
 
     @OnEvent(ServerEvent.UPW_CREATE_CHARGER)
     public async createCharger(source: number, charger: UpwCharger) {
-        if (!this.inventoryManager.removeItemFromInventory(source, 'car_charger', 1)) {
+        const inventory = await this.inventoryFactory.getPlayerInventory(source);
+
+        if (!inventory) {
+            return;
+        }
+
+        if (!inventory.remove('car_charger', 1, false)) {
             this.notifier.notify(source, "Vous n'avez pas de chargeur de voiture.", 'error');
 
             return;
@@ -108,6 +123,7 @@ export class UpwStationProvider {
 
     @Rpc(RpcServerEvent.UPW_GET_STATION)
     public async onGetStation(source: number, name: string): Promise<UpwStation> {
+        const whatIf = this.featureProvider.isFeatureEnabled(Feature.WhatIfFirstEpisode);
         const station = await this.prismaService.upw_stations.findFirst({
             where: {
                 station: name,
@@ -116,8 +132,8 @@ export class UpwStationProvider {
         const position = JSON.parse(station.position) as { x: number; y: number; z: number; w: number };
         const result: UpwStation = {
             id: station.id,
-            stock: station.stock,
-            max_stock: station.max_stock,
+            stock: whatIf ? 10_000 : station.stock,
+            max_stock: whatIf ? 10_000 : station.max_stock,
             price: station.price,
             position: [position.x, position.y, position.z, position.w],
             station: station.station,
@@ -139,10 +155,14 @@ export class UpwStationProvider {
             this.notifier.notify(source, 'La station est pleine !', 'success');
             return;
         }
-        if (!this.inventoryManager.removeItemFromInventory(source, cell, 1)) {
+
+        const inventory = await this.inventoryFactory.getPlayerInventory(source);
+
+        if (!inventory.remove(cell, 1, false)) {
             this.notifier.notify(source, "Une erreur s'est produite lors de la recharge.", 'error');
             return;
         }
+
         const newStock = Math.min(stationToRefill.stock + UPW_CHARGER_REFILL_VALUES[cell], stationToRefill.max_stock);
 
         await this.prismaService.upw_stations.update({
@@ -157,7 +177,7 @@ export class UpwStationProvider {
         });
         const restockPrice = UPW_CHARGER_REFILL_VALUES[cell] * 3;
         if (station) {
-            await this.playerMoneyService.transfer('farm_upw', 'safe_upw', restockPrice);
+            await this.bankService.transferFarmMoney(source, 'farm_upw', 'safe_upw', restockPrice);
         }
 
         this.notifier.notify(source, `Charge... ~b~${newStock}/${stationToRefill.max_stock} kWh`);
@@ -169,19 +189,14 @@ export class UpwStationProvider {
         });
 
         const item = this.itemService.getItem(cell);
-        this.monitor.publish(
-            'job_upw_station_restock',
-            {
-                player_source: source,
-                item_id: item.name,
-            },
-            {
-                item_label: item.label,
-                station_position: currentStation.position,
-                station_name: currentStation.station,
-                price: restockPrice,
-            }
-        );
+        this.monitor.traceEvent('job_upw_station_restock', {
+            player_source: source,
+            item_id: item.name,
+            item_label: item.label,
+            station_id: currentStation.id,
+            station_type: 'electric',
+            money: restockPrice,
+        });
     }
 
     @OnEvent(ServerEvent.UPW_SET_CHARGER_PRICE)

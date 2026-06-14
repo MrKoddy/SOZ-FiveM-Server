@@ -35,12 +35,22 @@ export class VoiceProvider {
 
     private isConnecting = false;
 
+    public intent: 'speech' | 'music' = 'speech';
+
     @Once(OnceStep.PlayerLoaded)
     public async initVoice(): Promise<void> {
         await this.reconnect();
 
         this.voiceListeningService.createAudioSubmixes();
         this.voipService.setReady(true);
+    }
+
+    public setIntent(intent: string): void {
+        if (intent === 'speech' || intent === 'music') {
+            this.intent = intent;
+        }
+
+        MumbleSetAudioInputIntent(this.intent);
     }
 
     @Tick(1000)
@@ -74,14 +84,9 @@ export class VoiceProvider {
             this.nuiDispatch.dispatch('hud', 'UpdateVoiceActive', false);
 
             if (notify) {
-                this.monitor.publish(
-                    'voip_restart',
-                    {},
-                    {
-                        reason,
-                    },
-                    true
-                );
+                this.monitor.traceEvent('voip_restart', {
+                    reason,
+                });
 
                 this.notifier.notify('Arret de la voip...');
             }
@@ -93,6 +98,7 @@ export class VoiceProvider {
                 MumbleSetServerAddress(serverAddress, serverPort);
             }
 
+            MumbleSetAudioInputIntent(this.intent);
             MumbleSetActive(true);
 
             while (MumbleIsConnected() === false) {

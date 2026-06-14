@@ -12,7 +12,6 @@ import { JobType } from '@public/shared/job';
 import { BoxZone } from '@public/shared/polyzone/box.zone';
 import { MultiZone } from '@public/shared/polyzone/multi.zone';
 import { RpcClientEvent, RpcServerEvent } from '@public/shared/rpc';
-import { Ear } from '@public/shared/voip';
 
 import { ClientEvent, ServerEvent } from '../../shared/event';
 import { Vector3, Vector4 } from '../../shared/polyzone/vector';
@@ -21,14 +20,13 @@ import {
     DisableNPCBike,
     getDefaultVehicleCondition,
     getDefaultVehicleVolatileState,
-    VehicleCategory,
     VehicleCondition,
     VehicleSpawn,
     VehicleType,
     VehicleVolatileState,
 } from '../../shared/vehicle/vehicle';
-import { PrismaService } from '../database/prisma.service';
 import { PlayerService } from '../player/player.service';
+import { VehicleRepository } from '../repository/vehicle.repository';
 import { VehicleStateService } from './vehicle.state.service';
 
 type ClosestVehicle = {
@@ -76,6 +74,7 @@ const VEHICLE_HAS_RADIO = [
     'lspd41',
     'lspd50',
     'lspd51',
+    'lspd60',
     'sheriff',
     'sheriff2',
     'sheriff3',
@@ -91,13 +90,15 @@ const VEHICLE_HAS_RADIO = [
     'bcso41',
     'bcso50',
     'bcso51',
-    'maverick2',
+    'bcso60',
+    'maverick3',
     'pbus',
     'polmav',
     'fbi',
     'fbi2',
     'cogfbi',
     'paragonfbi',
+    'paragonsfbi',
     'dodgebana',
     'polgauntlet',
     'sadler1',
@@ -108,6 +109,9 @@ const VEHICLE_HAS_RADIO = [
     'rumpo4',
     'predator',
     'sasp1',
+    'sasp20',
+    'sasp70',
+    'sasp71',
     'xls2',
     'schafter6',
     'tractor2',
@@ -117,11 +121,27 @@ const VEHICLE_HAS_RADIO = [
     'supervolito1',
     'coach',
     'coach2',
+    'policeold1',
+    'policeold2',
+    'polimpaler6',
+    'poldominator10',
+    'polimpaler5',
+    'polgreenwood',
+    'poldorado',
+    'openwheel1',
+    'openwheel2',
+    'formula',
+    'formula2',
+    'dinghy3',
+    'volatus',
+    'volatus2',
 ];
 
 const DISALLOWED_VEHICLE_MODELS = {
     [GetHashKey('dune2')]: true,
     [GetHashKey('besra')]: true,
+    [GetHashKey('blimp')]: true,
+    [GetHashKey('duster')]: true,
 };
 
 const frontBCSO = new BoxZone([1844.67, 3688.55, 33.75], 44.4, 93.2, {
@@ -142,6 +162,17 @@ const lsmcMlo = new BoxZone([347.75, -1412.87, 29.43], 92.8, 87.0, {
     maxZ: 70.43,
 });
 
+//Meteor
+const meteor = new BoxZone([2462.6, 3290, 29.43], 400.0, 800.0, {
+    heading: 45,
+});
+
+const gouv = new BoxZone([-464.79, -619.69, 31.32], 18.45, 19.4, {
+    heading: 180.09,
+    minZ: 29.92,
+    maxZ: 32.52,
+});
+
 const VEHICLE_INVERTED_SPAWN = ['raketrailer'];
 
 @Provider()
@@ -152,14 +183,14 @@ export class VehicleSpawner {
     @Inject(PlayerService)
     private playerService: PlayerService;
 
-    @Inject(PrismaService)
-    private prismaService: PrismaService;
-
     @Inject(Logger)
     private logger: Logger;
 
     @Inject(GarageRepository)
     private garageRepository: GarageRepository;
+
+    @Inject(VehicleRepository)
+    private vehicleRepository: VehicleRepository;
 
     private closestVehicleResolver: Record<string, (closestVehicle: null | ClosestVehicle) => void> = {};
 
@@ -168,19 +199,25 @@ export class VehicleSpawner {
     @Once(OnceStep.RepositoriesLoaded)
     public async onInit() {
         const garages = await this.garageRepository.get();
-        const noSpawnZones = [];
+        const noSpawnZones: BoxZone[] = [];
 
         for (const garage of Object.values(garages)) {
-            noSpawnZones.push(...garage.parkingPlaces);
+            for (const parkingPlace of garage.parkingPlaces) {
+                noSpawnZones.push(BoxZone.fromZone(parkingPlace) as BoxZone);
+            }
         }
 
         for (const dealership of Object.values(DealershipConfig)) {
-            noSpawnZones.push(BoxZone.default(dealership.showroom.position, 10, 10));
+            if (dealership.showroom) {
+                noSpawnZones.push(BoxZone.default(dealership.showroom.position, 10, 10));
+            }
         }
 
         noSpawnZones.push(frontBCSO);
         noSpawnZones.push(lsmcParking);
         noSpawnZones.push(lsmcMlo);
+        noSpawnZones.push(meteor);
+        noSpawnZones.push(gouv);
 
         this.noSpawnZone = new MultiZone<BoxZone>(noSpawnZones);
     }
@@ -220,7 +257,7 @@ export class VehicleSpawner {
         }
     }
 
-    @Rpc(RpcServerEvent.VEHICLE_SPAWN_TEMPORARY)
+    @Rpc(RpcServerEvent.VEHICLE_SPAWN_JOB_TEMPORARY)
     private async spawnTemporaryJobVehicle(source: number, model: string, position: Vector4) {
         const player = this.playerService.getPlayer(source);
 
@@ -228,6 +265,7 @@ export class VehicleSpawner {
             return null;
         }
 
+        const vehicle = await this.vehicleRepository.findByModel(model);
         const vehicleNetId = await this.spawn(
             source,
             {
@@ -240,8 +278,44 @@ export class VehicleSpawner {
                 isPlayerVehicle: true,
                 owner: player.citizenid,
                 open: true,
+                model: model,
             },
-            getDefaultVehicleCondition()
+            getDefaultVehicleCondition(vehicle)
+        );
+
+        if (!vehicleNetId) {
+            return null;
+        }
+
+        this.vehicleStateService.handleVehicleOpenChange(vehicleNetId);
+
+        return vehicleNetId;
+    }
+
+    @Rpc(RpcServerEvent.VEHICLE_SPAWN_TEMPORARY)
+    private async onSpawnTemporaryVehicle(source: number, model: string, position: Vector4) {
+        const player = this.playerService.getPlayer(source);
+
+        if (!player) {
+            return null;
+        }
+
+        const vehicle = await this.vehicleRepository.findByModel(model);
+        const vehicleNetId = await this.spawn(
+            source,
+            {
+                hash: GetHashKey(model),
+                model,
+                position,
+                warp: false,
+            },
+            {
+                isPlayerVehicle: false,
+                owner: null,
+                open: false,
+                model: model,
+            },
+            getDefaultVehicleCondition(vehicle)
         );
 
         if (!vehicleNetId) {
@@ -305,24 +379,25 @@ export class VehicleSpawner {
             return null;
         }
 
+        const vehDef = await this.vehicleRepository.findByModel(vehicle.vehicle);
         const condition = {
-            ...getDefaultVehicleCondition(),
+            ...getDefaultVehicleCondition(vehDef),
             ...JSON.parse(vehicle.condition || '{}'),
         };
 
-        const volatile = {
+        const volatile: Partial<VehicleVolatileState> = {
             isPlayerVehicle: true,
             plate: vehicle.plate,
+            fakeplate: vehicle.fakeplate,
             id: vehicle.id,
             open: false,
             owner: player.citizenid,
-            defaultOwner: vehicle.citizenid,
             job: vehicle.job as JobType,
-            class: vehicle.category as VehicleCategory,
             locatorEndJam: this.vehicleStateService.getJamLocator(vehicle.plate),
             model: vehicle.vehicle,
             label: vehicle.label,
             lastDrugTrace: this.vehicleStateService.getDrugTrace(vehicle.plate),
+            isCrimiImport: vehicle.crimiImport,
         };
 
         const hash = parseInt(vehicle.hash || '0', 10);
@@ -348,49 +423,69 @@ export class VehicleSpawner {
         );
     }
 
-    public async spawnTemporaryVehicle(source: number, model: string): Promise<null | number> {
+    public async spawnTemporaryVehicle(
+        source: number,
+        model: string,
+        position: Vector4 = null,
+        wrap: boolean = true
+    ): Promise<null | number> {
         const player = this.playerService.getPlayer(source);
 
         if (!player) {
             return null;
         }
 
-        const position = GetEntityCoords(GetPlayerPed(source)) as Vector4;
-        position[3] = GetEntityHeading(GetPlayerPed(source));
+        if (!position) {
+            position = GetEntityCoords(GetPlayerPed(source)) as Vector4;
+            position[3] = GetEntityHeading(GetPlayerPed(source));
+        }
 
+        const vehDef = await this.vehicleRepository.findByModel(model);
         const modelHash = GetHashKey(model);
-        const volatileState = {
+        const volatileState: VehicleVolatileState = {
             ...getDefaultVehicleVolatileState(),
             isPlayerVehicle: false,
             owner: player.citizenid,
             open: true,
+            model: model,
         };
-        const condition = getDefaultVehicleCondition();
+        const condition = getDefaultVehicleCondition(vehDef);
         return this.spawn(
             source,
             {
                 hash: modelHash,
                 model,
                 position,
-                warp: true,
+                warp: wrap,
             },
             volatileState,
             condition
         );
     }
 
-    // eslint-disable-next-line @typescript-eslint/ban-types
     public async spawnRentVehicle(
         source: number,
         model: string,
-        data: { position: Vector4; color: number }
+        data: { position: Vector4; color?: number; open?: boolean }
     ): Promise<null | number | object> {
         const player = this.playerService.getPlayer(source);
         const position = data.position;
-        const color = data.color;
 
         if (!player) {
             return null;
+        }
+
+        const modification: VehicleConfiguration = {
+            modification: {},
+            extra: {},
+        };
+        if (data.color) {
+            modification.color = {
+                primary: VehicleColor.MetallicWhite,
+                secondary: data.color,
+                pearlescent: null,
+                rim: null,
+            };
         }
 
         const modelHash = GetHashKey(model);
@@ -398,10 +493,12 @@ export class VehicleSpawner {
             ...getDefaultVehicleVolatileState(),
             isPlayerVehicle: false,
             owner: player.citizenid,
-            open: false,
+            open: !!data.open,
             rentOwner: player.citizenid,
+            model: model,
         };
-        const condition = getDefaultVehicleCondition();
+        const vehDef = await this.vehicleRepository.findByModel(model);
+        const condition = getDefaultVehicleCondition(vehDef);
         return this.spawn(
             source,
             {
@@ -409,23 +506,14 @@ export class VehicleSpawner {
                 model,
                 position,
                 warp: false,
-                modification: {
-                    color: {
-                        primary: VehicleColor.MetallicWhite,
-                        secondary: color,
-                        pearlescent: null,
-                        rim: null,
-                    },
-                    modification: {},
-                    extra: {},
-                },
+                modification: modification,
             },
             volatileState,
             condition
         );
     }
 
-    private async spawn(
+    public async spawn(
         player: number,
         vehicle: VehicleSpawn,
         volatileState: Partial<VehicleVolatileState>,
@@ -467,6 +555,8 @@ export class VehicleSpawner {
                 condition,
                 vehicle.modification || getDefaultVehicleConfiguration()
             );
+
+            this.vehicleStateService.handleVehicleOpenChange(netId);
 
             return netId;
         } catch (e) {
@@ -616,28 +706,17 @@ export class VehicleSpawner {
     }
 
     private getSpawnVolatileState(vehicle: VehicleSpawn, state: Partial<VehicleVolatileState>): VehicleVolatileState {
-        const radio = VEHICLE_HAS_RADIO.includes(vehicle.model);
+        const hasRadio = VEHICLE_HAS_RADIO.includes(vehicle.model);
+        const radio = this.vehicleStateService.getVehicleRadio(state.plate);
 
         return {
             ...getDefaultVehicleVolatileState(),
             ...state,
             spawned: true,
-            hasRadio: radio,
-            radioEnabled: false,
-            primaryRadio: radio
-                ? {
-                      frequency: 0.0,
-                      volume: 50,
-                      ear: Ear.Both,
-                  }
-                : null,
-            secondaryRadio: radio
-                ? {
-                      frequency: 0.0,
-                      volume: 50,
-                      ear: Ear.Both,
-                  }
-                : null,
+            hasRadio: hasRadio,
+            radioEnabled: radio.enabled,
+            primaryRadio: hasRadio ? radio.primary : null,
+            secondaryRadio: hasRadio ? radio.secondary : null,
         };
     }
 

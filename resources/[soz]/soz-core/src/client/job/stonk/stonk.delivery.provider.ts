@@ -5,11 +5,12 @@ import { ClientEvent, ServerEvent } from '../../../shared/event';
 import { JobType } from '../../../shared/job';
 import { StonkConfig } from '../../../shared/job/stonk';
 import { NamedZone } from '../../../shared/polyzone/box.zone';
+import { TargetOption } from '../../../shared/target';
 import { InventoryManager } from '../../inventory/inventory.manager';
 import { ItemService } from '../../item/item.service';
 import { Notifier } from '../../notifier';
 import { PlayerService } from '../../player/player.service';
-import { TargetFactory, TargetOptions } from '../../target/target.factory';
+import { TargetFactory } from '../../target/target.factory';
 
 @Provider()
 export class StonkDeliveryProvider {
@@ -46,19 +47,11 @@ export class StonkDeliveryProvider {
                 options: [
                     {
                         label: 'Récupérer un conteneur sécurisé',
-                        icon: 'c:/stonk/secure_container.png',
+                        icon: 'stonk/secure_container',
                         job: JobType.CashTransfer,
-                        color: JobType.CashTransfer,
                         blackoutGlobal: true,
                         blackoutJob: JobType.CashTransfer,
-                        canInteract: () => {
-                            const player = this.playerService.getPlayer();
-                            if (!player) {
-                                return false;
-                            }
-
-                            return player.job.onduty;
-                        },
+                        category: 'society',
                         action: () => {
                             TriggerServerEvent(ServerEvent.STONK_DELIVERY_TAKE);
                         },
@@ -76,21 +69,17 @@ export class StonkDeliveryProvider {
         this.notifier.notify('Les coordonnées de la livraison ont été ajoutées sur votre GPS');
     }
 
-    private deliverAction(): TargetOptions {
+    private deliverAction(): TargetOption {
         const acceptedItem = this.itemService.getItem(StonkConfig.delivery.item);
 
         return {
             label: `Déposer ${acceptedItem.label}`,
-            icon: 'c:stonk/vendre.png',
-            color: JobType.CashTransfer,
+            icon: 'stonk/vendre',
             job: JobType.CashTransfer,
             blackoutGlobal: true,
             blackoutJob: JobType.CashTransfer,
-            canInteract: () => {
-                return (
-                    this.playerService.isOnDuty() && this.inventoryManager.hasEnoughItem(StonkConfig.delivery.item, 1)
-                );
-            },
+            item: StonkConfig.delivery.item,
+            category: 'society',
             action: () => {
                 TriggerServerEvent(ServerEvent.STONK_DELIVERY_END, this.currentDeliverLocation);
                 this.targetFactory.removeBoxZone(this.currentDeliverLocation.name);

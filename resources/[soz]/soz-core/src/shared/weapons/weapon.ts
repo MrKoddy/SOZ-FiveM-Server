@@ -1,4 +1,6 @@
-import { InventoryItem } from '../item';
+import { POLICE_SHIELD_MODEL, POLICE_SHIELD_OBJECT } from '@private/shared/police';
+
+import { InventoryItem } from '../inventory';
 import { Vector3 } from '../polyzone/vector';
 import { WeaponAttachment, WeaponComponentType } from './attachment';
 import { WeaponMk2TintColor, WeaponTintColor, WeaponTintColorChoiceItem } from './tint';
@@ -7,6 +9,7 @@ export type WeaponsMenuData = {
     weapons: InventoryItem[];
     tints: { slot: number; tints: Record<WeaponTintColor, WeaponTintColorChoiceItem> }[];
     attachments: { slot: number; attachments: WeaponAttachment[] }[];
+    admin: boolean;
 };
 
 export type WeaponConfiguration = {
@@ -18,29 +21,45 @@ export type WeaponConfiguration = {
 
 export const GlobalWeaponConfig = {
     MaxAmmoRefill: (weapon_name: string) => {
-        if (weapon_name === 'weapon_musket') {
-            return 1;
-        }
-
-        return 3;
+        return maxAmmoRefill[weapon_name.toUpperCase()] || 5;
     },
     MaxHealth: 2000,
-    RecoilOnUsedWeapon: 2.0,
+    RecoilOnUsedWeapon: 1.0,
 };
 
-export const DrawPositions: Record<string, Omit<WeaponDrawPosition, 'model'>> = {
+type DrawPositionType = 'AR' | 'SMG' | 'RPG' | 'LMG' | 'PUMP' | 'PIX' | 'SHIELD';
+
+export const DrawPositions: Record<DrawPositionType, WeaponDrawPosition> = {
     AR: { position: [0.173, -0.14, 0.05], rotation: [0, 0, 0] },
     SMG: { position: [0.23, 0.187, -0.02], rotation: [10, 45, 10] },
     RPG: { position: [0.173, -0.14, -0.02], rotation: [0, 0, 0] }, // RPG & Sniper
     LMG: { position: [0.05, -0.14, -0.15], rotation: [0, 45, 0] }, // LMG & Corps à corps
     PUMP: { position: [0.05, -0.14, -0.15], rotation: [0, -40, 0] }, // Pompe
     PIX: { position: [0.05, -0.14, -0.15], rotation: [60, 90, -85] }, // Custom Pickaxe
+    SHIELD: { position: [0.13, -0.27, 0], rotation: [0, 90, 7] }, // Custom Shield
+};
+
+export const DrawPositionsWithShield: Record<DrawPositionType, WeaponDrawPosition> = {
+    ...DrawPositions,
+    AR: { position: [0.15, 0.2, 0.23], rotation: [260, 165, 10] },
+    SMG: { position: [0.33, -0.18, 0], rotation: [190, 165, -5] },
+    RPG: { position: [0.15, 0.2, 0.23], rotation: [260, 165, 10] }, // RPG & Sniper
+    PUMP: { position: [0.15, 0.2, 0.23], rotation: [260, 165, 10] }, // Pompe
+};
+
+export type WeaponDrawPositionInfo = {
+    model: string;
+    type: DrawPositionType;
 };
 
 export type WeaponDrawPosition = {
-    model: string;
     position: Vector3;
     rotation: Vector3;
+};
+
+export type ExtraWeaponDrawPosition = {
+    model: string;
+    bone: string;
 };
 
 export type WeaponConfig = {
@@ -62,8 +81,11 @@ export type WeaponConfig = {
         | 'ammo_14'
         | 'ammo_15'
         | 'ammo_16'
-        | 'ammo_17';
-    drawPosition?: WeaponDrawPosition;
+        | 'ammo_17'
+        | 'ammo_18'
+        | 'ammo_19';
+    drawPositionInfo?: WeaponDrawPositionInfo;
+    extaDraw?: ExtraWeaponDrawPosition[];
     attachments?: WeaponAttachment[];
 };
 
@@ -89,6 +111,7 @@ export enum WeaponName {
     STONE_HATCHET = 'WEAPON_STONE_HATCHET',
     CANDYCANE = 'WEAPON_CANDYCANE',
     PICKAXE = 'WEAPON_PICKAXE',
+    STUNROD = 'WEAPON_STUNROD',
 
     // Handguns
     PISTOL = 'WEAPON_PISTOL',
@@ -190,12 +213,20 @@ export enum WeaponName {
     SMOKEGRENADE = 'WEAPON_SMOKEGRENADE',
     FLARE = 'WEAPON_FLARE',
     ACIDPACKAGE = 'WEAPON_ACIDPACKAGE',
+    FLASHBANG = 'WEAPON_FLASHBANG',
 
     // Other
     PETROLCAN = 'WEAPON_PETROLCAN',
     FIREEXTINGUISHER = 'WEAPON_FIREEXTINGUISHER',
     HAZARDCAN = 'WEAPON_HAZARDCAN',
+    SNOWLAUNCHER = 'WEAPON_SNOWLAUNCHER',
 }
+
+const maxAmmoRefill: Partial<Record<WeaponName, number>> = {
+    [WeaponName.MUSKET]: 1,
+    [WeaponName.SNOWLAUNCHER]: 1,
+    [WeaponName.GRENADELAUNCHER_SMOKE]: 2,
+};
 
 export const WeaponType = {
     Melee: 2685387236,
@@ -248,17 +279,20 @@ export enum ExtraWeaponName {
     WEAPON_COUGAR = 'WEAPON_COUGAR',
 }
 
-export const Weapons: Record<WeaponName, WeaponConfig> = {
+export const POLICE_SHIELD_AS_WEAPONS = POLICE_SHIELD_OBJECT.toUpperCase();
+export type WeaponsType = WeaponName | typeof POLICE_SHIELD_AS_WEAPONS;
+
+export const Weapons: Record<WeaponsType, WeaponConfig> = {
     // Melee
     [WeaponName.BAT]: {
-        drawPosition: { model: 'w_me_bat', ...DrawPositions['LMG'] },
+        drawPositionInfo: { model: 'w_me_bat', type: 'LMG' },
     },
     [WeaponName.CROWBAR]: {
-        drawPosition: { model: 'w_me_crowbar', ...DrawPositions['LMG'] },
+        drawPositionInfo: { model: 'w_me_crowbar', type: 'LMG' },
     },
     [WeaponName.FLASHLIGHT]: {},
     [WeaponName.GOLFCLUB]: {
-        drawPosition: { model: 'w_me_gclub', ...DrawPositions['LMG'] },
+        drawPositionInfo: { model: 'w_me_gclub', type: 'LMG' },
     },
     [WeaponName.HAMMER]: {},
     [WeaponName.KNUCKLE]: {
@@ -277,20 +311,20 @@ export const Weapons: Record<WeaponName, WeaponConfig> = {
     },
     [WeaponName.NIGHTSTICK]: {},
     [WeaponName.WRENCH]: {
-        drawPosition: { model: 'prop_tool_wrench', ...DrawPositions['LMG'] },
+        drawPositionInfo: { model: 'prop_tool_wrench', type: 'LMG' },
     },
     [WeaponName.POOLCUE]: {
-        drawPosition: { model: 'prop_pool_cue', ...DrawPositions['LMG'] },
+        drawPositionInfo: { model: 'prop_pool_cue', type: 'LMG' },
     },
     [WeaponName.UNARMED]: {},
     [WeaponName.DAGGER]: {},
     [WeaponName.BOTTE]: {},
     [WeaponName.HATCHET]: {
-        drawPosition: { model: 'w_me_hatchet', ...DrawPositions['LMG'] },
+        drawPositionInfo: { model: 'w_me_hatchet', type: 'LMG' },
     },
     [WeaponName.KNIFE]: {},
     [WeaponName.MACHETE]: {
-        drawPosition: { model: 'prop_ld_w_me_machette', ...DrawPositions['LMG'] },
+        drawPositionInfo: { model: 'prop_ld_w_me_machette', type: 'LMG' },
     },
     [WeaponName.SWITCHBLADE]: {
         attachments: [
@@ -304,21 +338,22 @@ export const Weapons: Record<WeaponName, WeaponConfig> = {
         ],
     },
     [WeaponName.BATTLEAXE]: {
-        drawPosition: { model: 'w_me_battleaxe', ...DrawPositions['LMG'] },
+        drawPositionInfo: { model: 'w_me_battleaxe', type: 'LMG' },
     },
     [WeaponName.STONE_HATCHET]: {
-        drawPosition: { model: 'w_me_stonehatchet', ...DrawPositions['LMG'] },
+        drawPositionInfo: { model: 'w_me_stonehatchet', type: 'LMG' },
     },
     [WeaponName.CANDYCANE]: {
-        drawPosition: { model: 'W_ME_Candy_XM3', ...DrawPositions['LMG'] },
+        drawPositionInfo: { model: 'W_ME_Candy_XM3', type: 'LMG' },
     },
     [WeaponName.PICKAXE]: {
-        drawPosition: { model: 'w_me_pickaxe', ...DrawPositions['PIX'] },
+        drawPositionInfo: { model: 'w_me_pickaxe', type: 'PIX' },
     },
+    [WeaponName.STUNROD]: {},
 
     // Handguns
     [WeaponName.PISTOL]: {
-        recoil: 0.1,
+        recoil: 0.05,
         ammo: 'ammo_01',
         attachments: [
             { label: 'Grand chargeur', component: 'COMPONENT_PISTOL_CLIP_02', type: WeaponComponentType.Clip },
@@ -327,7 +362,7 @@ export const Weapons: Record<WeaponName, WeaponConfig> = {
         ],
     },
     [WeaponName.PISTOL_MK2]: {
-        recoil: 0.1,
+        recoil: 0.05,
         ammo: 'ammo_01',
         attachments: [
             { label: 'Grand chargeur', component: 'COMPONENT_PISTOL_MK2_CLIP_02', type: WeaponComponentType.Clip },
@@ -404,7 +439,7 @@ export const Weapons: Record<WeaponName, WeaponConfig> = {
         ],
     },
     [WeaponName.REVOLVER_MK2]: {
-        recoil: 0.3,
+        recoil: 0.15,
         ammo: 'ammo_02',
         attachments: [
             { label: 'Holo', component: 'COMPONENT_AT_SIGHTS', type: WeaponComponentType.Scope },
@@ -438,7 +473,7 @@ export const Weapons: Record<WeaponName, WeaponConfig> = {
     },
     [WeaponName.STUNGUN]: { recoil: 0.1 },
     [WeaponName.COMBATPISTOL]: {
-        recoil: 0.1,
+        recoil: 0.05,
         ammo: 'ammo_01',
         attachments: [
             { label: 'Grand chargeur', component: 'COMPONENT_COMBATPISTOL_CLIP_02', type: WeaponComponentType.Clip },
@@ -447,7 +482,7 @@ export const Weapons: Record<WeaponName, WeaponConfig> = {
         ],
     },
     [WeaponName.APPISTOL]: {
-        recoil: 0.1,
+        recoil: 0.05,
         ammo: 'ammo_01',
         attachments: [
             { label: 'Grand chargeur', component: 'COMPONENT_APPISTOL_CLIP_02', type: WeaponComponentType.Clip },
@@ -457,7 +492,7 @@ export const Weapons: Record<WeaponName, WeaponConfig> = {
         ],
     },
     [WeaponName.PISTOL50]: {
-        recoil: 0.3,
+        recoil: 0.15,
         ammo: 'ammo_02',
         attachments: [
             { label: 'Grand chargeur', component: 'COMPONENT_PISTOL50_CLIP_02', type: WeaponComponentType.Clip },
@@ -466,14 +501,14 @@ export const Weapons: Record<WeaponName, WeaponConfig> = {
         ],
     },
     [WeaponName.SNSPISTOL]: {
-        recoil: 0.1,
+        recoil: 0.05,
         ammo: 'ammo_01',
         attachments: [
             { label: 'Grand chargeur', component: 'COMPONENT_SNSPISTOL_CLIP_02', type: WeaponComponentType.Clip },
         ],
     },
     [WeaponName.HEAVYPISTOL]: {
-        recoil: 0,
+        recoil: 0.05,
         ammo: 'ammo_01',
         attachments: [
             { label: 'Grand chargeur', component: 'COMPONENT_HEAVYPISTOL_CLIP_02', type: WeaponComponentType.Clip },
@@ -482,7 +517,7 @@ export const Weapons: Record<WeaponName, WeaponConfig> = {
         ],
     },
     [WeaponName.VINTAGEPISTOL]: {
-        recoil: 0.1,
+        recoil: 0.05,
         ammo: 'ammo_01',
         attachments: [
             { label: 'Grand chargeur', component: 'COMPONENT_VINTAGEPISTOL_CLIP_02', type: WeaponComponentType.Clip },
@@ -490,15 +525,15 @@ export const Weapons: Record<WeaponName, WeaponConfig> = {
         ],
     },
     [WeaponName.FLAREGUN]: {
-        recoil: 0.1,
+        recoil: 0.05,
         ammo: 'ammo_03',
     },
     [WeaponName.MARKSMANPISTOL]: {
-        recoil: 0.1,
+        recoil: 0.05,
         ammo: 'ammo_01',
     },
     [WeaponName.REVOLVER]: {
-        recoil: 0.3,
+        recoil: 0.15,
         ammo: 'ammo_02',
         attachments: [
             { label: 'VIP', component: 'COMPONENT_REVOLVER_VARMOD_BOSS', type: WeaponComponentType.PrimarySkin },
@@ -510,11 +545,11 @@ export const Weapons: Record<WeaponName, WeaponConfig> = {
         ],
     },
     [WeaponName.DOUBLEACTION]: {
-        recoil: 0.1,
+        recoil: 0.05,
         ammo: 'ammo_02',
     },
     [WeaponName.SNSPISTOL_MK2]: {
-        recoil: 0.1,
+        recoil: 0.05,
         ammo: 'ammo_01',
         attachments: [
             { label: 'Grand chargeur', component: 'COMPONENT_SNSPISTOL_MK2_CLIP_02', type: WeaponComponentType.Clip },
@@ -524,22 +559,22 @@ export const Weapons: Record<WeaponName, WeaponConfig> = {
         ],
     },
     [WeaponName.RAYPISTOL]: {
-        recoil: 0.1,
+        recoil: 0.05,
     },
     [WeaponName.CERAMICPISTOL]: {
-        recoil: 0.1,
+        recoil: 0.05,
         ammo: 'ammo_01',
     },
     [WeaponName.NAVYREVOLVER]: {
-        recoil: 0.1,
+        recoil: 0.05,
         ammo: 'ammo_02',
     },
     [WeaponName.GADGETPISTOL]: {
-        recoil: 0.1,
+        recoil: 0.05,
         ammo: 'ammo_01',
     },
     [WeaponName.PISTOLXM3]: {
-        recoil: 0.1,
+        recoil: 0.05,
         ammo: 'ammo_01',
         attachments: [
             { label: 'Silencieux', component: 'COMPONENT_PISTOLXM3_SUPP', type: WeaponComponentType.Suppressor },
@@ -548,7 +583,7 @@ export const Weapons: Record<WeaponName, WeaponConfig> = {
 
     // SMGs
     [WeaponName.MICROSMG]: {
-        recoil: 0.05,
+        recoil: 0.025,
         ammo: 'ammo_01',
         attachments: [
             { label: 'Grand chargeur', component: 'COMPONENT_MICROSMG_CLIP_02', type: WeaponComponentType.Clip },
@@ -558,9 +593,9 @@ export const Weapons: Record<WeaponName, WeaponConfig> = {
         ],
     },
     [WeaponName.SMG]: {
-        recoil: 0.05,
+        recoil: 0.025,
         ammo: 'ammo_01',
-        drawPosition: { model: 'w_sb_smg', ...DrawPositions['SMG'] },
+        drawPositionInfo: { model: 'w_sb_smg', type: 'SMG' },
         attachments: [
             { label: 'Grand chargeur', component: 'COMPONENT_SMG_CLIP_02', type: WeaponComponentType.Clip },
             { label: 'Très grand chargeur', component: 'COMPONENT_SMG_CLIP_03', type: WeaponComponentType.Clip },
@@ -570,9 +605,9 @@ export const Weapons: Record<WeaponName, WeaponConfig> = {
         ],
     },
     [WeaponName.ASSAULTSMG]: {
-        recoil: 0.05,
+        recoil: 0.025,
         ammo: 'ammo_04',
-        drawPosition: { model: 'w_sb_assaultsmg', ...DrawPositions['SMG'] },
+        drawPositionInfo: { model: 'w_sb_assaultsmg', type: 'SMG' },
         attachments: [
             { label: 'Grand chargeur', component: 'COMPONENT_ASSAULTSMG_CLIP_02', type: WeaponComponentType.Clip },
             { label: 'Lampe torche', component: 'COMPONENT_AT_AR_FLSH', type: WeaponComponentType.Flashlight },
@@ -582,9 +617,9 @@ export const Weapons: Record<WeaponName, WeaponConfig> = {
         ],
     },
     [WeaponName.COMBATPDW]: {
-        recoil: 0.05,
+        recoil: 0.025,
         ammo: 'ammo_01',
-        drawPosition: { model: 'w_sb_pdw', ...DrawPositions['SMG'] },
+        drawPositionInfo: { model: 'w_sb_pdw', type: 'SMG' },
         attachments: [
             { label: 'Grand chargeur', component: 'COMPONENT_COMBATPDW_CLIP_02', type: WeaponComponentType.Clip },
             { label: 'Très grand chargeur', component: 'COMPONENT_COMBATPDW_CLIP_03', type: WeaponComponentType.Clip },
@@ -594,7 +629,7 @@ export const Weapons: Record<WeaponName, WeaponConfig> = {
         ],
     },
     [WeaponName.SMG_MK2]: {
-        recoil: 0.05,
+        recoil: 0.025,
         ammo: 'ammo_04',
         attachments: [
             { label: 'Grand chargeur', component: 'COMPONENT_SMG_MK2_CLIP_02', type: WeaponComponentType.Clip },
@@ -606,7 +641,7 @@ export const Weapons: Record<WeaponName, WeaponConfig> = {
         ],
     },
     [WeaponName.MACHINEPISTOL]: {
-        recoil: 0.05,
+        recoil: 0.025,
         ammo: 'ammo_01',
         attachments: [
             { label: 'Grand chargeur', component: 'COMPONENT_MACHINEPISTOL_CLIP_02', type: WeaponComponentType.Clip },
@@ -619,16 +654,16 @@ export const Weapons: Record<WeaponName, WeaponConfig> = {
         ],
     },
     [WeaponName.MINISMG]: {
-        recoil: 0.05,
+        recoil: 0.025,
         ammo: 'ammo_01',
         attachments: [
             { label: 'Grand chargeur', component: 'COMPONENT_MINISMG_CLIP_02', type: WeaponComponentType.Clip },
         ],
     },
     [WeaponName.RAYCARBINE]: {
-        recoil: 0.05,
+        recoil: 0.025,
         ammo: 'ammo_14',
-        drawPosition: { model: 'w_sb_assaultsmg', ...DrawPositions['SMG'] },
+        drawPositionInfo: { model: 'w_sb_assaultsmg', type: 'SMG' },
         attachments: [
             { label: 'Grand chargeur', component: 'COMPONENT_ASSAULTSMG_CLIP_02', type: WeaponComponentType.Clip },
             { label: 'Lampe torche', component: 'COMPONENT_AT_AR_FLSH', type: WeaponComponentType.Flashlight },
@@ -637,7 +672,7 @@ export const Weapons: Record<WeaponName, WeaponConfig> = {
         ],
     },
     [WeaponName.TECPISTOL]: {
-        recoil: 0.05,
+        recoil: 0.025,
         ammo: 'ammo_01',
         attachments: [
             { label: 'Grand chargeur', component: 'COMPONENT_TECPISTOL_CLIP_02', type: WeaponComponentType.Clip },
@@ -648,9 +683,9 @@ export const Weapons: Record<WeaponName, WeaponConfig> = {
 
     // Assault Rifles
     [WeaponName.ASSAULTRIFLE]: {
-        recoil: 0.1,
+        recoil: 0.05,
         ammo: 'ammo_05',
-        drawPosition: { model: 'w_ar_assaultrifle', ...DrawPositions['AR'] },
+        drawPositionInfo: { model: 'w_ar_assaultrifle', type: 'AR' },
         attachments: [
             { label: 'Grand chargeur', component: 'COMPONENT_ASSAULTRIFLE_CLIP_02', type: WeaponComponentType.Clip },
             {
@@ -665,9 +700,15 @@ export const Weapons: Record<WeaponName, WeaponConfig> = {
         ],
     },
     [WeaponName.ASSAULTRIFLE_MK2]: {
-        recoil: 0.1,
+        recoil: 0.05,
         ammo: 'ammo_05',
-        drawPosition: { model: 'w_ar_assaultriflemk2', ...DrawPositions['AR'] },
+        drawPositionInfo: { model: 'w_ar_assaultriflemk2', type: 'AR' },
+        extaDraw: [
+            {
+                bone: 'WAPBarrel',
+                model: 'w_at_ar_barrel_1',
+            },
+        ],
         attachments: [
             {
                 label: 'Grand chargeur',
@@ -683,9 +724,9 @@ export const Weapons: Record<WeaponName, WeaponConfig> = {
         ],
     },
     [WeaponName.CARBINERIFLE]: {
-        recoil: 0.1,
+        recoil: 0.05,
         ammo: 'ammo_06',
-        drawPosition: { model: 'w_ar_carbinerifle', ...DrawPositions['AR'] },
+        drawPositionInfo: { model: 'w_ar_carbinerifle', type: 'AR' },
         attachments: [
             { label: 'Grand chargeur', component: 'COMPONENT_CARBINERIFLE_CLIP_02', type: WeaponComponentType.Clip },
             {
@@ -700,9 +741,15 @@ export const Weapons: Record<WeaponName, WeaponConfig> = {
         ],
     },
     [WeaponName.CARBINERIFLE_MK2]: {
-        recoil: 0.1,
+        recoil: 0.05,
         ammo: 'ammo_06',
-        drawPosition: { model: 'w_ar_carbineriflemk2', ...DrawPositions['AR'] },
+        drawPositionInfo: { model: 'w_ar_carbineriflemk2', type: 'AR' },
+        extaDraw: [
+            {
+                bone: 'WAPBarrel',
+                model: 'w_at_cr_barrel_1',
+            },
+        ],
         attachments: [
             {
                 label: 'Grand chargeur',
@@ -718,9 +765,9 @@ export const Weapons: Record<WeaponName, WeaponConfig> = {
         ],
     },
     [WeaponName.ADVANCEDRIFLE]: {
-        recoil: 0.1,
+        recoil: 0.05,
         ammo: 'ammo_07',
-        drawPosition: { model: 'w_ar_advancedrifle', ...DrawPositions['AR'] },
+        drawPositionInfo: { model: 'w_ar_advancedrifle', type: 'AR' },
         attachments: [
             { label: 'Grand chargeur', component: 'COMPONENT_ADVANCEDRIFLE_CLIP_02', type: WeaponComponentType.Clip },
             { label: 'Lampe torche', component: 'COMPONENT_AT_AR_FLSH', type: WeaponComponentType.Flashlight },
@@ -729,9 +776,9 @@ export const Weapons: Record<WeaponName, WeaponConfig> = {
         ],
     },
     [WeaponName.SPECIALCARBINE]: {
-        recoil: 0.1,
+        recoil: 0.05,
         ammo: 'ammo_06',
-        drawPosition: { model: 'w_ar_specialcarbine', ...DrawPositions['AR'] },
+        drawPositionInfo: { model: 'w_ar_specialcarbine', type: 'AR' },
         attachments: [
             { label: 'Grand chargeur', component: 'COMPONENT_SPECIALCARBINE_CLIP_02', type: WeaponComponentType.Clip },
             {
@@ -746,9 +793,9 @@ export const Weapons: Record<WeaponName, WeaponConfig> = {
         ],
     },
     [WeaponName.BULLPUPRIFLE]: {
-        recoil: 0.1,
+        recoil: 0.05,
         ammo: 'ammo_06',
-        drawPosition: { model: 'w_ar_bullpuprifle', ...DrawPositions['AR'] },
+        drawPositionInfo: { model: 'w_ar_bullpuprifle', type: 'AR' },
         attachments: [
             { label: 'Grand chargeur', component: 'COMPONENT_BULLPUPRIFLE_CLIP_02', type: WeaponComponentType.Clip },
             { label: 'Lampe torche', component: 'COMPONENT_AT_AR_FLSH', type: WeaponComponentType.Flashlight },
@@ -758,7 +805,7 @@ export const Weapons: Record<WeaponName, WeaponConfig> = {
         ],
     },
     [WeaponName.COMPACTRIFLE]: {
-        recoil: 0.1,
+        recoil: 0.05,
         ammo: 'ammo_06',
         attachments: [
             { label: 'Grand chargeur', component: 'COMPONENT_COMPACTRIFLE_CLIP_02', type: WeaponComponentType.Clip },
@@ -770,9 +817,15 @@ export const Weapons: Record<WeaponName, WeaponConfig> = {
         ],
     },
     [WeaponName.SPECIALCARBINE_MK2]: {
-        recoil: 0.1,
+        recoil: 0.05,
         ammo: 'ammo_06',
-        drawPosition: { model: 'w_ar_specialcarbinemk2', ...DrawPositions['AR'] },
+        drawPositionInfo: { model: 'w_ar_specialcarbinemk2', type: 'AR' },
+        extaDraw: [
+            {
+                bone: 'WAPBarrel',
+                model: 'w_ar_sc_barrel_1',
+            },
+        ],
         attachments: [
             {
                 label: 'Grand chargeur',
@@ -788,7 +841,7 @@ export const Weapons: Record<WeaponName, WeaponConfig> = {
         ],
     },
     [WeaponName.BULLPUPRIFLE_MK2]: {
-        recoil: 0.1,
+        recoil: 0.05,
         ammo: 'ammo_05',
         attachments: [
             {
@@ -805,7 +858,7 @@ export const Weapons: Record<WeaponName, WeaponConfig> = {
         ],
     },
     [WeaponName.MILITARYRIFLE]: {
-        recoil: 0.1,
+        recoil: 0.05,
         ammo: 'ammo_07',
         attachments: [
             { label: 'Grand chargeur', component: 'COMPONENT_MILITARYRIFLE_CLIP_02', type: WeaponComponentType.Clip },
@@ -816,14 +869,22 @@ export const Weapons: Record<WeaponName, WeaponConfig> = {
         ],
     },
     [WeaponName.HEAVYRIFLE]: {
-        recoil: 0.1,
+        recoil: 0.05,
         ammo: 'ammo_07',
-        drawPosition: { model: 'w_ar_heavyrifleh', ...DrawPositions['AR'] },
+        drawPositionInfo: { model: 'w_ar_heavyrifleh', type: 'AR' },
+        attachments: [
+            { label: 'Grand chargeur', component: 'COMPONENT_HEAVYRIFLE_CLIP_02', type: WeaponComponentType.Clip },
+            { label: 'Lampe torche', component: 'COMPONENT_AT_AR_FLSH', type: WeaponComponentType.Flashlight },
+            { label: 'Poignée', component: 'COMPONENT_AT_AR_AFGRIP', type: WeaponComponentType.Grip },
+            { label: 'Silencieux', component: 'COMPONENT_AT_AR_SUPP', type: WeaponComponentType.Suppressor },
+            { label: 'Viseur', component: 'COMPONENT_AT_SCOPE_MEDIUM', type: WeaponComponentType.Scope },
+            { label: 'Families', component: 'COMPONENT_HEAVYRIFLE_CAMO1', type: WeaponComponentType.PrimarySkin },
+        ],
     },
     [WeaponName.TACTICALRIFLE]: {
-        recoil: 0.1,
+        recoil: 0.05,
         ammo: 'ammo_06',
-        drawPosition: { model: 'w_ar_carbinerifle_reh', ...DrawPositions['AR'] },
+        drawPositionInfo: { model: 'w_ar_carbinerifle_reh', type: 'AR' },
         attachments: [
             { label: 'Grand chargeur', component: 'COMPONENT_TACTICALRIFLE_CLIP_02', type: WeaponComponentType.Clip },
             { label: 'Lampe torche', component: 'COMPONENT_AT_AR_FLSH_REH', type: WeaponComponentType.Flashlight },
@@ -832,9 +893,9 @@ export const Weapons: Record<WeaponName, WeaponConfig> = {
         ],
     },
     [WeaponName.BATTLERIFLE]: {
-        recoil: 0.1,
+        recoil: 0.05,
         ammo: 'ammo_07',
-        drawPosition: { model: 'w_sl_battlerifle_m32', ...DrawPositions['AR'] },
+        drawPositionInfo: { model: 'w_sl_battlerifle_m32', type: 'AR' },
         attachments: [
             { label: 'Grand chargeur', component: 'COMPONENT_BATTLERIFLE_CLIP_02', type: WeaponComponentType.Clip },
             { label: 'Silencieux', component: 'COMPONENT_AT_AR_SUPP', type: WeaponComponentType.Suppressor },
@@ -845,7 +906,7 @@ export const Weapons: Record<WeaponName, WeaponConfig> = {
     [WeaponName.PUMPSHOTGUN]: {
         recoil: 0.4,
         ammo: 'ammo_17',
-        drawPosition: { model: 'w_sg_pumpshotgun', ...DrawPositions['PUMP'] },
+        drawPositionInfo: { model: 'w_sg_pumpshotgun', type: 'PUMP' },
         attachments: [
             { label: 'Lampe torche', component: 'COMPONENT_AT_AR_FLSH', type: WeaponComponentType.Flashlight },
             { label: 'Silencieux', component: 'COMPONENT_AT_SR_SUPP', type: WeaponComponentType.Suppressor },
@@ -855,7 +916,7 @@ export const Weapons: Record<WeaponName, WeaponConfig> = {
     [WeaponName.ASSAULTSHOTGUN]: {
         recoil: 0.4,
         ammo: 'ammo_08',
-        drawPosition: { model: 'w_sg_assaultshotgun', ...DrawPositions['PUMP'] },
+        drawPositionInfo: { model: 'w_sg_assaultshotgun', type: 'PUMP' },
         attachments: [
             { label: 'Grand chargeur', component: 'COMPONENT_ASSAULTSHOTGUN_CLIP_02', type: WeaponComponentType.Clip },
             { label: 'Lampe torche', component: 'COMPONENT_AT_AR_FLSH', type: WeaponComponentType.Flashlight },
@@ -866,7 +927,7 @@ export const Weapons: Record<WeaponName, WeaponConfig> = {
     [WeaponName.BULLPUPSHOTGUN]: {
         recoil: 0.4,
         ammo: 'ammo_08',
-        drawPosition: { model: 'w_sg_bullpupshotgun', ...DrawPositions['PUMP'] },
+        drawPositionInfo: { model: 'w_sg_bullpupshotgun', type: 'PUMP' },
         attachments: [
             { label: 'Lampe torche', component: 'COMPONENT_AT_AR_FLSH', type: WeaponComponentType.Flashlight },
             { label: 'Silencieux', component: 'COMPONENT_AT_AR_SUPP_02', type: WeaponComponentType.Suppressor },
@@ -876,12 +937,12 @@ export const Weapons: Record<WeaponName, WeaponConfig> = {
     [WeaponName.MUSKET]: {
         recoil: 0.4,
         ammo: 'ammo_09',
-        drawPosition: { model: 'w_ar_musket', ...DrawPositions['PUMP'] },
+        drawPositionInfo: { model: 'w_ar_musket', type: 'PUMP' },
     },
     [WeaponName.HEAVYSHOTGUN]: {
         recoil: 0.4,
         ammo: 'ammo_08',
-        drawPosition: { model: 'w_sg_heavyshotgun', ...DrawPositions['PUMP'] },
+        drawPositionInfo: { model: 'w_sg_heavyshotgun', type: 'PUMP' },
         attachments: [
             { label: 'Grand chargeur', component: 'COMPONENT_HEAVYSHOTGUN_CLIP_02', type: WeaponComponentType.Clip },
             {
@@ -905,7 +966,7 @@ export const Weapons: Record<WeaponName, WeaponConfig> = {
     [WeaponName.PUMPSHOTGUN_MK2]: {
         recoil: 0.4,
         ammo: 'ammo_08',
-        drawPosition: { model: 'w_sg_pumpshotgunmk2', ...DrawPositions['PUMP'] },
+        drawPositionInfo: { model: 'w_sg_pumpshotgunmk2', type: 'PUMP' },
         attachments: [
             { label: 'Viseur', component: 'COMPONENT_AT_SIGHTS', type: WeaponComponentType.Scope },
             { label: 'Moyen', component: 'COMPONENT_AT_SCOPE_SMALL_MK2', type: WeaponComponentType.Scope },
@@ -918,7 +979,7 @@ export const Weapons: Record<WeaponName, WeaponConfig> = {
     [WeaponName.COMBATSHOTGUN]: {
         recoil: 0.4,
         ammo: 'ammo_08',
-        drawPosition: { model: 'w_sg_pumpshotgunh4', ...DrawPositions['PUMP'] },
+        drawPositionInfo: { model: 'w_sg_pumpshotgunh4', type: 'PUMP' },
         attachments: [
             { label: 'Lampe torche', component: 'COMPONENT_AT_AR_FLSH', type: WeaponComponentType.Flashlight },
             { label: 'Silencieux', component: 'COMPONENT_AT_AR_SUPP', type: WeaponComponentType.Suppressor },
@@ -929,7 +990,7 @@ export const Weapons: Record<WeaponName, WeaponConfig> = {
     [WeaponName.MG]: {
         recoil: 0.4,
         ammo: 'ammo_10',
-        drawPosition: { model: 'w_mg_mg', ...DrawPositions['LMG'] },
+        drawPositionInfo: { model: 'w_mg_mg', type: 'LMG' },
         attachments: [
             { label: 'Grand chargeur', component: 'COMPONENT_MG_CLIP_02', type: WeaponComponentType.Clip },
             { label: 'Viseur', component: 'COMPONENT_AT_SCOPE_SMALL_02', type: WeaponComponentType.Scope },
@@ -938,7 +999,7 @@ export const Weapons: Record<WeaponName, WeaponConfig> = {
     [WeaponName.COMBATMG]: {
         recoil: 0.4,
         ammo: 'ammo_10',
-        drawPosition: { model: 'w_mg_combatmg', ...DrawPositions['LMG'] },
+        drawPositionInfo: { model: 'w_mg_combatmg', type: 'LMG' },
         attachments: [
             { label: 'Grand chargeur', component: 'COMPONENT_COMBATMG_CLIP_02', type: WeaponComponentType.Clip },
             { label: 'Viseur', component: 'COMPONENT_AT_SCOPE_MEDIUM', type: WeaponComponentType.Scope },
@@ -948,7 +1009,7 @@ export const Weapons: Record<WeaponName, WeaponConfig> = {
     [WeaponName.GUSENBERG]: {
         recoil: 0.4,
         ammo: 'ammo_10',
-        drawPosition: { model: 'w_sb_gusenberg', ...DrawPositions['LMG'] },
+        drawPositionInfo: { model: 'w_sb_gusenberg', type: 'LMG' },
         attachments: [
             { label: 'Grand chargeur', component: 'COMPONENT_GUSENBERG_CLIP_02', type: WeaponComponentType.Clip },
         ],
@@ -956,7 +1017,7 @@ export const Weapons: Record<WeaponName, WeaponConfig> = {
     [WeaponName.COMBATMG_MK2]: {
         recoil: 0.4,
         ammo: 'ammo_10',
-        drawPosition: { model: 'w_mg_combatmgmk2', ...DrawPositions['LMG'] },
+        drawPositionInfo: { model: 'w_mg_combatmgmk2', type: 'LMG' },
         attachments: [
             { label: 'Grand chargeur', component: 'COMPONENT_COMBATMG_MK2_CLIP_02', type: WeaponComponentType.Clip },
             { label: 'Grip', component: 'COMPONENT_AT_AR_AFGRIP_02', type: WeaponComponentType.Grip },
@@ -970,13 +1031,13 @@ export const Weapons: Record<WeaponName, WeaponConfig> = {
     [WeaponName.RPG]: {
         recoil: 0.4,
         ammo: 'ammo_11',
-        drawPosition: { model: 'w_lr_rpg', ...DrawPositions['RPG'] },
+        drawPositionInfo: { model: 'w_lr_rpg', type: 'RPG' },
         attachments: [],
     },
     [WeaponName.GRENADELAUNCHER]: {
         recoil: 0.4,
         ammo: 'ammo_12',
-        drawPosition: { model: 'w_lr_grenadelauncher', ...DrawPositions['RPG'] },
+        drawPositionInfo: { model: 'w_lr_grenadelauncher', type: 'RPG' },
         attachments: [
             { label: 'Lampe torche', component: 'COMPONENT_AT_AR_FLSH', type: WeaponComponentType.Flashlight },
             { label: 'Poignée', component: 'COMPONENT_AT_AR_AFGRIP', type: WeaponComponentType.Grip },
@@ -986,27 +1047,27 @@ export const Weapons: Record<WeaponName, WeaponConfig> = {
     [WeaponName.GRENADELAUNCHER_SMOKE]: {
         recoil: 0.4,
         ammo: 'ammo_12',
-        drawPosition: { model: 'w_lr_grenadelauncher', ...DrawPositions['RPG'] },
+        drawPositionInfo: { model: 'w_lr_grenadelauncher', type: 'RPG' },
     },
     [WeaponName.MINIGUN]: {
         recoil: 0.4,
         ammo: 'ammo_10',
-        drawPosition: { model: 'w_mg_minigun', ...DrawPositions['RPG'] },
+        drawPositionInfo: { model: 'w_mg_minigun', type: 'RPG' },
     },
     [WeaponName.FIREWORK]: {
         recoil: 0.4,
         ammo: 'ammo_13',
-        drawPosition: { model: 'w_lr_firework', ...DrawPositions['RPG'] },
+        drawPositionInfo: { model: 'w_lr_firework', type: 'RPG' },
     },
     [WeaponName.RAILGUN]: {
         recoil: 0.4,
         ammo: 'ammo_14',
-        drawPosition: { model: 'w_ar_railgun', ...DrawPositions['RPG'] },
+        drawPositionInfo: { model: 'w_ar_railgun', type: 'RPG' },
     },
     [WeaponName.HOMINGLAUNCHER]: {
         recoil: 0.4,
         ammo: 'ammo_15',
-        drawPosition: { model: 'w_lr_homing', ...DrawPositions['RPG'] },
+        drawPositionInfo: { model: 'w_lr_homing', type: 'RPG' },
     },
     [WeaponName.COMPACTLAUNCHER]: {
         recoil: 0.4,
@@ -1015,11 +1076,11 @@ export const Weapons: Record<WeaponName, WeaponConfig> = {
     [WeaponName.RAYMINIGUN]: {
         recoil: 0.4,
         ammo: 'ammo_14',
-        drawPosition: { model: 'w_mg_sminigun', ...DrawPositions['RPG'] },
+        drawPositionInfo: { model: 'w_mg_sminigun', type: 'RPG' },
     },
     [WeaponName.EMPLAUNCHER]: {
         recoil: 0.4,
-        ammo: 'ammo_14',
+        ammo: 'ammo_18',
     },
     [WeaponName.RAILGUNXM3]: {
         recoil: 0.4,
@@ -1030,7 +1091,7 @@ export const Weapons: Record<WeaponName, WeaponConfig> = {
     [WeaponName.SNIPERRIFLE]: {
         recoil: 0.4,
         ammo: 'ammo_16',
-        drawPosition: { model: 'w_sr_sniperrifle', ...DrawPositions['RPG'] },
+        drawPositionInfo: { model: 'w_sr_sniperrifle', type: 'RPG' },
         attachments: [
             { label: 'Silencieux', component: 'COMPONENT_AT_AR_SUPP_02', type: WeaponComponentType.Suppressor },
             { label: 'Viseur', component: 'COMPONENT_AT_SCOPE_LARGE', type: WeaponComponentType.Scope },
@@ -1040,7 +1101,7 @@ export const Weapons: Record<WeaponName, WeaponConfig> = {
     [WeaponName.HEAVYSNIPER]: {
         recoil: 0.4,
         ammo: 'ammo_16',
-        drawPosition: { model: 'w_sr_heavysniper', ...DrawPositions['RPG'] },
+        drawPositionInfo: { model: 'w_sr_heavysniper', type: 'RPG' },
         attachments: [
             { label: 'Viseur', component: 'COMPONENT_AT_SCOPE_LARGE', type: WeaponComponentType.Scope },
             { label: 'Adv Scope', component: 'COMPONENT_AT_SCOPE_MAX', type: WeaponComponentType.Scope },
@@ -1049,7 +1110,13 @@ export const Weapons: Record<WeaponName, WeaponConfig> = {
     [WeaponName.HEAVYSNIPER_MK2]: {
         recoil: 0.4,
         ammo: 'ammo_16',
-        drawPosition: { model: 'w_sr_heavysnipermk2', ...DrawPositions['RPG'] },
+        drawPositionInfo: { model: 'w_sr_heavysnipermk2', type: 'RPG' },
+        extaDraw: [
+            {
+                bone: 'WAPBarrel',
+                model: 'w_at_sr_barrel_1',
+            },
+        ],
         attachments: [
             { label: 'Grand chargeur', component: 'COMPONENT_HEAVYSNIPER_MK2_CLIP_02', type: WeaponComponentType.Clip },
             { label: 'Viseur', component: 'COMPONENT_AT_SCOPE_LARGE_MK2', type: WeaponComponentType.Scope },
@@ -1062,7 +1129,7 @@ export const Weapons: Record<WeaponName, WeaponConfig> = {
     [WeaponName.MARKSMANRIFLE]: {
         recoil: 0.4,
         ammo: 'ammo_07',
-        drawPosition: { model: 'w_sr_marksmanrifle', ...DrawPositions['RPG'] },
+        drawPositionInfo: { model: 'w_sr_marksmanrifle', type: 'RPG' },
         attachments: [
             { label: 'Grand chargeur', component: 'COMPONENT_MARKSMANRIFLE_CLIP_02', type: WeaponComponentType.Clip },
             { label: 'Lampe torche', component: 'COMPONENT_AT_AR_FLSH', type: WeaponComponentType.Flashlight },
@@ -1074,7 +1141,7 @@ export const Weapons: Record<WeaponName, WeaponConfig> = {
     [WeaponName.MARKSMANRIFLE_MK2]: {
         recoil: 0.4,
         ammo: 'ammo_07',
-        drawPosition: { model: 'w_sr_marksmanriflemk2', ...DrawPositions['RPG'] },
+        drawPositionInfo: { model: 'w_sr_marksmanriflemk2', type: 'RPG' },
         attachments: [
             {
                 label: 'Grand chargeur',
@@ -1092,7 +1159,7 @@ export const Weapons: Record<WeaponName, WeaponConfig> = {
     [WeaponName.PRECISIONRIFLE]: {
         recoil: 0.4,
         ammo: 'ammo_16',
-        drawPosition: { model: 'w_sr_precisionrifle_reh', ...DrawPositions['RPG'] },
+        drawPositionInfo: { model: 'w_sr_precisionrifle_reh', type: 'RPG' },
     },
 
     // Launcher
@@ -1101,17 +1168,25 @@ export const Weapons: Record<WeaponName, WeaponConfig> = {
     [WeaponName.MOLOTOV]: { attachments: [] },
     [WeaponName.STICKYBOMB]: { attachments: [] },
     [WeaponName.PROXMINE]: { attachments: [] },
+    [WeaponName.SNOWLAUNCHER]: {
+        ammo: 'ammo_19',
+    },
     [WeaponName.SNOWBALL]: { attachments: [] },
     [WeaponName.PIPEBOMB]: { attachments: [] },
     [WeaponName.BALL]: { attachments: [] },
     [WeaponName.SMOKEGRENADE]: { attachments: [] },
     [WeaponName.FLARE]: { attachments: [] },
     [WeaponName.ACIDPACKAGE]: { attachments: [] },
+    [WeaponName.FLASHBANG]: { attachments: [] },
 
     // Other
     [WeaponName.PETROLCAN]: { attachments: [] },
     [WeaponName.FIREEXTINGUISHER]: { attachments: [] },
     [WeaponName.HAZARDCAN]: { attachments: [] },
+    [POLICE_SHIELD_OBJECT.toUpperCase()]: {
+        drawPositionInfo: { model: POLICE_SHIELD_MODEL, type: 'SHIELD' },
+        attachments: [],
+    },
 };
 
 export const GunShotMessage = [
@@ -1131,13 +1206,18 @@ export const ExplosionMessage = [
 ];
 
 export enum ExplosionType {
+    STICKYBOMB = 2,
     PETROL_PUMP = 9,
     DIR_WATER_HYDRANT = 13,
     SMOKEGRENADELAUNCHER = 19,
     SMOKEGRENADE = 20,
     FLARE = 22,
+    FIREWORK = 38,
     EXP_TAG_SNOWBALL = 39,
     EXP_TAG_RAYGUN = 70,
+    EMPLAUNCHER_EMP = 83,
+    BZGAS = 21,
+    FLASHGRENADE = 78,
 }
 
 export const excludeExplosionAlert = [
@@ -1147,4 +1227,87 @@ export const excludeExplosionAlert = [
     ExplosionType.SMOKEGRENADE,
     ExplosionType.FLARE,
     ExplosionType.EXP_TAG_SNOWBALL,
+    ExplosionType.EMPLAUNCHER_EMP,
+    ExplosionType.FIREWORK,
+    ExplosionType.FLASHGRENADE,
 ];
+
+export const WeaponAmmo: Partial<Record<WeaponName, string>> = {
+    [WeaponName.PISTOL]: '9x19 AP',
+    [WeaponName.PISTOL_MK2]: '9x19 AP',
+    [WeaponName.REVOLVER_MK2]: '.357 Magnum',
+    [WeaponName.COMBATPISTOL]: '9x19 AP',
+    [WeaponName.APPISTOL]: '9x19 AP',
+    [WeaponName.PISTOL50]: '.357 Magnum',
+    [WeaponName.SNSPISTOL]: '9x19 AP',
+    [WeaponName.HEAVYPISTOL]: '9x19 AP',
+    [WeaponName.VINTAGEPISTOL]: '9x19 AP',
+    [WeaponName.FLAREGUN]: 'Flair',
+    [WeaponName.MARKSMANPISTOL]: '9x19 AP',
+    [WeaponName.REVOLVER]: '.357 Magnum',
+    [WeaponName.DOUBLEACTION]: '.357 Magnum',
+    [WeaponName.SNSPISTOL_MK2]: '9x19 AP',
+    [WeaponName.CERAMICPISTOL]: '9x19 AP',
+    [WeaponName.NAVYREVOLVER]: '.357 Magnum',
+    [WeaponName.GADGETPISTOL]: '9x19 AP',
+    [WeaponName.PISTOLXM3]: '9x19 AP',
+    [WeaponName.MICROSMG]: '9x19 AP',
+    [WeaponName.SMG]: '9x19 AP',
+    [WeaponName.ASSAULTSMG]: '5.7x28 SB193',
+    [WeaponName.COMBATPDW]: '9x19 AP',
+    [WeaponName.SMG_MK2]: '5.7x28 SB193',
+    [WeaponName.MACHINEPISTOL]: '9x19 AP',
+    [WeaponName.MINISMG]: '9x19 AP',
+    [WeaponName.RAYCARBINE]: 'Munition Alien',
+    [WeaponName.TECPISTOL]: '9x19 AP',
+    [WeaponName.ASSAULTRIFLE]: '7.62x39 BP',
+    [WeaponName.ASSAULTRIFLE_MK2]: '7.62x39 BP',
+    [WeaponName.CARBINERIFLE]: '5.56x45 M995',
+    [WeaponName.CARBINERIFLE_MK2]: '5.56x45 M995',
+    [WeaponName.ADVANCEDRIFLE]: '7.62x51 M62',
+    [WeaponName.SPECIALCARBINE]: '5.56x45 M995',
+    [WeaponName.BULLPUPRIFLE]: '5.56x45 M995',
+    [WeaponName.COMPACTRIFLE]: '5.56x45 M995',
+    [WeaponName.SPECIALCARBINE_MK2]: '5.56x45 M995',
+    [WeaponName.BULLPUPRIFLE_MK2]: '7.62x39 BP',
+    [WeaponName.MILITARYRIFLE]: '7.62x51 M62',
+    [WeaponName.HEAVYRIFLE]: '7.62x51 M62',
+    [WeaponName.TACTICALRIFLE]: '5.56x45 M995',
+    [WeaponName.BATTLERIFLE]: '7.62x51 M62',
+    [WeaponName.PUMPSHOTGUN]: 'Billes caoutchouc',
+    [WeaponName.SAWNOFFSHOTGUN]: '12/70 Buckshot',
+    [WeaponName.ASSAULTSHOTGUN]: '12/70 Buckshot',
+    [WeaponName.BULLPUPSHOTGUN]: '12/70 Buckshot',
+    [WeaponName.MUSKET]: 'Lead Bullet',
+    [WeaponName.HEAVYSHOTGUN]: '12/70 Buckshot',
+    [WeaponName.DBSHOTGUN]: '12/70 Buckshot',
+    [WeaponName.AUTOSHOTGUN]: '12/70 Buckshot',
+    [WeaponName.PUMPSHOTGUN_MK2]: '12/70 Buckshot',
+    [WeaponName.COMBATSHOTGUN]: '12/70 Buckshot',
+    [WeaponName.MG]: '12,7x108 BZT-44M',
+    [WeaponName.COMBATMG]: '12,7x108 BZT-44M',
+    [WeaponName.GUSENBERG]: '12,7x108 BZT-44M',
+    [WeaponName.COMBATMG_MK2]: '12,7x108 BZT-44M',
+    [WeaponName.RPG]: '85mm PG-7',
+    [WeaponName.GRENADELAUNCHER]: '40x46mm M381',
+    [WeaponName.GRENADELAUNCHER_SMOKE]: '40x46mm M381',
+    [WeaponName.MINIGUN]: '12,7x108 BZT-44M',
+    [WeaponName.FIREWORK]: '85mn Artifice',
+    [WeaponName.RAILGUN]: 'Munition Alien',
+    [WeaponName.HOMINGLAUNCHER]: 'AIM-9X',
+    [WeaponName.COMPACTLAUNCHER]: '40x46mm M381',
+    [WeaponName.RAYMINIGUN]: 'Munition Alien',
+    [WeaponName.EMPLAUNCHER]: 'Munition Alien',
+    [WeaponName.RAILGUNXM3]: 'Munition Alien',
+    [WeaponName.SNIPERRIFLE]: '.50 BMG',
+    [WeaponName.HEAVYSNIPER]: '.50 BMG',
+    [WeaponName.HEAVYSNIPER_MK2]: '.50 BMG',
+    [WeaponName.MARKSMANRIFLE]: '7.62x51 M62',
+    [WeaponName.MARKSMANRIFLE_MK2]: '7.62x51 M62',
+    [WeaponName.PRECISIONRIFLE]: '.50 BMG',
+    [WeaponName.SNOWLAUNCHER]: 'Munition de neige',
+};
+
+export interface NuiFlashMap {
+    setFlash: Vector3;
+}

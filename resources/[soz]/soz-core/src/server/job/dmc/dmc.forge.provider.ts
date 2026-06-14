@@ -1,10 +1,11 @@
-import { OnEvent } from '@public/core/decorators/event';
-import { Exportable } from '@public/core/decorators/exports';
+import { Once, OnEvent } from '@public/core/decorators/event';
 import { Inject } from '@public/core/decorators/injectable';
 import { Provider } from '@public/core/decorators/provider';
 import { Rpc } from '@public/core/decorators/rpc';
 import { Tick, TickInterval } from '@public/core/decorators/tick';
-import { InventoryManager } from '@public/server/inventory/inventory.manager';
+import { InventoryFactory } from '@public/server/inventory/inventory.factory';
+import { InventoryOpenProvider } from '@public/server/inventory/inventory.open.provider';
+import { Monitor } from '@public/server/monitor/monitor';
 import { Notifier } from '@public/server/notifier';
 import { StateGlobalProvider } from '@public/server/store/state.global.provider';
 import { ServerEvent } from '@public/shared/event';
@@ -12,22 +13,50 @@ import { JobType } from '@public/shared/job';
 import { DmcConverterConfig, DmcConverterState, DmcIncineratorConfig } from '@public/shared/job/dmc';
 import { RpcServerEvent } from '@public/shared/rpc';
 
+import { InventoryItem, InventoryType } from '../../../shared/inventory';
+import { UpwFacilityProvider } from '../upw/upw.facility.provider';
+
 @Provider()
 export class DmcForgeProvider {
     @Inject(Notifier)
     private notifier: Notifier;
 
-    @Inject(InventoryManager)
-    private inventoryManager: InventoryManager;
+    @Inject(InventoryFactory)
+    private inventoryFactory: InventoryFactory;
 
     @Inject(StateGlobalProvider)
     private stateGlobalProvider: StateGlobalProvider;
+
+    @Inject(InventoryOpenProvider)
+    private inventoryOpenProvider: InventoryOpenProvider;
+
+    @Inject(UpwFacilityProvider)
+    private upwFacilityProvider: UpwFacilityProvider;
+
+    @Inject(Monitor)
+    private monitor: Monitor;
 
     private converterState: DmcConverterState = {
         enabled: false,
         temperature: 0,
         targetTemperature: 0,
     };
+
+    @Once()
+    public async onModuleInit() {
+        this.inventoryFactory.addAccessChecker(
+            (_id, type) => type === InventoryType.MetalConverter,
+            source => {
+                if (this.converterState.temperature === this.converterState.targetTemperature) {
+                    return true;
+                }
+
+                this.notifier.error(source, `Impossible d'accéder au Convertisseur lorsque sa température s'ajuste.`);
+
+                return false;
+            }
+        );
+    }
 
     @Rpc(RpcServerEvent.DMC_GET_CONVERTER_STATE)
     public getConverterState() {
@@ -42,6 +71,10 @@ export class DmcForgeProvider {
             this.converterState.targetTemperature = 0;
         }
         this.notifier.notify(source, `Vous avez ${value ? '~g~allumé' : '~r~éteint'}~s~ le Convertisseur.`, 'info');
+
+        this.monitor.traceEvent(`job_dmc_${value ? 'start' : 'stop'}_converter`, {
+            player_source: source,
+        });
     }
 
     @OnEvent(ServerEvent.DMC_SET_CONVERTER_TARGET_TEMPERATURE)
@@ -57,7 +90,7 @@ export class DmcForgeProvider {
         );
 
         if (temperature != this.converterState.temperature) {
-            TriggerEvent('inventory:server:closeInventoryAllUsers', DmcConverterConfig.converterStorage);
+            this.inventoryOpenProvider.closeInventory(DmcConverterConfig.converterStorage);
         }
     }
 
@@ -81,12 +114,18 @@ export class DmcForgeProvider {
     }
 
     @Tick(DmcConverterConfig.converterDelay)
-    public handleConverterItems() {
+    public async handleConverterItems() {
         if (!this.converterState.enabled) {
             return;
         }
 
-        exports['soz-upw'].ConsumeJobTerminal(JobType.DMC, DmcConverterConfig.energyPerTick);
+        const inventory = await this.inventoryFactory.get(DmcConverterConfig.converterStorage);
+
+        if (!inventory) {
+            return;
+        }
+
+        this.upwFacilityProvider.consumeJobTerminal(JobType.DMC, DmcConverterConfig.energyPerTick);
 
         for (const output_item of Object.keys(DmcConverterConfig.recipes)) {
             const recipe = DmcConverterConfig.recipes[output_item];
@@ -96,7 +135,7 @@ export class DmcForgeProvider {
             let canCraft = true;
             for (const input_item of Object.keys(recipe.input)) {
                 const amount = recipe.input[input_item];
-                const itemCount = this.inventoryManager.getItemCount(DmcConverterConfig.converterStorage, input_item);
+                const itemCount = inventory.getItemCount(input_item);
                 if (itemCount < amount) {
                     canCraft = false;
                     break;
@@ -111,21 +150,16 @@ export class DmcForgeProvider {
             // Remove input items
             for (const input_item of Object.keys(recipe.input)) {
                 const amount = recipe.input[input_item];
-                this.inventoryManager.removeItemFromInventory(
-                    DmcConverterConfig.converterStorage,
-                    input_item,
-                    amount,
-                    null,
-                    null
-                );
+                inventory.remove(input_item, amount);
+
+                this.monitor.traceEvent('job_dmc_converted_item', {
+                    item_id: input_item,
+                    amount: amount,
+                });
             }
+
             // Add output items
-            this.inventoryManager.addItemToInventoryNotPlayer(
-                DmcConverterConfig.converterStorage,
-                output_item,
-                recipe.outputAmount,
-                null
-            );
+            inventory.add(output_item, recipe.outputAmount);
 
             // Only 1 recipe by cycle, so we break here
             return;
@@ -133,15 +167,20 @@ export class DmcForgeProvider {
     }
 
     @Tick(DmcIncineratorConfig.incineratorDelay)
-    public handleIncineratorItems() {
+    public async handleIncineratorItems() {
         const globalState = this.stateGlobalProvider.getGlobalState();
         if (globalState.blackoutLevel > 3 || globalState.blackout || globalState.jobEnergy.dmc < 1) {
             return;
         }
-        const allItems = this.inventoryManager.getAllItems(DmcIncineratorConfig.incineratorStorage);
-        const itemsToProcess = [];
+        const inventory = await this.inventoryFactory.get(DmcIncineratorConfig.incineratorStorage);
+        if (!inventory) {
+            return;
+        }
+
+        const itemsToProcess: InventoryItem[] = [];
         let remainingItemsToProcess = DmcIncineratorConfig.incineratorProcessingAmount;
-        for (const item of allItems) {
+
+        for (const item of Object.values(inventory.items())) {
             if (remainingItemsToProcess == 0) {
                 break;
             }
@@ -152,19 +191,18 @@ export class DmcForgeProvider {
             });
             remainingItemsToProcess -= amountToProcess;
         }
+
         for (const item of itemsToProcess) {
-            this.inventoryManager.removeItemFromInventory(
-                DmcIncineratorConfig.incineratorStorage,
-                item.item.name,
-                item.amount,
-                item.item.metadata,
-                item.item.slot
-            );
+            inventory.removeAtSlot(item.slot, item.amount);
+
+            this.monitor.traceEvent('job_dmc_incinerated_item', {
+                item_id: item.name,
+                amount: item.amount,
+            });
         }
     }
 
-    @Exportable('CanAccessConverter')
-    public CanAccessConverter() {
+    public canAccessConverter() {
         return this.converterState.temperature == this.converterState.targetTemperature;
     }
 }

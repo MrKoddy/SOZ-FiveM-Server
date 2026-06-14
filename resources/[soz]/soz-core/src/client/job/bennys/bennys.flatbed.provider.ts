@@ -1,3 +1,6 @@
+import { PlayerUpdate } from '@public/core/decorators/player';
+import { PlayerData } from '@public/shared/player';
+
 import { Once, OnceStep, OnEvent } from '../../../core/decorators/event';
 import { Inject } from '../../../core/decorators/injectable';
 import { Provider } from '../../../core/decorators/provider';
@@ -14,9 +17,9 @@ import { PlayerService } from '../../player/player.service';
 import { RopeService } from '../../rope.service';
 import { SoundService } from '../../sound.service';
 import { TargetFactory } from '../../target/target.factory';
+import { VehicleOffroadProvider } from '../../vehicle/vehicle.offroad.provider';
 import { VehicleService } from '../../vehicle/vehicle.service';
 import { VehicleStateService } from '../../vehicle/vehicle.state.service';
-import { VehicleOffroadProvider } from '../../vehicle/vehicule.offroad.provider';
 
 const FLATBED_OFFSET = [0.0, -2.2, 1.1] as Vector3;
 
@@ -61,29 +64,21 @@ export class BennysFlatbedProvider {
     public async setupFlatbed() {
         this.targetFactory.createForAllVehicle([
             {
-                icon: 'c:mechanic/Mettre.png',
-                color: JobType.Bennys,
+                icon: 'mechanic/Mettre',
                 job: JobType.Bennys,
                 label: 'Remorquer',
-                event: 'soz-flatbed:client:calltp',
+                category: 'society',
                 action: (entity: number) => {
                     this.attachVehicle(entity);
+                    TriggerEvent('soz-flatbed:client:calltp');
                 },
-                canInteract: () => {
-                    const player = this.playerService.getPlayer();
-
-                    if (!player) {
-                        return false;
-                    }
-
-                    return player.job.onduty && this.currentFlatbedAttach !== null;
-                },
+                canInteract: () => this.currentFlatbedAttach !== null,
             },
             {
-                icon: 'c:mechanic/Attacher.png',
-                color: JobType.Bennys,
+                icon: 'mechanic/Attacher',
                 job: JobType.Bennys,
                 label: 'Prendre le crochet',
+                category: 'society',
                 action: (entity: number) => {
                     this.toggleFlatbedAttach(entity);
                 },
@@ -96,16 +91,6 @@ export class BennysFlatbedProvider {
                         return false;
                     }
 
-                    const player = this.playerService.getPlayer();
-
-                    if (!player) {
-                        return false;
-                    }
-
-                    if (!player.job.onduty) {
-                        return false;
-                    }
-
                     const flatbedState = await this.vehicleStateService.getVehicleState(entity);
                     const attachedVehicleNetworkId = flatbedState.flatbedAttachedVehicle;
 
@@ -113,10 +98,10 @@ export class BennysFlatbedProvider {
                 },
             },
             {
-                icon: 'c:mechanic/Attacher.png',
-                color: JobType.Bennys,
+                icon: 'mechanic/Attacher',
                 job: JobType.Bennys,
                 label: 'Déposer le crochet',
+                category: 'society',
                 action: entity => {
                     this.toggleFlatbedAttach(entity);
                 },
@@ -129,20 +114,14 @@ export class BennysFlatbedProvider {
                         return false;
                     }
 
-                    const player = this.playerService.getPlayer();
-
-                    if (!player) {
-                        return false;
-                    }
-
-                    return player.job.onduty;
+                    return true;
                 },
             },
             {
-                icon: 'c:mechanic/Retirer.png',
-                color: JobType.Bennys,
+                icon: 'mechanic/Retirer',
                 job: JobType.Bennys,
                 label: 'Démorquer',
+                category: 'society',
                 action: (entity: number) => {
                     TriggerServerEvent(
                         ServerEvent.BENNYS_FLATBED_ASK_DETACH_VEHICLE,
@@ -151,16 +130,6 @@ export class BennysFlatbedProvider {
                 },
                 canInteract: async (entity: number) => {
                     if (GetEntityModel(entity) !== GetHashKey('flatbed4')) {
-                        return false;
-                    }
-
-                    const player = this.playerService.getPlayer();
-
-                    if (!player) {
-                        return false;
-                    }
-
-                    if (!player.job.onduty) {
                         return false;
                     }
 
@@ -183,6 +152,13 @@ export class BennysFlatbedProvider {
     @OnEvent(ClientEvent.BASE_ENTERING_VEHICLE, false)
     public async onEnteringVehicle() {
         if (this.currentFlatbedAttach) {
+            await this.disableFlatbedAttach();
+        }
+    }
+
+    @PlayerUpdate()
+    public async onPlayerUpdate(player: PlayerData) {
+        if (player.metadata.isdead || player.metadata.ishandcuffed) {
             await this.disableFlatbedAttach();
         }
     }

@@ -8,7 +8,7 @@ import { MenuType } from '@public/shared/nui/menu';
 import { PlayerPedHash, Skin } from '@public/shared/player';
 import { Vector3 } from '@public/shared/polyzone/vector';
 import { Ok } from '@public/shared/result';
-import { BarberConfiguration, BarberShopColors, BarberShopItem, BarberShopLabels } from '@public/shared/shop';
+import { BarberShopColors, BarberShopItem, BarberShopLabels } from '@public/shared/shop';
 
 import { AnimationService } from '../animation/animation.service';
 import { CameraService } from '../camera';
@@ -89,19 +89,17 @@ export class BarberShopProvider {
     public async openShop() {
         const shop_content = this.barberShopContent;
         const shop_colors = this.barberShopColors;
-        const player_data = this.playerService.getPlayer();
 
         this.setupShop();
 
         this.nuiMenu.openMenu(MenuType.BarberShop, {
             shop_content,
             shop_colors,
-            player_data,
         });
     }
 
     @OnNuiEvent(NuiEvent.BarberShopPreview)
-    public async onBarberPreview(config: BarberConfiguration) {
+    public async onBarberPreview(config: Skin) {
         const player = this.playerService.getPlayer();
         const temporarySkin: Skin = {
             ...player.skin,
@@ -115,7 +113,7 @@ export class BarberShopProvider {
             },
             FaceTrait: {
                 ...player.skin.FaceTrait,
-                ...config.FaceTraits,
+                ...config.FaceTrait,
             },
         };
         TriggerEvent('soz-character:Client:ApplyTemporarySkin', temporarySkin);
@@ -167,7 +165,7 @@ export class BarberShopProvider {
         }
         TriggerEvent('soz-character:Client:ApplyCurrentClothConfig');
         TriggerEvent('soz-character:Client:ApplyCurrentSkin');
-        await this.cameraService.deleteCamera();
+        await this.cameraService.deleteAllCameras();
         await this.animationService.clearShopAnimations(PlayerPedId());
         FreezeEntityPosition(PlayerPedId(), false);
     }

@@ -1,8 +1,10 @@
+import { usePlayer } from '@public/nui/hook/data';
+import { GouvJobMenuPropData } from '@public/shared/job/gouv';
+import { TaxLabel, TaxType } from '@public/shared/tax';
 import { FunctionComponent } from 'react';
 
-import { TaxLabel, TaxType } from '../../../../shared/bank';
 import { NuiEvent } from '../../../../shared/event';
-import { JobPermission, JobType } from '../../../../shared/job';
+import { JobLabel, JobPermission, JobType } from '../../../../shared/job';
 import { MenuType } from '../../../../shared/nui/menu';
 import { RepositoryType } from '../../../../shared/repository';
 import { fetchNui } from '../../../fetch';
@@ -23,10 +25,7 @@ import {
 } from '../../Styleguide/Menu';
 
 type GouvJobMenuProps = {
-    data: {
-        onDuty: boolean;
-        displayRadar: boolean;
-    };
+    data: GouvJobMenuPropData;
 };
 
 export const TAX_DESCRIPTION_ITEMS: Record<TaxType, string[]> = {
@@ -50,17 +49,18 @@ export const TAX_DESCRIPTION_ITEMS: Record<TaxType, string[]> = {
 };
 
 export const GouvJobMenu: FunctionComponent<GouvJobMenuProps> = ({ data }) => {
-    const banner = 'https://nui-img/soz/menu_job_gouv';
     const taxData = useRepository(RepositoryType.Tax);
     const taxAllowed = useHasJobPermission(JobType.Gouv, JobPermission.GouvUpdateTax);
     const fineAllowed = useHasJobPermission(JobType.Gouv, JobPermission.GouvManageFine);
     const tier = useConfigurationValue('JobTaxTier');
+    const gouv = useConfigurationValue('Gouv');
+    const player = usePlayer();
 
-    if (!data.onDuty) {
+    if (!player.job.onduty) {
         return (
             <Menu type={MenuType.GouvJobMenu}>
                 <MainMenu>
-                    <MenuTitle banner={banner}></MenuTitle>
+                    <MenuTitle title={JobLabel.gouv} />
                     <MenuContent>
                         <MenuItemText>Vous n'êtes pas en service.</MenuItemText>
                     </MenuContent>
@@ -72,7 +72,7 @@ export const GouvJobMenu: FunctionComponent<GouvJobMenuProps> = ({ data }) => {
     return (
         <Menu type={MenuType.GouvJobMenu}>
             <MainMenu>
-                <MenuTitle banner={banner}></MenuTitle>
+                <MenuTitle title={JobLabel.gouv} />
                 <MenuContent>
                     <MenuItemButton
                         onConfirm={async () => {
@@ -92,11 +92,23 @@ export const GouvJobMenu: FunctionComponent<GouvJobMenuProps> = ({ data }) => {
                     >
                         Afficher les radars sur le GPS
                     </MenuItemCheckbox>
+                    {data.updateSenatSalary && (
+                        <MenuItemButton
+                            onConfirm={async () => {
+                                await fetchNui(NuiEvent.GouvSenatSalary, gouv.SenatSalary);
+                            }}
+                        >
+                            <div className="pr-2 flex items-center justify-between">
+                                <span>Salaire de Sénateurs</span>
+                                <span>{gouv.SenatSalary}$</span>
+                            </div>
+                        </MenuItemButton>
+                    )}
                 </MenuContent>
             </MainMenu>
             <SubMenu id="tax">
-                <MenuTitle banner={banner}>Les taxes</MenuTitle>
-                <MenuContent>
+                <MenuTitle title={JobLabel.gouv} />
+                <MenuContent subtitle="Les taxes">
                     {Object.values(TaxType).map(taxType => {
                         const tax = taxData[taxType] ?? { id: taxType, value: 11 };
 
@@ -128,8 +140,8 @@ export const GouvJobMenu: FunctionComponent<GouvJobMenuProps> = ({ data }) => {
                 </MenuContent>
             </SubMenu>
             <SubMenu id="tier">
-                <MenuTitle banner={banner}>Seuil des Impôts</MenuTitle>
-                <MenuContent>
+                <MenuTitle title={JobLabel.gouv} />
+                <MenuContent subtitle="Seuil des Impôts">
                     <MenuItemSelect
                         onConfirm={(_, value) => {
                             if (value === 'amount') {
@@ -236,8 +248,8 @@ export const GouvJobMenu: FunctionComponent<GouvJobMenuProps> = ({ data }) => {
                 </MenuContent>
             </SubMenu>
             <SubMenu id="fine">
-                <MenuTitle banner={banner}>Amendes</MenuTitle>
-                <MenuContent>
+                <MenuTitle title={JobLabel.gouv} />
+                <MenuContent subtitle="Amendes">
                     <MenuItemSubMenuLink id="fine_1">🟢 Catégorie 1</MenuItemSubMenuLink>
                     <MenuItemSubMenuLink id="fine_2">🟡 Catégorie 2</MenuItemSubMenuLink>
                     <MenuItemSubMenuLink id="fine_3">🟠 Catégorie 3</MenuItemSubMenuLink>
@@ -262,8 +274,8 @@ const FineSubMenu: FunctionComponent<FineSubMenuProps> = ({ category }) => {
 
     return (
         <SubMenu id={`fine_${category}`}>
-            <MenuTitle banner="https://nui-img/soz/menu_job_gouv">Amendes categorie {category}</MenuTitle>
-            <MenuContent>
+            <MenuTitle title={JobLabel.gouv} />
+            <MenuContent subtitle={`Amendes categorie ${category}`}>
                 <MenuItemButton
                     onConfirm={() => {
                         fetchNui(NuiEvent.GouvFineAdd, {

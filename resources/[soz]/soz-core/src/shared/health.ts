@@ -1,5 +1,4 @@
-import { JobsWithInjuries } from './job/lsmc';
-import { PlayerCriminalState, PlayerData, PlayerHealthBook } from './player';
+import { PlayerData, PlayerHealthBook } from './player';
 
 export enum LabelStrategy {
     MinMax,
@@ -86,26 +85,14 @@ export const healthLevelToLabel = (
 
 export const injuriesLevelToLabel = (targetPlayer: PlayerData): string => {
     let state = 'aucunes';
-    if (targetPlayer.metadata.criminal_state == PlayerCriminalState.Allowed) {
-        if (targetPlayer.metadata.injuries_count >= 7) {
-            state = 'graves';
-        } else if (targetPlayer.metadata.injuries_count >= 4) {
-            state = 'moyennes';
-        } else if (targetPlayer.metadata.injuries_count >= 1) {
-            state = 'légères';
-        } else {
-            state = 'aucunes';
-        }
-    } else if (JobsWithInjuries.includes(targetPlayer.job.id)) {
-        if (targetPlayer.metadata.injuries_count >= 3) {
-            state = 'graves';
-        } else if (targetPlayer.metadata.injuries_count >= 2) {
-            state = 'moyennes';
-        } else if (targetPlayer.metadata.injuries_count >= 1) {
-            state = 'légères';
-        } else {
-            state = 'aucunes';
-        }
+    if (targetPlayer.metadata.injuries_count >= 7) {
+        state = 'graves';
+    } else if (targetPlayer.metadata.injuries_count >= 4) {
+        state = 'moyennes';
+    } else if (targetPlayer.metadata.injuries_count >= 1) {
+        state = 'légères';
+    } else {
+        state = 'aucunes';
     }
     return state;
 };
@@ -131,3 +118,50 @@ export const HealthBookLabel: Record<keyof PlayerHealthBook, string> = {
     health_book_sugar: 'Glucides',
     health_book_fiber: 'Fibres',
 };
+
+export enum StressLooseType {
+    VehicleAbove160,
+    VehicleAbove180,
+    VehicleYellowEngine,
+    SeenDead,
+    ShootingNearby,
+    HittingNearby,
+    Dead,
+    Handcuffed,
+    DrinkCoffee,
+    DrinkAlcohol,
+    Smoke,
+    Thunder,
+}
+
+export const PointsByStressLooseType: Record<StressLooseType, number> = {
+    [StressLooseType.VehicleAbove160]: 1,
+    [StressLooseType.VehicleAbove180]: 2,
+    [StressLooseType.VehicleYellowEngine]: 3,
+    [StressLooseType.ShootingNearby]: 3,
+    [StressLooseType.HittingNearby]: 2,
+    [StressLooseType.SeenDead]: 2,
+    [StressLooseType.Dead]: 10,
+    [StressLooseType.Handcuffed]: 1,
+    [StressLooseType.DrinkCoffee]: -2,
+    [StressLooseType.DrinkAlcohol]: -6,
+    [StressLooseType.Smoke]: -1,
+    [StressLooseType.Thunder]: 2,
+};
+
+export const IntervalByStressLooseType: Record<StressLooseType, number> = {
+    [StressLooseType.VehicleAbove160]: 30,
+    [StressLooseType.VehicleAbove180]: 30,
+    [StressLooseType.VehicleYellowEngine]: 30,
+    [StressLooseType.ShootingNearby]: 30,
+    [StressLooseType.HittingNearby]: 30,
+    [StressLooseType.SeenDead]: 30,
+    [StressLooseType.Dead]: 0,
+    [StressLooseType.Handcuffed]: 0,
+    [StressLooseType.DrinkCoffee]: 30,
+    [StressLooseType.DrinkAlcohol]: 30,
+    [StressLooseType.Smoke]: 30,
+    [StressLooseType.Thunder]: 1,
+};
+
+export const CRITICAL_HEALTH = 120;

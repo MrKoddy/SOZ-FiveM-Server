@@ -1,7 +1,12 @@
+import { VehicleBusinessCustomPrice, VehicleBusinessCustomWhatIfPrice } from '@private/shared/business.vehicle';
+import { InventoryFactory } from '@public/server/inventory/inventory.factory';
+import { Feature } from '@public/shared/features';
+import { TaxType } from '@public/shared/tax';
+import { LSCustomMode } from '@public/shared/vehicle/vehicle';
+
 import { Inject } from '../../core/decorators/injectable';
 import { Provider } from '../../core/decorators/provider';
 import { Rpc } from '../../core/decorators/rpc';
-import { TaxType } from '../../shared/bank';
 import { RpcServerEvent } from '../../shared/rpc';
 import {
     getDefaultVehicleConfiguration,
@@ -10,7 +15,9 @@ import {
 } from '../../shared/vehicle/modification';
 import { PriceService } from '../bank/price.service';
 import { PrismaService } from '../database/prisma.service';
-import { InventoryManager } from '../inventory/inventory.manager';
+import { FeatureProvider } from '../feature/feature.provider';
+import { ItemService } from '../item/item.service';
+import { Monitor } from '../monitor/monitor';
 import { Notifier } from '../notifier';
 import { PlayerMoneyService } from '../player/player.money.service';
 import { VehicleStateService } from './vehicle.state.service';
@@ -31,11 +38,20 @@ export class VehicleCustomProvider {
     @Inject(Notifier)
     private notifier: Notifier;
 
-    @Inject(InventoryManager)
-    private inventoryManager: InventoryManager;
+    @Inject(InventoryFactory)
+    private inventoryFactory: InventoryFactory;
 
     @Inject(PriceService)
     private priceService: PriceService;
+
+    @Inject(ItemService)
+    private itemService: ItemService;
+
+    @Inject(FeatureProvider)
+    private featureProvider: FeatureProvider;
+
+    @Inject(Monitor)
+    private monitor: Monitor;
 
     @Rpc(RpcServerEvent.VEHICLE_CUSTOM_SET_MODS)
     public async setMods(
@@ -44,54 +60,88 @@ export class VehicleCustomProvider {
         mods: VehicleConfiguration,
         originalConfiguration: VehicleConfiguration,
         price: number | null = null,
-        notify = true
+        notify = true,
+        mode = LSCustomMode.LsCustom,
+        crimiPrice: Record<string, number>
     ) {
-        // @TODO Price client side
         const state = this.vehicleStateService.getVehicleState(vehicleNetworkId);
         const taxedPrice = await this.priceService.getPrice(price ?? 0, TaxType.VEHICLE);
 
-        const playerVehicle = state.volatile.id
-            ? await this.prismaService.playerVehicle.findUnique({
-                  where: {
-                      id: state.volatile.id,
-                  },
-              })
-            : null;
+        const playerVehicle = state.volatile.isPlayerVehicle;
+        const inventory = await this.inventoryFactory.getPlayerInventory(source);
+        const crimiCustomPrice = this.featureProvider.isFeatureEnabled(Feature.WhatIfFirstEpisode)
+            ? VehicleBusinessCustomWhatIfPrice
+            : VehicleBusinessCustomPrice;
 
-        if (taxedPrice && this.playerMoneyService.get(source) < taxedPrice) {
+        if (mode == LSCustomMode.LsCustom && taxedPrice && this.playerMoneyService.get(source) < taxedPrice) {
             this.notifier.notify(source, "Vous n'avez pas assez d'argent", 'error');
 
             return originalConfiguration;
         }
+        if (
+            mode == LSCustomMode.CrimiCusto &&
+            price &&
+            !inventory.hasEnoughItem('veh_strip_piece_std', Math.ceil(price / crimiCustomPrice), true)
+        ) {
+            const item = this.itemService.getItem('veh_strip_piece_std');
+            this.notifier.notify(source, `Vous n'avez pas assez de  ~r~${item.label}.`, 'error');
 
-        if (taxedPrice) {
+            return originalConfiguration;
+        }
+
+        if (mode == LSCustomMode.CrimiPerfo && crimiPrice) {
+            let message = '';
+            for (const itemName of Object.keys(crimiPrice)) {
+                if (!inventory.hasEnoughItem(itemName, crimiPrice[itemName], true)) {
+                    const item = this.itemService.getItem(itemName);
+                    message += `~b~${crimiPrice[itemName]}~s~ ~r~${item.label}~s~~n~`;
+                }
+            }
+
+            if (message.length > 0) {
+                this.notifier.notify(
+                    source,
+                    'Vous ne possédez pas les:~n~' +
+                        message +
+                        ' sur vous pour effectuer cette modification de performance.',
+                    'error'
+                );
+                return originalConfiguration;
+            }
+        }
+        if (price && mode == LSCustomMode.LsCustom) {
             // LS Custom upgrade parts
             const upgradedParts = this.getLSCustomUpgradedPart(originalConfiguration, mods);
 
-            if (
-                upgradedParts > 0 &&
-                !this.inventoryManager.removeItemFromInventory(
-                    'ls_custom_storage',
-                    'ls_custom_upgrade_part',
-                    upgradedParts
-                )
-            ) {
-                this.notifier.notify(
-                    source,
-                    `Le stock du LS Custom n'est pas suffisant. Impossible d'améliorer votre véhicule !`,
-                    'error'
-                );
+            if (!this.featureProvider.isFeatureEnabled(Feature.WhatIfFirstEpisode)) {
+                const lsCustomInventory = await this.inventoryFactory.get('ls_custom_storage');
+                if (upgradedParts > 0 && !lsCustomInventory.remove('ls_custom_upgrade_part', upgradedParts)) {
+                    this.notifier.notify(
+                        source,
+                        `Le stock du LS Custom n'est pas suffisant. Impossible d'améliorer votre véhicule !`,
+                        'error'
+                    );
 
-                return originalConfiguration;
+                    return originalConfiguration;
+                }
             }
 
-            await this.playerMoneyService.buy(source, price, TaxType.VEHICLE);
+            if (!(await this.playerMoneyService.buy(source, price, TaxType.VEHICLE))) {
+                this.notifier.notify(source, "Vous n'avez pas assez d'argent", 'error');
+                return originalConfiguration;
+            }
+        } else if (price && mode == LSCustomMode.CrimiCusto) {
+            inventory.remove('veh_strip_piece_std', Math.ceil(price / crimiCustomPrice), false);
+        } else if (crimiPrice && mode == LSCustomMode.CrimiPerfo) {
+            for (const itemName of Object.keys(crimiPrice)) {
+                inventory.remove(itemName, crimiPrice[itemName], false);
+            }
         }
 
         if (playerVehicle) {
             await this.prismaService.playerVehicle.update({
                 where: {
-                    id: playerVehicle.id,
+                    id: state.volatile.id,
                 },
                 data: {
                     mods: JSON.stringify(mods),
@@ -99,13 +149,21 @@ export class VehicleCustomProvider {
             });
         }
 
-        if (taxedPrice) {
+        if (taxedPrice && mode == LSCustomMode.LsCustom) {
             this.notifier.notify(source, `Vous avez payé $${taxedPrice.toFixed(0)} pour modifier votre véhicule.`);
         } else if (notify) {
             this.notifier.notify(source, 'Le véhicule a été modifié');
         }
 
         this.vehicleStateService.updateVehicleConfiguration(vehicleNetworkId, mods);
+
+        this.monitor.traceEvent('vehicle_update_config', {
+            player_source: source,
+            vehicle_plate: state.volatile.plate,
+            type: mode,
+            money: Math.round(price),
+            message: JSON.stringify(mods),
+        });
 
         return mods;
     }
@@ -126,6 +184,10 @@ export class VehicleCustomProvider {
                 }
             }
         }
+        if (originalConfig.manualGearbox != newConfig.manualGearbox) {
+            totalParts++;
+        }
+
         return totalParts;
     }
 
@@ -133,23 +195,9 @@ export class VehicleCustomProvider {
     public async getMods(source: number, vehicleNetworkId: number): Promise<VehicleConfiguration> {
         const state = this.vehicleStateService.getVehicleState(vehicleNetworkId);
 
-        if (!state.volatile.id) {
-            return null;
-        }
-
-        const playerVehicle = await this.prismaService.playerVehicle.findUnique({
-            where: {
-                id: state.volatile.id,
-            },
-        });
-
-        if (!playerVehicle) {
-            return null;
-        }
-
         return {
             ...getDefaultVehicleConfiguration(),
-            ...JSON.parse(playerVehicle.mods || '{}'),
+            ...state.configuration,
         };
     }
 }

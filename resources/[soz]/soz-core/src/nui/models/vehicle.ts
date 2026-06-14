@@ -15,8 +15,11 @@ export const vehicle = createModel<RootModel>()({
         fuelType: 'essence',
         fuelLevel: 0,
         rpm: 0,
-        vehCategory: null,
+        maxFuel: 100,
         useRpm: true,
+        nosLevel: null,
+        nosCount: 0,
+        gear: 0,
     } as VehicleHud,
     reducers: {
         update(state, vehicle: Partial<VehicleHud>) {
@@ -30,6 +33,7 @@ export const vehicleSpeed = createModel<RootModel>()({
     state: {
         speed: 0,
         rpm: 0,
+        gear: 0,
     } as VehicleHudSpeed,
     reducers: {
         update(state, vehicle: Partial<VehicleHudSpeed>) {

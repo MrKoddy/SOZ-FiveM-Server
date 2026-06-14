@@ -1,14 +1,15 @@
+import { VehicleBusinessProvider } from '@private/server/gang/business.vehicle.provider';
 import { Once, OnceStep, OnEvent } from '@public/core/decorators/event';
 import { Monitor } from '@public/server/monitor/monitor';
 import { ServerEvent } from '@public/shared/event';
 import { JobType } from '@public/shared/job';
 import { toVector3Object, Vector3 } from '@public/shared/polyzone/vector';
+import { TaxType } from '@public/shared/tax';
 import { VehicleCategory } from '@public/shared/vehicle/vehicle';
 
 import { Inject } from '../../core/decorators/injectable';
 import { Provider } from '../../core/decorators/provider';
 import { Rpc } from '../../core/decorators/rpc';
-import { TaxType } from '../../shared/bank';
 import { RpcServerEvent } from '../../shared/rpc';
 import { BankService } from '../bank/bank.service';
 import { PrismaService } from '../database/prisma.service';
@@ -40,6 +41,9 @@ export class VehiclePitStopProvider {
 
     @Inject(ServerStateService)
     private serverStateService: ServerStateService;
+
+    @Inject(VehicleBusinessProvider)
+    private vehicleBusinessProvider: VehicleBusinessProvider;
 
     @Inject(Monitor)
     private monitor: Monitor;
@@ -113,17 +117,12 @@ export class VehiclePitStopProvider {
             `Le prix du Pit Stop pour les ${VehicleCategory[category]} est maintenant de ~g~${price}~s~`
         );
 
-        this.monitor.publish(
-            'vehicle_pitstop_price_update',
-            {
-                player_source: source,
-            },
-            {
-                price: price,
-                category: category,
-                position: toVector3Object(GetEntityCoords(GetPlayerPed(source)) as Vector3),
-            }
-        );
+        this.monitor.traceEvent('vehicle_pitstop_price_update', {
+            player_source: source,
+            money: price,
+            category: category,
+            position: toVector3Object(GetEntityCoords(GetPlayerPed(source)) as Vector3),
+        });
 
         return this.getPrices();
     }
@@ -137,6 +136,7 @@ export class VehiclePitStopProvider {
             return;
         }
 
+        this.vehicleBusinessProvider.repairVehicule(vehicleNetworkId);
         this.vehicleStateService.updateVehicleCondition(vehicleNetworkId, {
             engineHealth: 1000,
             bodyHealth: 1000,
@@ -149,21 +149,16 @@ export class VehiclePitStopProvider {
             tireBurstState: {},
         });
 
-        this.bankService.addMoney('safe_' + JobType.Bennys, Math.round(price / 2));
+        await this.bankService.addAccountMoney('safe_' + JobType.Bennys, Math.round(price / 2));
 
         this.notifier.notify(source, 'Le véhicule a été réparé', 'success');
 
         const state = this.vehicleStateService.getVehicleState(vehicleNetworkId);
-        this.monitor.publish(
-            'vehicle_pitstop',
-            {
-                player_source: source,
-                vehicle_plate: state.volatile.plate,
-            },
-            {
-                price: price,
-                position: toVector3Object(GetEntityCoords(GetPlayerPed(source)) as Vector3),
-            }
-        );
+        this.monitor.traceEvent('vehicle_pitstop', {
+            player_source: source,
+            vehicle_plate: state.volatile.plate,
+            money: price,
+            position: toVector3Object(GetEntityCoords(GetPlayerPed(source)) as Vector3),
+        });
     }
 }

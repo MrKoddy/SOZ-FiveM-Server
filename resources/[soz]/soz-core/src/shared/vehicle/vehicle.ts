@@ -1,12 +1,15 @@
+import { PlaneCostMultiplier } from '@private/shared/business.smuggling';
+import { VehicleBusinessImportConf } from '@private/shared/business.vehicle';
 import { joaat } from '@public/shared/joaat';
 import { PlayerLicenceType } from '@public/shared/player';
 import { RadioChannel } from '@public/shared/voip';
 
 import { DealershipConfigItem, DealershipType } from '../../config/dealership';
 import { JobType } from '../job';
+import { NamedZone } from '../polyzone/box.zone';
 import { Vector3, Vector4 } from '../polyzone/vector';
 import { AuctionVehicle } from './auction';
-import { VehicleConfiguration } from './modification';
+import { VehicleConfiguration, VehicleHandlingType } from './modification';
 
 export type Vehicle = {
     model: string;
@@ -20,6 +23,7 @@ export type Vehicle = {
     jobName?: { [key in JobType]: string };
     stock: number;
     maxStock: number;
+    handling?: Record<VehicleHandlingType, number>;
 };
 
 export type VehicleHud = {
@@ -31,13 +35,16 @@ export type VehicleHud = {
     lightState: number;
     fuelType: 'essence' | 'electric' | 'none';
     fuelLevel: number;
-    vehCategory: string;
+    maxFuel: number;
     useRpm: boolean;
+    nosLevel: number;
+    nosCount: number;
 };
 
 export type VehicleHudSpeed = {
     speed: number;
     rpm: number;
+    gear: number;
 };
 
 export type VehicleSpawn = {
@@ -241,6 +248,15 @@ export type VehicleCondition = {
     doorStatus: { [key: number]: boolean };
     windowStatus: { [key: number]: boolean };
     mileage: number;
+    nitro: number;
+    nitroRemaining: number;
+};
+
+export type VehiculeInformation = {
+    plate: string | null;
+    brand: string | null;
+    model: string | null;
+    category: string | null;
 };
 
 // state not sync to database, only in memory
@@ -250,6 +266,7 @@ export type VehicleVolatileState = {
     forced: boolean;
     open: boolean;
     plate: string | null;
+    fakeplate: string | null;
     owner: string | null;
     speedLimit: number | null;
     isPlayerVehicle: boolean;
@@ -276,6 +293,19 @@ export type VehicleVolatileState = {
     fingerprint: string | null;
     lastDrugTrace: string[] | null;
     isAnalyzed: boolean;
+    stolenLocator: boolean;
+    exportBiz: boolean;
+    nitroReloadStart: number;
+    isCrimiImport: boolean;
+    gyro: number;
+};
+
+export type VehicleState = {
+    volatile: VehicleVolatileState;
+    condition: VehicleCondition;
+    configuration: VehicleConfiguration;
+    position: Vector4 | null;
+    owner: number;
 };
 
 export enum VehicleClass {
@@ -284,7 +314,7 @@ export enum VehicleClass {
     SUVs = 2,
     Coupes = 3,
     Muscle = 4,
-    SportsClassics = 5,
+    Sportsclassics = 5,
     Sports = 6,
     Super = 7,
     Motorcycles = 8,
@@ -301,6 +331,7 @@ export enum VehicleClass {
     Military = 19,
     Commercial = 20,
     Trains = 21,
+    OpenWheel = 22,
 }
 
 export enum VehicleType {
@@ -314,12 +345,12 @@ export enum VehicleType {
     Train = 'train',
 }
 
-export const getDefaultVehicleCondition = (): VehicleCondition => ({
+export const getDefaultVehicleCondition = (vehDef: Vehicle): VehicleCondition => ({
     bodyHealth: 1000,
     doorStatus: {},
     dirtLevel: 0,
     engineHealth: 1000,
-    fuelLevel: 100,
+    fuelLevel: getVehicleMaxFuelStorage(vehDef),
     oilLevel: 100,
     tireTemporaryRepairDistance: {},
     tireBurstCompletely: {},
@@ -328,6 +359,8 @@ export const getDefaultVehicleCondition = (): VehicleCondition => ({
     tankHealth: 1000,
     windowStatus: {},
     mileage: 0,
+    nitro: 0,
+    nitroRemaining: 0,
 });
 
 export const getDefaultVehicleVolatileState = (): VehicleVolatileState => ({
@@ -336,6 +369,7 @@ export const getDefaultVehicleVolatileState = (): VehicleVolatileState => ({
     open: false,
     owner: null,
     plate: null,
+    fakeplate: null,
     speedLimit: null,
     dead: false,
     isPlayerVehicle: false,
@@ -362,6 +396,11 @@ export const getDefaultVehicleVolatileState = (): VehicleVolatileState => ({
     fingerprint: null,
     lastDrugTrace: null,
     isAnalyzed: false,
+    stolenLocator: false,
+    exportBiz: false,
+    nitroReloadStart: 0,
+    isCrimiImport: false,
+    gyro: null,
 });
 
 export type VehicleMenuData = {
@@ -380,7 +419,19 @@ export type VehicleMenuData = {
     pitstopPrice: number;
     neonLightsStatus: boolean;
     hasNeon: boolean;
+    crimiPerformance: boolean;
+    crimiCustom: boolean;
+    canGyro: boolean;
+    hasGyro: boolean;
 };
+
+export enum LSCustomMode {
+    Admin = 'admin',
+    CrimiPerfo = 'crimi_perfo',
+    CrimiCusto = 'crimi_custom',
+    LsCustom = 'ls_custom',
+    NewGahray = 'new_gahray',
+}
 
 export type VehicleAuctionMenuData = {
     name: string;
@@ -427,19 +478,45 @@ export enum VehicleCategory {
     Quads = 'Quads',
 }
 
+export const VehicleCategoryMap = {
+    [VehicleClass.Boats]: VehicleCategory.Boats,
+    [VehicleClass.Commercial]: VehicleCategory.Commercial,
+    [VehicleClass.Compacts]: VehicleCategory.Compacts,
+    [VehicleClass.Coupes]: VehicleCategory.Coupes,
+    [VehicleClass.Cycles]: VehicleCategory.Cycles,
+    [VehicleClass.Emergency]: VehicleCategory.Emergency,
+    [VehicleClass.Helicopters]: VehicleCategory.Helicopters,
+    [VehicleClass.Industrial]: VehicleCategory.Industrial,
+    [VehicleClass.Military]: VehicleCategory.Military,
+    [VehicleClass.Motorcycles]: VehicleCategory.Motorcycles,
+    [VehicleClass.Muscle]: VehicleCategory.Muscle,
+    [VehicleClass.OffRoad]: VehicleCategory['Off-road'],
+    [VehicleClass.OpenWheel]: VehicleCategory.Openwheel,
+    [VehicleClass.Planes]: VehicleCategory.Planes,
+    [VehicleClass.Sedans]: VehicleCategory.Sedans,
+    [VehicleClass.Service]: VehicleCategory.Service,
+    [VehicleClass.Sportsclassics]: VehicleCategory.Sportsclassics,
+    [VehicleClass.Sports]: VehicleCategory.Sports,
+    [VehicleClass.Super]: VehicleCategory.Super,
+    [VehicleClass.SUVs]: VehicleCategory.Suvs,
+    [VehicleClass.Trains]: VehicleCategory.Trains,
+    [VehicleClass.Utility]: VehicleCategory.Utility,
+    [VehicleClass.Vans]: VehicleCategory.Vans,
+};
+
 export const VehicleElectricModels: Record<number, string> = {
-    [-1130810103]: 'Dilettante',
-    [544021352]: 'Khamelion',
-    [-1894894188]: 'Surge',
-    [-1622444098]: 'Voltic',
-    [1392481335]: 'Cyclone',
-    [-1848994066]: 'Neon',
-    [-1529242755]: 'Raiden',
-    [1031562256]: 'Tezeract',
-    [-1132721664]: 'Imorgon',
-    [662793086]: 'I-Wagen',
-    [-505223465]: 'Omnis e-GT',
-    [1147287684]: 'Caddy',
+    [joaat('dilettante')]: 'Dilettante',
+    [joaat('khamelion')]: 'Khamelion',
+    [joaat('surge')]: 'Surge',
+    [joaat('voltic')]: 'Voltic',
+    [joaat('cyclone')]: 'Cyclone',
+    [joaat('neon')]: 'Neon',
+    [joaat('raiden')]: 'Raiden',
+    [joaat('tezeract')]: 'Tezeract',
+    [joaat('imorgon')]: 'Imorgon',
+    [joaat('iwagen')]: 'I-Wagen',
+    [joaat('omnisegt')]: 'Omnis e-GT',
+    [joaat('caddy')]: 'Caddy',
     [1560980623]: 'Airtug',
     [989294410]: 'Rocket Voltic',
     [-430238662]: 'lspd40',
@@ -450,6 +527,39 @@ export const VehicleElectricModels: Record<number, string> = {
     [joaat('coureur')]: 'La Coureuse',
     [joaat('buffalo5')]: 'Buffalo EVX',
     [joaat('vivanite')]: 'Vivanite',
+    [joaat('pipistrello')]: 'Pipistrello',
+    [joaat('envisage')]: 'Envisage',
+    [joaat('eodbot')]: 'Eodbot',
+    [joaat('suzume')]: 'Suzume',
+};
+
+export const VehicleElectricModelClass: Record<number, VehicleClass> = {
+    [joaat('dilettante')]: VehicleClass.Compacts,
+    [joaat('khamelion')]: VehicleClass.Sports,
+    [joaat('surge')]: VehicleClass.Sedans,
+    [joaat('voltic')]: VehicleClass.Super,
+    [joaat('cyclone')]: VehicleClass.Super,
+    [joaat('neon')]: VehicleClass.Sports,
+    [joaat('raiden')]: VehicleClass.Sports,
+    [joaat('tezeract')]: VehicleClass.Super,
+    [joaat('imorgon')]: VehicleClass.Sports,
+    [joaat('iwagen')]: VehicleClass.SUVs,
+    [joaat('omnisegt')]: VehicleClass.Sports,
+    [joaat('caddy')]: VehicleClass.Utility,
+    [1560980623]: VehicleClass.Utility,
+    [989294410]: VehicleClass.Super,
+    [-430238662]: VehicleClass.Super,
+    [-635002646]: VehicleClass.Emergency,
+    [joaat('dilettante2')]: VehicleClass.Compacts,
+    [joaat('virtue')]: VehicleClass.Super,
+    [joaat('powersurge')]: VehicleClass.Motorcycles,
+    [joaat('coureur')]: VehicleClass.Sports,
+    [joaat('buffalo5')]: VehicleClass.Muscle,
+    [joaat('vivanite')]: VehicleClass.SUVs,
+    [joaat('pipistrello')]: VehicleClass.Super,
+    [joaat('envisage')]: VehicleClass.Sports,
+    [joaat('eodbot')]: VehicleClass.OffRoad,
+    [joaat('suzume')]: VehicleClass.Super,
 };
 
 export const VehicleTrailerModels: Record<number, string> = {
@@ -471,7 +581,7 @@ export const VehicleTypeFromClass: Record<VehicleClass, VehicleType> = {
     [VehicleClass.SUVs]: VehicleType.Automobile,
     [VehicleClass.Coupes]: VehicleType.Automobile,
     [VehicleClass.Muscle]: VehicleType.Automobile,
-    [VehicleClass.SportsClassics]: VehicleType.Automobile,
+    [VehicleClass.Sportsclassics]: VehicleType.Automobile,
     [VehicleClass.Sports]: VehicleType.Automobile,
     [VehicleClass.Super]: VehicleType.Automobile,
     [VehicleClass.Motorcycles]: VehicleType.Bike,
@@ -488,9 +598,39 @@ export const VehicleTypeFromClass: Record<VehicleClass, VehicleType> = {
     [VehicleClass.Military]: VehicleType.Automobile,
     [VehicleClass.Commercial]: VehicleType.Automobile,
     [VehicleClass.Trains]: VehicleType.Train,
+    [VehicleClass.OpenWheel]: VehicleType.Automobile,
 };
 
-export const LockPickAlertChance = 0.5;
+export const PushableVehicleClass: Record<VehicleClass, boolean> = {
+    [VehicleClass.Compacts]: true,
+    [VehicleClass.Sedans]: true,
+    [VehicleClass.SUVs]: true,
+    [VehicleClass.Coupes]: true,
+    [VehicleClass.Muscle]: true,
+    [VehicleClass.Sportsclassics]: true,
+    [VehicleClass.Sports]: true,
+    [VehicleClass.Super]: true,
+    [VehicleClass.Motorcycles]: false,
+    [VehicleClass.OffRoad]: true,
+    [VehicleClass.Industrial]: false,
+    [VehicleClass.Utility]: false,
+    [VehicleClass.Vans]: true,
+    [VehicleClass.Cycles]: false,
+    [VehicleClass.Boats]: false,
+    [VehicleClass.Helicopters]: false,
+    [VehicleClass.Planes]: false,
+    [VehicleClass.Service]: false,
+    [VehicleClass.Emergency]: true,
+    [VehicleClass.Military]: false,
+    [VehicleClass.Commercial]: false,
+    [VehicleClass.Trains]: false,
+    [VehicleClass.OpenWheel]: false,
+};
+
+export const NotPushableVehicleModel: string[] = ['firetruk', 'brickade', 'brickade1'];
+export const PushableVehicleModel: string[] = ['caddy', 'sadler1', 'utillitruck2', 'utillitruck3', 'utillitruck4'];
+
+export const LockPickAlertChance = 0.1;
 
 export const LockPickAlertMessage = {
     all: [
@@ -513,6 +653,7 @@ export type VehicleLocation = {
     name: string;
     model: string;
     position: Vector3;
+    stolen: boolean;
 };
 
 export const ALLOWED_AIR_CONTROL: Partial<Record<VehicleClass, true>> = {
@@ -527,6 +668,60 @@ export const ALLOWED_AIR_CONTROL: Partial<Record<VehicleClass, true>> = {
 //update MissiveVehicleModelList when toggle
 export const DisableNPCBike = false;
 
-export const VehicleClassFuelStorageMultiplier: Record<string, number> = {
-    [PlayerLicenceType.Moto]: 0.5,
+export function getVehicleMaxFuelStorage(vehDef: Vehicle): number {
+    if (vehDef?.requiredLicence == PlayerLicenceType.Moto) {
+        return 75;
+    }
+
+    if (vehDef?.dealershipId == DealershipType.Armored) {
+        return 50;
+    }
+
+    return 100;
+}
+
+export const VEHICLE_TRUNK_TYPES = {
+    [joaat('tanker')]: 'tanker',
+    [joaat('tanker2')]: 'tanker',
+    [joaat('trailerlogs')]: 'trailerlogs',
+    [joaat('brickade')]: 'brickade',
+    [joaat('brickade1')]: 'brickade',
+    [joaat('trash')]: 'trash',
+    [joaat('tiptruck2')]: 'tiptruck',
+};
+
+export type VehicleOrder = {
+    uuid: string;
+    model: string;
+    job: JobType;
+    deliverDate: number;
+    gang: number;
+    citizenId: string;
+    license: string;
+    garage: string;
+};
+
+export enum VehicleOrderMode {
+    Job = 'job',
+    Crimi = 'crimi',
+    Cartel = 'cartel',
+}
+
+export type VehicleOrderMenuData = {
+    dealerships: string[];
+    mode: VehicleOrderMode;
+};
+
+export type VehicleOrderConfig = {
+    zone: NamedZone;
+    waitingTime: number;
+    garage: string;
+    account: string;
+    farm: string;
+};
+
+export const VehicleOrderCostMuliplier: Record<VehicleOrderMode, number> = {
+    [VehicleOrderMode.Crimi]: VehicleBusinessImportConf.CostMuliplier,
+    [VehicleOrderMode.Job]: 0.01,
+    [VehicleOrderMode.Cartel]: PlaneCostMultiplier,
 };

@@ -1,6 +1,7 @@
+import { TaxType } from '@public/shared/tax';
+import { PlayerVehicleState } from '@public/shared/vehicle/player.vehicle';
 import { FunctionComponent, useState } from 'react';
 
-import { TaxType } from '../../../shared/bank';
 import { NuiEvent } from '../../../shared/event';
 import { MenuType } from '../../../shared/nui/menu';
 import { GarageMenuData, GarageType, GarageVehicle, getTransferPrice } from '../../../shared/vehicle/garage';
@@ -14,6 +15,7 @@ import {
     MenuItemSelect,
     MenuItemSelectOption,
     MenuItemSubMenuLink,
+    MenuSubTitle,
     MenuTitle,
     SubMenu,
     useMenuNavigate,
@@ -23,13 +25,15 @@ type MenuGarageProps = {
     data?: GarageMenuData;
 };
 
-const BannerMap: Record<GarageType, string> = {
-    [GarageType.Public]: 'https://nui-img/soz/menu_garage_public',
-    [GarageType.Private]: 'https://nui-img/soz/menu_garage_private',
-    [GarageType.Job]: 'https://nui-img/soz/menu_garage_entreprise',
-    [GarageType.JobLuxury]: 'https://nui-img/soz/menu_garage_entreprise',
-    [GarageType.Depot]: 'https://nui-img/soz/menu_garage_pound',
-    [GarageType.House]: 'https://nui-img/soz/menu_garage_personal',
+const MenutitleMap: Record<GarageType, string> = {
+    [GarageType.Public]: 'Garage Public',
+    [GarageType.Private]: 'Garage Privé',
+    [GarageType.Job]: 'Garage Entreprise',
+    [GarageType.JobLuxury]: 'Garage Entreprise',
+    [GarageType.Depot]: 'Fourrière',
+    [GarageType.House]: 'Garage Personnel',
+    [GarageType.Gang]: 'Garage',
+    [GarageType.CasinoVip]: 'Garage',
 };
 
 export const MenuGarage: FunctionComponent<MenuGarageProps> = ({ data }) => {
@@ -40,7 +44,7 @@ export const MenuGarage: FunctionComponent<MenuGarageProps> = ({ data }) => {
         return null;
     }
 
-    const showFreePlaces = data?.garage.type === GarageType.Private;
+    const showFreePlaces = [GarageType.Private, GarageType.Gang].includes(data?.garage.type);
 
     const vehicleShowPlaces = () => {
         fetchNui(NuiEvent.VehicleGarageShowPlaces, { id: data.id, garage: data.garage });
@@ -58,7 +62,7 @@ export const MenuGarage: FunctionComponent<MenuGarageProps> = ({ data }) => {
         return (
             <Menu type={MenuType.Garage}>
                 <MainMenu>
-                    <MenuTitle banner={BannerMap[data?.garage.type]}>{data?.garage.name}</MenuTitle>
+                    <MenuTitle title={MenutitleMap[data?.garage.type]} />
                     <VehicleList data={data} setCurrentVehicle={setCurrentVehicle} />
                 </MainMenu>
             </Menu>
@@ -68,11 +72,13 @@ export const MenuGarage: FunctionComponent<MenuGarageProps> = ({ data }) => {
     return (
         <Menu type={MenuType.Garage}>
             <MainMenu>
-                <MenuTitle banner={BannerMap[data?.garage.type]}>
-                    {data?.garage.name}
-                    {showFreePlaces && ` | Places libres : ${data?.free_places} / ${data?.max_places}`}
-                </MenuTitle>
-                <MenuContent>
+                <MenuTitle title={MenutitleMap[data?.garage.type]} />
+                <MenuContent subtitle={data?.garage.name}>
+                    {showFreePlaces && (
+                        <MenuSubTitle>
+                            Places libres : {data?.free_places} / {data?.max_places}
+                        </MenuSubTitle>
+                    )}
                     <MenuItemSubMenuLink id="vehicles">Les véhicules</MenuItemSubMenuLink>
                     {data.garage.type === GarageType.House && data.apartments.length > 0 && (
                         <MenuItemSelect
@@ -115,17 +121,15 @@ export const MenuGarage: FunctionComponent<MenuGarageProps> = ({ data }) => {
                 </MenuContent>
             </MainMenu>
             <SubMenu id="vehicles">
-                <MenuTitle banner={BannerMap[data?.garage.type]}>
-                    {data?.garage.name}
-                    {showFreePlaces && ` | Places libres : ${data?.free_places} / ${data?.max_places}`}
-                </MenuTitle>
+                <MenuTitle title={MenutitleMap[data?.garage.type]} />
                 <VehicleList data={data} setCurrentVehicle={setCurrentVehicle} />
             </SubMenu>
             <SubMenu id="transfer">
-                <MenuTitle banner={BannerMap[data?.garage.type]}>
-                    Transférer {currentVehicle?.name} - {currentVehicle?.vehicle.plate}
-                </MenuTitle>
+                <MenuTitle title={MenutitleMap[data?.garage.type]} />
                 <MenuContent>
+                    <MenuSubTitle>
+                        Transférer {currentVehicle?.name} - {currentVehicle?.vehicle.plate}
+                    </MenuSubTitle>
                     {data.transferGarageList.map((garage, key) => {
                         const transferPrice = getTransferPrice(currentVehicle?.weight || 0);
 
@@ -166,6 +170,8 @@ export const VehicleList: FunctionComponent<VehicleListProps> = ({ data, setCurr
         return null;
     }
 
+    const showFreePlaces = [GarageType.Private, GarageType.Gang].includes(data?.garage.type);
+
     const vehicleTakeOut = (id: number, use_ticket: boolean) => {
         fetchNui(NuiEvent.VehicleGarageTakeOut, { id: data.id, garage: data.garage, vehicle: id, use_ticket });
     };
@@ -190,7 +196,12 @@ export const VehicleList: FunctionComponent<VehicleListProps> = ({ data, setCurr
         });
 
     return (
-        <MenuContent>
+        <MenuContent subtitle={data?.garage.name}>
+            {showFreePlaces && (
+                <MenuSubTitle>
+                    Places libres : {data?.free_places} / {data?.max_places}
+                </MenuSubTitle>
+            )}
             {data.vehicles.length === 0 && <MenuItemButton disabled>Aucun véhicule</MenuItemButton>}
             {(data.garage.type === GarageType.Job || data.garage.type === GarageType.House) && (
                 <>
@@ -243,25 +254,29 @@ export const VehicleList: FunctionComponent<VehicleListProps> = ({ data, setCurr
                                 title={garageVehicle.vehicle_name}
                                 titleWidth={60}
                                 description={
-                                    <p>
-                                        Kilométrage:
-                                        {((garageVehicle.vehicle.condition.mileage || 0) / 1000).toFixed(2)} km
-                                        <br />
-                                        {garageVehicle.price > 0 && (
+                                    <div>
+                                        <div className="pr-2 flex items-center justify-between">
+                                            <span>Kilométrage</span>
                                             <span>
-                                                Prix de sortie: ${getPrice(garageVehicle.price, TaxType.VEHICLE)}
-                                                <br />
+                                                {((garageVehicle.vehicle.condition.mileage || 0) / 1000).toFixed(2)} km
                                             </span>
+                                        </div>
+                                        {garageVehicle.price > 0 && (
+                                            <div className="pr-2 flex items-center justify-between">
+                                                <span>Prix de sortie</span>
+                                                <span>
+                                                    $
+                                                    {garageVehicle.vehicle.state === PlayerVehicleState.InFedPound
+                                                        ? garageVehicle.price
+                                                        : getPrice(garageVehicle.price, TaxType.VEHICLE)}
+                                                    <br />
+                                                </span>
+                                            </div>
                                         )}
-                                    </p>
+                                    </div>
                                 }
                             >
-                                <MenuItemSelectOption value="take_out">
-                                    Sortir{' '}
-                                    {garageVehicle.price > 0 && (
-                                        <span>(${getPrice(garageVehicle.price, TaxType.VEHICLE)})</span>
-                                    )}
-                                </MenuItemSelectOption>
+                                <MenuItemSelectOption value="take_out">Sortir</MenuItemSelectOption>
                                 {garageVehicle.price > 0 &&
                                     data.has_fake_ticket &&
                                     data.garage.type === GarageType.Private && (

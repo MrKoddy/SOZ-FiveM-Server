@@ -1,6 +1,6 @@
+import { joaat } from '@public/shared/joaat';
+
 import { Component, WardrobeConfig } from '../cloth';
-import { CraftCategory } from '../craft/craft';
-import { Feature } from '../features';
 import { NamedZone } from '../polyzone/box.zone';
 
 export const CraftZones: NamedZone[] = [
@@ -34,7 +34,7 @@ export const CraftZones: NamedZone[] = [
 ];
 
 export const PawlCloakroom: WardrobeConfig = {
-    [GetHashKey('mp_m_freemode_01')]: {
+    [joaat('mp_m_freemode_01')]: {
         ['Tenue Bucheron']: {
             Components: {
                 [Component.Torso]: { Palette: 0, Texture: 4, Drawable: 145 },
@@ -63,19 +63,31 @@ export const PawlCloakroom: WardrobeConfig = {
         },
         ["Tenue d'hiver"]: {
             Components: {
-                [Component.Torso]: { Drawable: 145, Texture: 4, Palette: 0 },
-                [Component.Legs]: { Drawable: 97, Texture: 2, Palette: 0 },
-                [Component.Shoes]: { Drawable: 70, Texture: 2, Palette: 0 },
+                [Component.Torso]: { Drawable: 139, Texture: 8, Palette: 0 },
+                [Component.Legs]: { Drawable: 125, Texture: 6, Palette: 0 },
+                [Component.Shoes]: { Drawable: 71, Texture: 17, Palette: 0 },
                 [Component.Accessories]: { Drawable: 0, Texture: 0, Palette: 0 },
-                [Component.Undershirt]: { Drawable: 15, Texture: 0, Palette: 0 },
+                [Component.Undershirt]: { Drawable: 30, Texture: 9, Palette: 0 },
                 [Component.BodyArmor]: { Drawable: 0, Texture: 0, Palette: 0 },
                 [Component.Decals]: { Drawable: 0, Texture: 0, Palette: 0 },
-                [Component.Tops]: { Drawable: 251, Texture: 2, Palette: 0 },
+                [Component.Tops]: { Drawable: 244, Texture: 13, Palette: 0 },
             },
             Props: {},
         },
+        ['Ifécho']: {
+            Components: {
+                [Component.Torso]: { Drawable: 184, Texture: 0, Palette: 0 },
+                [Component.Legs]: { Drawable: 98, Texture: 2, Palette: 0 },
+                [Component.Shoes]: { Drawable: 59, Texture: 22, Palette: 0 },
+                [Component.Undershirt]: { Drawable: 0, Texture: 0, Palette: 0 },
+                [Component.Decals]: { Drawable: 0, Texture: 0, Palette: 0 },
+                [Component.Tops]: { Drawable: 346, Texture: 19, Palette: 0 },
+            },
+            Props: {},
+            GlovesID: 56031,
+        },
     },
-    [GetHashKey('mp_f_freemode_01')]: {
+    [joaat('mp_f_freemode_01')]: {
         ['Tenue Bucheron']: {
             Components: {
                 [Component.Torso]: { Texture: 4, Drawable: 179, Palette: 0 },
@@ -104,104 +116,34 @@ export const PawlCloakroom: WardrobeConfig = {
         },
         ["Tenue d'hiver"]: {
             Components: {
-                [Component.Torso]: { Drawable: 179, Texture: 4, Palette: 0 },
-                [Component.Legs]: { Drawable: 100, Texture: 2, Palette: 0 },
-                [Component.Shoes]: { Drawable: 73, Texture: 2, Palette: 0 },
-                [Component.Accessories]: { Drawable: 0, Texture: 0, Palette: 0 },
+                [Component.Torso]: { Drawable: 171, Texture: 8, Palette: 0 },
+                [Component.Legs]: { Drawable: 131, Texture: 6, Palette: 0 },
+                [Component.Shoes]: { Drawable: 74, Texture: 17, Palette: 0 },
+                [Component.Accessories]: { Drawable: 15, Texture: 2, Palette: 0 },
                 [Component.Undershirt]: { Drawable: 15, Texture: 0, Palette: 0 },
                 [Component.BodyArmor]: { Drawable: 0, Texture: 0, Palette: 0 },
                 [Component.Decals]: { Drawable: 0, Texture: 0, Palette: 0 },
-                [Component.Tops]: { Drawable: 259, Texture: 2, Palette: 0 },
+                [Component.Tops]: { Drawable: 252, Texture: 13, Palette: 0 },
             },
             Props: {},
+        },
+        ['Ifécho']: {
+            Components: {
+                [Component.Torso]: { Drawable: 4, Texture: 0, Palette: 0 },
+                [Component.Legs]: { Drawable: 101, Texture: 2, Palette: 0 },
+                [Component.Shoes]: { Drawable: 62, Texture: 22, Palette: 0 },
+                [Component.Undershirt]: { Drawable: 151, Texture: 0, Palette: 0 },
+                [Component.Decals]: { Drawable: 0, Texture: 0, Palette: 0 },
+                [Component.Tops]: { Drawable: 364, Texture: 19, Palette: 0 },
+            },
+            Props: {},
+            GlovesID: 55031,
         },
     },
 };
 
-export const PawlCraftsLists: Record<string, CraftCategory> = {
-    Objets: {
-        duration: 15000,
-        animation: {
-            dictionary: 'mp_arresting',
-            name: 'a_uncuff',
-            options: {
-                onlyUpperBody: true,
-                repeat: true,
-            },
-        },
-        event: 'job_pawl_craft',
-        recipes: {
-            police_barrier: {
-                inputs: {
-                    wood_plank: { count: 1 },
-                },
-                amount: 1,
-            },
-            paper: {
-                inputs: {
-                    wood_plank: { count: 1 },
-                },
-                amount: 10,
-            },
-            empty_lunchbox: {
-                inputs: {
-                    wood_plank: { count: 1 },
-                },
-                amount: 4,
-            },
-            cabinet_zkea: {
-                inputs: {
-                    wood_plank: { count: 2 },
-                },
-                rewardTier: {
-                    Divin: { id: 4, chance: GetConvarInt('soz_pawl_craft_chance_tier_4', 25) },
-                    Sublime: { id: 3, chance: GetConvarInt('soz_pawl_craft_chance_tier_3', 25) },
-                    Joli: { id: 2, chance: GetConvarInt('soz_pawl_craft_chance_tier_2', 25) },
-                    Banal: { id: 1, chance: GetConvarInt('soz_pawl_craft_chance_tier_1', 25) },
-                },
-                amount: 1,
-            },
-            walkstick: {
-                inputs: {
-                    wood_plank: { count: 1 },
-                },
-                amount: 4,
-            },
-        },
-    },
-    Halloween: {
-        feature: Feature.Halloween,
-        duration: 15000,
-        icon: '🎃',
-        animation: {
-            dictionary: 'mp_arresting',
-            name: 'a_uncuff',
-            options: {
-                onlyUpperBody: true,
-                repeat: true,
-            },
-        },
-        event: 'job_pawl_craft',
-        recipes: {
-            witch_broom: {
-                inputs: {
-                    wood_plank: { count: 4 },
-                },
-                amount: 1,
-            },
-            small_coffin: {
-                inputs: {
-                    wood_plank: { count: 10 },
-                },
-                amount: 1,
-            },
-            halloween_scarecrow: {
-                inputs: {
-                    wood_plank: { count: 10 },
-                    halloween_uranium_raw: { count: 1 },
-                },
-                amount: 1,
-            },
-        },
-    },
-};
+export enum DegradationLevel {
+    Green,
+    Yellow,
+    Red,
+}

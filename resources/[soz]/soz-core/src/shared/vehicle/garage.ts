@@ -11,6 +11,8 @@ export enum GarageType {
     JobLuxury = 'job_luxury',
     Depot = 'depot',
     House = 'house',
+    Gang = 'gang',
+    CasinoVip = 'casino_vip',
 }
 
 export enum GarageCategory {
@@ -32,6 +34,22 @@ export const HouseGarageLimits = {
     2: 6,
     3: 8,
     4: 10,
+    5: 12,
+    6: 14,
+    7: 16,
+    8: 18,
+    9: 20,
+};
+
+export const MaxPlaces: Record<GarageType, number> = {
+    depot: 0,
+    gang: 99,
+    house: 99,
+    job: 0,
+    job_luxury: 0,
+    private: 60,
+    public: 0,
+    casino_vip: 60,
 };
 
 export type GarageParkingPlaceData = {
@@ -66,6 +84,7 @@ export type GarageMenuData = {
     id: string;
     max_places: number | null;
     has_fake_ticket: boolean;
+    citizenId: string;
     transferGarageList: {
         id: string;
         garage: Garage;

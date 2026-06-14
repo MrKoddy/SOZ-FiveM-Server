@@ -1,14 +1,11 @@
-import {
-    getDefaultVehicleCondition,
-    isVehicleModelElectric,
-    VehicleClassFuelStorageMultiplier,
-} from '@public/shared/vehicle/vehicle';
+import { getVehicleMaxFuelStorage, isVehicleModelElectric } from '@public/shared/vehicle/vehicle';
 
 import { Once } from '../../core/decorators/event';
 import { Inject } from '../../core/decorators/injectable';
 import { Provider } from '../../core/decorators/provider';
-import { CommonItem, InventoryItem } from '../../shared/item';
-import { InventoryManager } from '../inventory/inventory.manager';
+import { InventoryItem } from '../../shared/inventory';
+import { CommonItem } from '../../shared/item';
+import { Inventory } from '../inventory/inventory';
 import { Notifier } from '../notifier';
 import { ProgressService } from '../player/progress.service';
 import { VehicleRepository } from '../repository/vehicle.repository';
@@ -22,9 +19,6 @@ export const BATTERY_FUEL_AMOUNT = 33;
 export class ItemFuelProvider {
     @Inject(ItemService)
     private item: ItemService;
-
-    @Inject(InventoryManager)
-    private inventoryManager: InventoryManager;
 
     @Inject(ProgressService)
     private progressService: ProgressService;
@@ -41,13 +35,12 @@ export class ItemFuelProvider {
     @Inject(VehicleRepository)
     private vehicleRepository: VehicleRepository;
 
-    public async useEssenceJerrycan(source: number, item: CommonItem, inventoryItem: InventoryItem) {
-        if (this.item.isItemExpired(inventoryItem)) {
-            this.notifier.notify(source, "L'essence du jerrycan est périmé.", 'error');
-
-            return;
-        }
-
+    public async useEssenceJerrycan(
+        source: number,
+        item: CommonItem,
+        inventoryItem: InventoryItem,
+        inventory: Inventory
+    ) {
         const closestVehicle = await this.vehicleSpawner.getClosestVehicle(source);
 
         if (!closestVehicle) {
@@ -68,6 +61,7 @@ export class ItemFuelProvider {
             vehicleType === 'heli' ||
             vehicleType === 'plane' ||
             vehicleType === 'boat' ||
+            vehicleType === 'submarine' ||
             isVehicleModelElectric(GetEntityModel(closestVehicle.vehicleEntityId))
         ) {
             this.notifier.notify(source, 'Vous ne pouvez pas utiliser ce carburant pour ce véhicule.', 'error');
@@ -82,26 +76,11 @@ export class ItemFuelProvider {
             return;
         }
 
-        const storageMultiplier = VehicleClassFuelStorageMultiplier[vehModel?.requiredLicence] || 1.0;
-        const maxFuel = Math.floor(getDefaultVehicleCondition().fuelLevel * storageMultiplier);
+        const maxFuel = getVehicleMaxFuelStorage(vehModel);
 
         const vehicleState = this.vehicleStateService.getVehicleState(closestVehicle.vehicleNetworkId);
 
-        if (vehicleState.condition.fuelLevel + 30 > maxFuel) {
-            this.notifier.notify(source, "Vous avez ~r~trop d'essence~s~ pour utiliser un jerrycan.", 'error');
-
-            return;
-        }
-
-        if (
-            !this.inventoryManager.removeItemFromInventory(
-                source,
-                item.name,
-                1,
-                inventoryItem.metadata,
-                inventoryItem.slot
-            )
-        ) {
+        if (!inventory.removeAtSlot(inventoryItem.slot, 1)) {
             return;
         }
 
@@ -129,13 +108,18 @@ export class ItemFuelProvider {
         const filledFuel = Math.round(progress * amount);
 
         this.vehicleStateService.updateVehicleCondition(closestVehicle.vehicleNetworkId, {
-            fuelLevel: vehicleState.condition.fuelLevel + filledFuel,
+            fuelLevel: Math.min(maxFuel, vehicleState.condition.fuelLevel + filledFuel),
         });
 
         this.notifier.notify(source, "Vous avez ~g~utilisé~s~ un jerrycan d'essence.", 'success');
     }
 
-    public async useKeroseneJerrycan(source: number, item: CommonItem, inventoryItem: InventoryItem) {
+    public async useKeroseneJerrycan(
+        source: number,
+        item: CommonItem,
+        inventoryItem: InventoryItem,
+        inventory: Inventory
+    ) {
         const closestVehicle = await this.vehicleSpawner.getClosestVehicle(source);
 
         if (!closestVehicle) {
@@ -152,29 +136,23 @@ export class ItemFuelProvider {
 
         const vehicleType = GetVehicleType(closestVehicle.vehicleEntityId);
 
-        if (vehicleType !== 'heli' && vehicleType !== 'plane' && vehicleType !== 'boat') {
+        if (
+            vehicleType !== 'heli' &&
+            vehicleType !== 'plane' &&
+            vehicleType !== 'boat' &&
+            vehicleType !== 'submarine'
+        ) {
             this.notifier.notify(source, 'Vous ne pouvez pas utiliser ce carburant pour ce véhicule', 'error');
 
             return;
         }
 
+        const vehModel = await this.vehicleRepository.findByHash(GetEntityModel(closestVehicle.vehicleEntityId));
+        const maxFuel = getVehicleMaxFuelStorage(vehModel);
+
         const vehicleState = this.vehicleStateService.getVehicleState(closestVehicle.vehicleNetworkId);
 
-        if (vehicleState.condition.fuelLevel >= 70) {
-            this.notifier.notify(source, 'Vous avez ~r~trop de kérosène~s~ pour utiliser un jerrycan.', 'error');
-
-            return;
-        }
-
-        if (
-            !this.inventoryManager.removeItemFromInventory(
-                source,
-                item.name,
-                1,
-                inventoryItem.metadata,
-                inventoryItem.slot
-            )
-        ) {
+        if (!inventory.removeAtSlot(inventoryItem.slot, 1)) {
             return;
         }
 
@@ -202,13 +180,13 @@ export class ItemFuelProvider {
         const filledFuel = Math.round(progress * amount);
 
         this.vehicleStateService.updateVehicleCondition(closestVehicle.vehicleNetworkId, {
-            fuelLevel: vehicleState.condition.fuelLevel + filledFuel,
+            fuelLevel: Math.min(maxFuel, vehicleState.condition.fuelLevel + filledFuel),
         });
 
         this.notifier.notify(source, 'Vous avez ~g~utilisé~s~ un jerrycan de kérosène.', 'success');
     }
 
-    public async useOilJerrycan(source: number, item: CommonItem, inventoryItem: InventoryItem) {
+    public async useOilJerrycan(source: number, item: CommonItem, inventoryItem: InventoryItem, inventory: Inventory) {
         const closestVehicle = await this.vehicleSpawner.getClosestVehicle(source);
 
         if (!closestVehicle) {
@@ -231,15 +209,7 @@ export class ItemFuelProvider {
 
         const vehicleState = this.vehicleStateService.getVehicleState(closestVehicle.vehicleNetworkId);
 
-        if (
-            !this.inventoryManager.removeItemFromInventory(
-                source,
-                item.name,
-                1,
-                inventoryItem.metadata,
-                inventoryItem.slot
-            )
-        ) {
+        if (!inventory.removeAtSlot(inventoryItem.slot, 1)) {
             return;
         }
 
@@ -269,7 +239,12 @@ export class ItemFuelProvider {
         this.notifier.notify(source, "Vous avez ~g~utilisé~s~ un bidon d'huile.", 'success');
     }
 
-    public async usePortableBattery(source: number, item: CommonItem, inventoryItem: InventoryItem) {
+    public async usePortableBattery(
+        source: number,
+        item: CommonItem,
+        inventoryItem: InventoryItem,
+        inventory: Inventory
+    ) {
         const closestVehicle = await this.vehicleSpawner.getClosestVehicle(source);
 
         if (!closestVehicle) {
@@ -283,27 +258,12 @@ export class ItemFuelProvider {
             return;
         }
 
+        const vehModel = await this.vehicleRepository.findByHash(GetEntityModel(closestVehicle.vehicleEntityId));
+        const maxFuel = getVehicleMaxFuelStorage(vehModel);
+
         const vehicleState = this.vehicleStateService.getVehicleState(closestVehicle.vehicleNetworkId);
 
-        if (vehicleState.condition.fuelLevel >= 67) {
-            this.notifier.notify(
-                source,
-                'La batterie est ~r~trop chargée~s~ pour utiliser une batterie portable.',
-                'error'
-            );
-
-            return;
-        }
-
-        if (
-            !this.inventoryManager.removeItemFromInventory(
-                source,
-                item.name,
-                1,
-                inventoryItem.metadata,
-                inventoryItem.slot
-            )
-        ) {
+        if (!inventory.removeAtSlot(inventoryItem.slot, 1)) {
             return;
         }
 
@@ -327,7 +287,7 @@ export class ItemFuelProvider {
         const filledFuel = Math.round(progress * BATTERY_FUEL_AMOUNT);
 
         this.vehicleStateService.updateVehicleCondition(closestVehicle.vehicleNetworkId, {
-            fuelLevel: vehicleState.condition.fuelLevel + filledFuel,
+            fuelLevel: Math.min(maxFuel, vehicleState.condition.fuelLevel + filledFuel),
         });
 
         this.notifier.notify(source, 'Vous avez ~g~rechargé~s~ la batterie du véhicule.', 'success');

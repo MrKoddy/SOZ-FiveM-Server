@@ -3,7 +3,7 @@ import { Vector3 } from '@public/shared/polyzone/vector';
 
 export const VOICE_TARGET = 1;
 
-export type AudioContextType = 'radio' | 'car' | 'proximity' | 'megaphone' | 'phone';
+export type AudioContextType = 'radio' | 'car' | 'eodrobot' | 'proximity' | 'megaphone' | 'phone_speaker' | 'phone';
 
 export type AudioContextRadio = {
     position: Vector3;
@@ -22,6 +22,11 @@ export type AudioContextCar = {
 
 export type AudioContextProximity = {
     type: 'proximity';
+    priority: 6;
+};
+
+export type AudioContextEodRobot = {
+    type: 'eodrobot';
     priority: 5;
 };
 
@@ -35,12 +40,19 @@ export type AudioContextPhone = {
     priority: 1;
 };
 
+export type AudioContextPhoneSpeaker = {
+    type: 'phone_speaker';
+    priority: 2;
+};
+
 export type AudioContext =
     | AudioContextRadio
     | AudioContextCar
     | AudioContextProximity
+    | AudioContextEodRobot
     | AudioContextMegaphone
-    | AudioContextPhone;
+    | AudioContextPhone
+    | AudioContextPhoneSpeaker;
 
 export type PlayerVoice = {
     serverId: number;
@@ -89,3 +101,19 @@ export type VoiceDebugInfo = {
     listeners: PlayerVoice[];
     submixes: [number, number][];
 };
+
+export function getDefaultRadioState(): Radio {
+    return {
+        enabled: false,
+        primary: {
+            ear: Ear.Both,
+            frequency: 0,
+            volume: 50,
+        },
+        secondary: {
+            ear: Ear.Both,
+            frequency: 0,
+            volume: 50,
+        },
+    };
+}

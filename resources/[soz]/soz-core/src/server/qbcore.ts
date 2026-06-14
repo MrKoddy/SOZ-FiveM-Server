@@ -14,9 +14,6 @@ export class QBCore {
     public logout(source: number): void {
         this.QBCore.Player.Logout(source);
     }
-    public createUseableItem(name, action: (player: number, item: any) => void) {
-        this.QBCore.Functions.CreateUseableItem(name, action);
-    }
 
     public getItem<T extends Item = Item>(name: string): T | null {
         return (this.QBCore.Shared.Items[name] as T) || null;
@@ -46,6 +43,10 @@ export class QBCore {
 
     public getPlayerByPhone(phone: string): QBCorePlayer | null {
         return this.QBCore.Functions.GetPlayerByPhone(phone);
+    }
+
+    public getPlayerByBankAccount(account: string): QBCorePlayer | null {
+        return this.QBCore.Functions.GetPlayerByBankAccount(account);
     }
 
     public getPlayer(source: number): QBCorePlayer {

@@ -1,16 +1,16 @@
-import { TargetOptions } from '../client/target/target.factory';
+import { BankMoneyType } from '@public/shared/bank';
+import { InventoryItemMetadata } from '@public/shared/inventory';
+import { RpcServerEvent } from '@public/shared/rpc';
+import { ShopItem } from '@public/shared/shop/superette';
+import { TargetOption } from '@public/shared/target';
+import { TaxType } from '@public/shared/tax';
+
 import { Component, GlovesItem, OutfitItem, Prop } from './cloth';
-import { InventoryItemMetadata, Item, ItemType } from './item';
+import { Item, ItemType } from './item';
 import { JobType } from './job';
-import { PlayerLicenceType } from './player';
+import { PlayerLicenceType, Skin } from './player';
 import { Zone } from './polyzone/box.zone';
 import { Vector3 } from './polyzone/vector';
-
-export enum ClothingBrand {
-    PONSONBYS = 'ponsonbys',
-    SUBURBAN = 'suburban',
-    BINCO = 'binco',
-}
 
 // Superette
 export type ShopProduct = {
@@ -26,7 +26,7 @@ export type ShopProduct = {
 export type ShopConfig = {
     name: string;
     zone: Zone;
-    targets: TargetOptions[];
+    targets: TargetOption[];
     products: ShopProduct[];
     orders?: {
         targetInv: string;
@@ -44,7 +44,6 @@ export type ClothingShop = {
     id: number;
     name: string;
     categories?: Record<number, ClothingShopCategory>;
-    stocks?: Record<number, number>;
 };
 
 export type ClothingShopCategory = {
@@ -52,6 +51,7 @@ export type ClothingShopCategory = {
     name: string;
     parentId?: number;
     content?: Record<string, ClothingShopItem[]>; // Map modelLabel -> list of items
+    warmScore: number;
 };
 
 export type ClothingShopItem = {
@@ -63,7 +63,7 @@ export type ClothingShopItem = {
     colorLabel?: string;
     price: number;
     modelHash?: number;
-    components?: Record<Component, OutfitItem>;
+    components?: Partial<Record<Component, OutfitItem>>;
     props?: Record<Prop, OutfitItem>;
     stock: number;
     correspondingDrawables?: Record<number, number>; // This is for torso compatibility (for gloves)
@@ -72,15 +72,14 @@ export type ClothingShopItem = {
 };
 
 export type ClothingShopItemData = {
-    components?: Record<Component, OutfitItem>;
+    components?: Partial<Record<Component, OutfitItem>>;
     props?: Record<Prop, OutfitItem>;
-    label?: string;
-    modelHash?: number;
+    modelHash: number;
     correspondingDrawables?: Record<number, number>; // This is for torso compatibility (for gloves)
     undershirtType?: number; // This is for top compatibility (for undershirt)
     underTypes?: number[]; // This is for undershirt compatibility (for tops)
-    modelLabel?: string;
-    colorLabel?: string;
+    modelLabel: string;
+    colorLabel: string;
 };
 
 export const ClothingCategoryID = {
@@ -141,6 +140,7 @@ export type ShopJewelryContent = Record<string, ShopJewelryCategory>;
 export type BarberShopLabelEntry = {
     value: number;
     label: string;
+    Collection: string;
 };
 export type BarberShopColorEntry = {
     value: number;
@@ -163,35 +163,8 @@ export type BarberShopCategory = {
 
 export type BarberShopContent = Record<number, BarberShopCategory[]>;
 
-export type BarberConfiguration = {
-    Hair: {
-        HairType?: number;
-        HairColor?: number;
-        HairSecondaryColor?: number;
-        BeardType?: number;
-        BeardColor?: number;
-        EyebrowType?: number;
-        EyebrowColor?: number;
-    };
-    Makeup: {
-        FullMakeupType?: number;
-        FullMakeupOpacity?: number;
-        FullMakeupPrimaryColor?: number;
-        FullMakeupSecondaryColor?: number;
-        BlushType?: number;
-        BlushOpacity?: number;
-        BlushColor?: number;
-        LipstickType?: number;
-        LipstickOpacity?: number;
-        LipstickColor?: number;
-    };
-    FaceTraits: {
-        EyeColor?: number;
-    };
-};
-
 export type BarberShopItem = {
-    config: BarberConfiguration;
+    config: Skin;
     price: number;
     overlay: string;
 };
@@ -204,3 +177,14 @@ export type ClothingShopRepositoryData = {
 
 export type GloveShopRepositoryData = Record<number, GlovesItem>; // Map ID of gloves -> Gloves data
 export type UnderTypesShopRepositoryData = Record<number, number[]>; // Map ID -> list of compatible underTypes
+
+export type ShopContent = {
+    items: ShopItem[];
+    tax?: TaxType;
+    title: string;
+    moneyType: string | BankMoneyType;
+    shopId: string;
+    rpcServerEvent: RpcServerEvent;
+};
+
+export const ENGRAVE_PRICE = 10_000;

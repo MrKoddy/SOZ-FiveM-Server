@@ -1,14 +1,18 @@
+import { On, Once, OnceStep, OnEvent } from '@core/decorators/event';
+import { Inject } from '@core/decorators/injectable';
+import { Provider } from '@core/decorators/provider';
+import { Tick, TickInterval } from '@core/decorators/tick';
+import { emitRpc } from '@core/rpc';
+import { FeatureProvider } from '@public/client/feature/feature.provider';
+import { GamesProvider } from '@public/client/games/games.provider';
+import { PlayerUpdate } from '@public/core/decorators/player';
 import { wait } from '@public/core/utils';
+import { TargetOption } from '@public/shared/target';
 
-import { On, Once, OnceStep, OnEvent } from '../../core/decorators/event';
-import { Inject } from '../../core/decorators/injectable';
-import { Provider } from '../../core/decorators/provider';
-import { Tick, TickInterval } from '../../core/decorators/tick';
-import { emitRpc } from '../../core/rpc';
 import { AnimationStopReason } from '../../shared/animation';
 import { Component, WardrobeConfig } from '../../shared/cloth';
 import { ClientEvent, ServerEvent } from '../../shared/event';
-import { Feature, isFeatureEnabled } from '../../shared/features';
+import { Feature } from '../../shared/features';
 import { Control } from '../../shared/input';
 import { PlayerData, PlayerServerState, PlayerServerStateExercise } from '../../shared/player';
 import { getDistance, Vector3, Vector4 } from '../../shared/polyzone/vector';
@@ -144,6 +148,42 @@ const CHIN_UPS_COORDS = [
         },
         coords: [304.57, -1407.69, 37.99, 314.06] as Vector4,
     },
+    {
+        name: 'chin_ups_11',
+        zone: {
+            center: [1145.71, -435.88, 76.34] as Vector3,
+            width: 1.0,
+            length: 1.0,
+            heading: 166.87,
+            minZ: 75.34,
+            maxZ: 77.34,
+        },
+        coords: [1145.7, -436.33, 76.34, 348.47] as Vector4,
+    },
+    {
+        name: 'chin_ups_12',
+        zone: {
+            center: [1144.06, -435.36, 76.34] as Vector3,
+            width: 1.0,
+            length: 1.0,
+            heading: 166.86,
+            minZ: 75.34,
+            maxZ: 77.34,
+        },
+        coords: [1143.89, -435.93, 76.34, 353.39] as Vector4,
+    },
+    {
+        name: 'chin_ups_13',
+        zone: {
+            center: [1142.23, -435.05, 76.34] as Vector3,
+            width: 1.0,
+            length: 1.0,
+            heading: 166.86,
+            minZ: 75.34,
+            maxZ: 77.34,
+        },
+        coords: [1142.23, -435.46, 76.34, 351.52] as Vector4,
+    },
 ];
 
 const FREE_WEIGHT_COORDS = [
@@ -213,6 +253,17 @@ const FREE_WEIGHT_COORDS = [
             heading: 321.91,
         },
     },
+    {
+        name: 'free_weight_7',
+        zone: {
+            center: [1139.43, -433.52, 76.34] as Vector3,
+            length: 0.8,
+            width: 1.0,
+            heading: 255.6,
+            minZ: 75.34,
+            maxZ: 77.34,
+        },
+    },
 ];
 
 const GymWardrobeConfig: WardrobeConfig = {
@@ -229,6 +280,7 @@ const GymWardrobeConfig: WardrobeConfig = {
                 [Component.Tops]: { Drawable: 15, Texture: 0, Palette: 0 },
             },
             Props: {},
+            type: 'SPORT',
         },
         'Homme sport': {
             Components: {
@@ -242,6 +294,7 @@ const GymWardrobeConfig: WardrobeConfig = {
                 [Component.Tops]: { Drawable: 237, Texture: 0, Palette: 13 },
             },
             Props: {},
+            type: 'SPORT',
         },
     },
     [GetHashKey('mp_f_freemode_01')]: {
@@ -257,7 +310,42 @@ const GymWardrobeConfig: WardrobeConfig = {
                 [Component.Tops]: { Drawable: 18, Texture: 0, Palette: 0 },
             },
             Props: {},
+            type: 'SPORT',
         },
+        'Femme sport': {
+            Components: {
+                [Component.Torso]: { Drawable: 15, Texture: 0, Palette: 0 },
+                [Component.Legs]: { Drawable: 10, Texture: 0, Palette: 0 },
+                [Component.Shoes]: { Drawable: 81, Texture: 0, Palette: 0 },
+                [Component.Accessories]: { Drawable: 0, Texture: 0, Palette: 0 },
+                [Component.Undershirt]: { Drawable: 3, Texture: 0, Palette: 0 },
+                [Component.BodyArmor]: { Drawable: 0, Texture: 0, Palette: 0 },
+                [Component.Decals]: { Drawable: 0, Texture: 0, Palette: 0 },
+                [Component.Tops]: { Drawable: 284, Texture: 4, Palette: 0 },
+            },
+            Props: {},
+            type: 'SPORT',
+        },
+    },
+};
+
+const OotdoorGymWardrobeConfig: WardrobeConfig = {
+    [GetHashKey('mp_m_freemode_01')]: {
+        'Homme sport': {
+            Components: {
+                [Component.Torso]: { Drawable: 5, Texture: 0, Palette: 0 },
+                [Component.Legs]: { Drawable: 12, Texture: 0, Palette: 0 },
+                [Component.Shoes]: { Drawable: 31, Texture: 0, Palette: 3 },
+                [Component.Accessories]: { Drawable: 0, Texture: 0, Palette: 0 },
+                [Component.Undershirt]: { Drawable: 15, Texture: 0, Palette: 0 },
+                [Component.BodyArmor]: { Drawable: 0, Texture: 0, Palette: 0 },
+                [Component.Decals]: { Drawable: 0, Texture: 0, Palette: 0 },
+                [Component.Tops]: { Drawable: 237, Texture: 0, Palette: 13 },
+            },
+            Props: {},
+        },
+    },
+    [GetHashKey('mp_f_freemode_01')]: {
         'Femme sport': {
             Components: {
                 [Component.Torso]: { Drawable: 15, Texture: 0, Palette: 0 },
@@ -302,23 +390,91 @@ export class PlayerHealthProvider {
     @Inject(PlayerWardrobe)
     private playerWardrobe: PlayerWardrobe;
 
+    @Inject(FeatureProvider)
+    private featureProvider: FeatureProvider;
+
+    @Inject(GamesProvider)
+    private readonly gamesProvider: GamesProvider;
+
     private lastRunPosition = null;
 
     private unlimitedSprint = false;
 
     private disableSprint = false;
 
+    private disableJump = false;
+
+    private disableNutrition = false;
+
     @Tick(50)
     private async updateNuiHealth(): Promise<void> {
-        const health = GetEntityHealth(PlayerPedId());
-        const armor = GetPedArmour(PlayerPedId());
+        const playerPed = PlayerPedId();
+        const playerId = PlayerId();
+        const state = this.playerService.getState();
 
-        this.nuiDispatch.dispatch('player', 'UpdatePlayerStats', [health, armor]);
+        const health = GetEntityHealth(playerPed);
+        const armor = GetPedArmour(playerPed);
+        const armorPlates = state.nbArmorPlates;
+        const stamina = GetPlayerMaxStamina(playerId) - Math.trunc(GetPlayerSprintStaminaRemaining(playerId));
+
+        this.nuiDispatch.dispatch('player', 'UpdatePlayerStats', { health, armor, stamina, armorPlates });
+    }
+
+    @OnEvent(ClientEvent.POLICE_SETUP_ARMOR_PLATE)
+    public setupArmorPlates(nbPlates?: number, maxPlates?: number, removePreviousPlates?: boolean) {
+        const state = this.playerService.getState();
+
+        const armorPlates = state.nbArmorPlates;
+        const usedArmorPlates = state.usedArmorPlates;
+        if (maxPlates) {
+            this.playerService.updateState({ maxArmorPlates: maxPlates });
+        }
+        this.playerService.updateState({
+            nbArmorPlates: removePreviousPlates ? nbPlates : armorPlates + (nbPlates || 1),
+        });
+        this.playerService.updateState({ usedArmorPlates: removePreviousPlates ? 0 : usedArmorPlates + 1 });
+
+        if (removePreviousPlates ? nbPlates : armorPlates + (nbPlates || 1) > 0) {
+            SetPlayerWeaponDefenseModifier(PlayerId(), 0.1);
+            SetPlayerWeaponDefenseModifier_2(PlayerId(), 0.1);
+        }
+    }
+
+    @OnEvent(ClientEvent.POLICE_ANIMATE_ARMOR_PLATE)
+    public animateArmorPlate() {
+        this.animationService.playAnimation({
+            base: {
+                dictionary: `anim@mp_atm@exit`,
+                name: 'exit',
+                blendInSpeed: 8.0,
+                blendOutSpeed: -8.0,
+                duration: 3000,
+                options: {
+                    onlyUpperBody: true,
+                },
+                playbackRate: 0,
+                lockX: false,
+                lockY: false,
+                lockZ: false,
+            },
+        });
+    }
+
+    @PlayerUpdate()
+    public onPlayerUpdate(playerData: PlayerData) {
+        if (playerData.cloth_config.Config.HideBulletproof) {
+            this.playerService.updateState({ nbArmorPlates: 0 });
+        }
+    }
+
+    @OnEvent(ClientEvent.PLAYER_HEALTH_SET_NUTRITION_DISABLED)
+    public setNutritionDisabled(value: boolean) {
+        this.disableNutrition = value;
     }
 
     @Tick(TickInterval.EVERY_MINUTE)
     private async nutritionLoop(): Promise<void> {
-        if (this.playerService.isLoggedIn()) {
+        if (this.playerService.isLoggedIn() && !this.disableNutrition) {
             TriggerServerEvent(ServerEvent.PLAYER_NUTRITION_LOOP);
         }
     }
@@ -339,6 +495,9 @@ export class PlayerHealthProvider {
         const armor = GetPedArmour(PlayerPedId());
         if (armor != metadataArmor.current) {
             metadataArmor.current = armor;
+            if (!armor) {
+                TriggerServerEvent(ServerEvent.QBCORE_SET_METADATA, 'armor_plates', 0);
+            }
             TriggerServerEvent(ServerEvent.QBCORE_SET_METADATA, 'armor', metadataArmor);
         }
     }
@@ -370,8 +529,11 @@ export class PlayerHealthProvider {
 
     private canDoExercise(): boolean {
         const player = this.playerService.getPlayer();
-
         if (!player) {
+            return false;
+        }
+
+        if (this.featureProvider.isFeatureEnabled(Feature.WhatIfSecondEpisode)) {
             return false;
         }
 
@@ -405,7 +567,11 @@ export class PlayerHealthProvider {
         const { completed } = await this.progressService.progress(
             'Haltères',
             'Vous faites des haltères...',
-            EXERCISE_TIME
+            EXERCISE_TIME,
+            {},
+            {
+                allowExistingAnimation: true,
+            }
         );
         progressEnd = true;
 
@@ -489,7 +655,15 @@ export class PlayerHealthProvider {
             }
         });
 
-        const { completed } = await this.progressService.progress(type, message, EXERCISE_TIME);
+        const { completed } = await this.progressService.progress(
+            type,
+            message,
+            EXERCISE_TIME,
+            {},
+            {
+                allowExistingAnimation: true,
+            }
+        );
         progressEnd = true;
 
         if (completed) {
@@ -511,18 +685,47 @@ export class PlayerHealthProvider {
         this.disableSprint = value;
     }
 
+    @OnEvent(ClientEvent.PLAYER_DISABLE_JUMP)
+    public setDisabledJump(value: boolean): void {
+        this.disableJump = value;
+    }
+
     @Tick(TickInterval.EVERY_FRAME)
     async disableSprintLoop(): Promise<void> {
-        if (!this.disableSprint) {
-            return;
+        if (this.disableSprint) {
+            DisableControlAction(0, Control.Sprint, true); // disable sprint
         }
 
-        DisableControlAction(0, Control.Sprint, true); // disable sprint
+        if (GetPlayerStamina(PlayerId()) <= 25 || this.disableJump) {
+            DisableControlAction(0, Control.Jump, true); // disable jump
+        }
+    }
+
+    @Tick(TickInterval.EVERY_FRAME)
+    async consumeMoreStaminaOnJump(): Promise<void> {
+        const playerId = PlayerId();
+        const stamina = GetPlayerStamina(playerId);
+
+        if (IsPedJumping(PlayerPedId())) {
+            SetPlayerStamina(playerId, stamina - 25);
+            await wait(1000);
+        }
     }
 
     @Tick(TickInterval.EVERY_SECOND)
     async checkRunning(): Promise<void> {
-        if (!isFeatureEnabled(Feature.MyBodySummer)) {
+        if (!this.featureProvider.isFeatureEnabled(Feature.MyBodySummer)) {
+            return;
+        }
+
+        if (this.featureProvider.isFeatureEnabled(Feature.WhatIfSecondEpisode)) {
+            const playerId = PlayerId();
+
+            if (GetPlayerMaxStamina(playerId) > 50) {
+                RestorePlayerStamina(playerId, 0.5);
+                SetPlayerMaxStamina(playerId, 50.0);
+            }
+
             return;
         }
 
@@ -533,6 +736,10 @@ export class PlayerHealthProvider {
         }
 
         if (player.metadata.isdead || player.metadata.disease) {
+            return;
+        }
+
+        if (this.gamesProvider.areAnyGameRunning()) {
             return;
         }
 
@@ -589,7 +796,10 @@ export class PlayerHealthProvider {
 
     @Once()
     async onStart(): Promise<void> {
-        if (!isFeatureEnabled(Feature.MyBodySummer)) {
+        if (
+            !this.featureProvider.isFeatureEnabled(Feature.MyBodySummer) ||
+            this.featureProvider.isFeatureEnabled(Feature.WhatIfSecondEpisode)
+        ) {
             return;
         }
 
@@ -597,9 +807,14 @@ export class PlayerHealthProvider {
             this.targetFactory.createForBoxZone(name, zone, [
                 {
                     label: 'Faire des tractions',
-                    icon: 'c:/sport/traction.png',
+                    icon: 'sport/traction',
+                    category: 'citizen',
                     canInteract: () => true,
                     action: () => {
+                        if (!(this.playerService.getPlayer().metadata.cloth_type === 'SPORT')) {
+                            this.notifier.error('Enfile une tenue de sport dans le vestiaire à côté !');
+                            return;
+                        }
                         this.doChinUps(coords);
                     },
                 },
@@ -610,9 +825,14 @@ export class PlayerHealthProvider {
             this.targetFactory.createForBoxZone(name, zone, [
                 {
                     label: 'Faire des haltères',
-                    icon: 'c:/sport/halteres.png',
+                    icon: 'sport/halteres',
+                    category: 'citizen',
                     canInteract: () => true,
                     action: () => {
+                        if (!(this.playerService.getPlayer().metadata.cloth_type === 'SPORT')) {
+                            this.notifier.error('Enfile une tenue de sport dans le vestiaire à côté !');
+                            return;
+                        }
                         this.doFreeWeight();
                     },
                 },
@@ -622,7 +842,10 @@ export class PlayerHealthProvider {
 
     @Once(OnceStep.PlayerLoaded)
     async setupPlayerBodySummer(): Promise<void> {
-        if (!isFeatureEnabled(Feature.MyBodySummer)) {
+        if (
+            !this.featureProvider.isFeatureEnabled(Feature.MyBodySummer) ||
+            this.featureProvider.isFeatureEnabled(Feature.WhatIfSecondEpisode)
+        ) {
             return;
         }
 
@@ -650,10 +873,11 @@ export class PlayerHealthProvider {
             color: 47,
         });
 
-        const targets = [
+        const gym_targets: TargetOption[] = [
             {
-                icon: 'c:jobs/habiller.png',
+                icon: 'jobs/habiller',
                 label: 'Changer de tenue',
+                category: 'citizen',
                 canInteract: () => {
                     const player = this.playerService.getPlayer();
 
@@ -671,59 +895,81 @@ export class PlayerHealthProvider {
                     );
                 },
                 action: async () => {
-                    const menWardrobe = GymWardrobeConfig[GetHashKey('mp_m_freemode_01')];
-                    const femaleWardrobe = GymWardrobeConfig[GetHashKey('mp_f_freemode_01')];
-
-                    menWardrobe['Homme natation'].Components[Component.Legs].Texture = getRandomInt(0, 11);
-                    menWardrobe['Homme sport'].Components[Component.Legs].Texture = getRandomItem([0, 5, 7, 12]);
-                    menWardrobe['Homme sport'].Components[Component.Shoes].Texture = getRandomInt(0, 4);
-                    menWardrobe['Homme sport'].Components[Component.Undershirt].Texture = getRandomInt(0, 7);
-                    menWardrobe['Homme sport'].Components[Component.Tops].Texture = getRandomInt(0, 20);
-
-                    const randomSwimTexture = getRandomInt(0, 11);
-
-                    femaleWardrobe['Femme natation'].Components[Component.Legs].Texture = randomSwimTexture;
-                    femaleWardrobe['Femme natation'].Components[Component.Tops].Texture = randomSwimTexture;
-                    femaleWardrobe['Femme sport'].Components[Component.Legs].Texture = getRandomInt(0, 2);
-                    femaleWardrobe['Femme sport'].Components[Component.Shoes].Texture = getRandomInt(0, 3);
-                    femaleWardrobe['Femme sport'].Components[Component.Tops].Texture = getRandomInt(0, 11);
-
-                    const outfitSelection = await this.playerWardrobe.selectOutfit(GymWardrobeConfig, 'Tenue civile');
-
-                    if (outfitSelection.canceled) {
-                        return;
-                    }
-
-                    const { completed } = await this.progressService.progress(
-                        'switch_clothes',
-                        "Changement d'habits...",
-                        5000,
-                        {
-                            name: 'male_shower_towel_dry_to_get_dressed',
-                            dictionary: 'anim@mp_yacht@shower@male@',
-                            options: {
-                                cancellable: false,
-                                enablePlayerControl: false,
-                            },
-                        },
-                        {
-                            disableCombat: true,
-                            disableMovement: true,
-                        }
-                    );
-
-                    if (!completed) {
-                        return;
-                    }
-
-                    if (outfitSelection.outfit) {
-                        TriggerServerEvent('soz-character:server:SetPlayerJobClothes', outfitSelection.outfit);
-                    } else {
-                        TriggerServerEvent('soz-character:server:SetPlayerJobClothes', null);
-                    }
+                    await puttingSportClothes();
                 },
             },
         ];
+
+        const gym_targets_free: TargetOption[] = [
+            {
+                icon: 'jobs/habiller',
+                label: 'Changer de tenue',
+                category: 'citizen',
+                action: async () => {
+                    await puttingSportClothes();
+                },
+            },
+        ];
+
+        const puttingSportClothes = async (sportOnly?: boolean) => {
+            const gymConfig = sportOnly ? OotdoorGymWardrobeConfig : GymWardrobeConfig;
+
+            const menWardrobe = gymConfig[GetHashKey('mp_m_freemode_01')];
+            const femaleWardrobe = gymConfig[GetHashKey('mp_f_freemode_01')];
+
+            menWardrobe['Homme sport'].Components[Component.Shoes].Texture = getRandomInt(0, 4);
+            menWardrobe['Homme sport'].Components[Component.Tops].Texture = getRandomInt(0, 20);
+            menWardrobe['Homme sport'].Components[Component.Legs].Texture = getRandomItem([0, 5, 7, 12]);
+
+            if (!sportOnly) {
+                menWardrobe['Homme natation'].Components[Component.Legs].Texture = getRandomInt(0, 11);
+            }
+
+            const randomSwimTexture = getRandomInt(0, 11);
+
+            femaleWardrobe['Femme sport'].Components[Component.Legs].Texture = getRandomInt(0, 2);
+            femaleWardrobe['Femme sport'].Components[Component.Shoes].Texture = getRandomInt(0, 3);
+            femaleWardrobe['Femme sport'].Components[Component.Tops].Texture = getRandomInt(0, 11);
+
+            if (!sportOnly) {
+                femaleWardrobe['Femme natation'].Components[Component.Tops].Texture = randomSwimTexture;
+                femaleWardrobe['Femme natation'].Components[Component.Legs].Texture = randomSwimTexture;
+            }
+
+            const outfitSelection = await this.playerWardrobe.selectOutfit(gymConfig, 'Tenue civile');
+
+            if (outfitSelection.canceled) {
+                return;
+            }
+
+            const { completed } = await this.progressService.progress(
+                'switch_clothes',
+                "Changement d'habits...",
+                5000,
+                {
+                    name: 'male_shower_towel_dry_to_get_dressed',
+                    dictionary: 'anim@mp_yacht@shower@male@',
+                    options: {
+                        cancellable: false,
+                        enablePlayerControl: false,
+                    },
+                },
+                {
+                    disableCombat: true,
+                    disableMovement: true,
+                }
+            );
+
+            if (!completed) {
+                return;
+            }
+
+            if (outfitSelection.outfit) {
+                TriggerServerEvent('soz-character:server:SetPlayerJobClothes', outfitSelection.outfit);
+            } else {
+                TriggerServerEvent('soz-character:server:SetPlayerJobClothes', null);
+            }
+        };
 
         this.targetFactory.createForBoxZone(
             'gym_wardrobe_1',
@@ -735,7 +981,7 @@ export class PlayerHealthProvider {
                 minZ: 52.98,
                 maxZ: 56.98,
             },
-            targets
+            gym_targets
         );
 
         this.targetFactory.createForBoxZone(
@@ -748,7 +994,59 @@ export class PlayerHealthProvider {
                 minZ: 52.98,
                 maxZ: 56.98,
             },
-            targets
+            gym_targets
+        );
+
+        this.targetFactory.createForBoxZone(
+            'sandy_gym',
+            {
+                center: [1444.96, 3571.23, 35.71],
+                heading: 21.92,
+                width: 2.0,
+                length: 1.6,
+                minZ: 34.71,
+                maxZ: 37.31,
+            },
+            gym_targets_free
+        );
+
+        this.targetFactory.createForBoxZone(
+            'vespucci_gym',
+            {
+                center: [-1195.1, -1577.05, 4.41],
+                heading: 125.17,
+                width: 2,
+                length: 1.2,
+                minZ: 3.41,
+                maxZ: 6.01,
+            },
+            gym_targets_free
+        );
+
+        this.targetFactory.createForBoxZone(
+            'lsmc_gym_1',
+            {
+                center: [309.59, -1426.12, 38.44],
+                heading: -220.57,
+                width: 1,
+                length: 5.6,
+                minZ: 36.99,
+                maxZ: 39.59,
+            },
+            gym_targets_free
+        );
+
+        this.targetFactory.createForBoxZone(
+            'lsmc_gym_2',
+            {
+                center: [316.07, -1431.44, 37.99],
+                heading: 140.57,
+                width: 1,
+                length: 6.1,
+                minZ: 36.99,
+                maxZ: 39.59,
+            },
+            gym_targets_free
         );
 
         this.targetFactory.createForPed({
@@ -766,7 +1064,8 @@ export class PlayerHealthProvider {
                 options: [
                     {
                         label: 'Prendre un abonnement.',
-                        icon: 'c:/sport/abonnement.png',
+                        icon: 'sport/abonnement',
+                        category: 'citizen',
                         canInteract: () => {
                             const player = this.playerService.getPlayer();
 
@@ -782,7 +1081,8 @@ export class PlayerHealthProvider {
                     },
                     {
                         label: 'Renouveler son abonnement.',
-                        icon: 'c:/sport/renouvellement.png',
+                        icon: 'sport/renouvellement',
+                        category: 'citizen',
                         canInteract: () => {
                             const player = this.playerService.getPlayer();
 

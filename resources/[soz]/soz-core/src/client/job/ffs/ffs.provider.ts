@@ -49,17 +49,18 @@ export class FightForStyleProvider {
         this.nuiMenu.openMenu(MenuType.FightForStyleJobMenu, {
             recipes: crafting.categories,
             state: this.state,
-            onDuty: this.playerService.isOnDuty(),
         });
     }
 
     private createBlips() {
+        /*
         this.blipFactory.create('jobs:ffs', {
             name: 'Fight For Style',
             coords: { x: 717.72, y: -974.24, z: 24.91 },
             sprite: 808,
             scale: 1.2,
         });
+        */
         this.blipFactory.create('ffs_cotton_bale', {
             name: 'Point de récolte de balles de coton',
             coords: { x: 2564.11, y: 4680.59, z: 34.08 },

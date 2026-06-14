@@ -1,11 +1,18 @@
+import { OnEvent } from '@public/core/decorators/event';
+import { ServerEvent } from '@public/shared/event';
+import { TYPE_LABEL } from '@public/shared/housing/upgrades';
+
 import { Inject } from '../../core/decorators/injectable';
 import { Provider } from '../../core/decorators/provider';
 import { Rpc } from '../../core/decorators/rpc';
-import { Property } from '../../shared/housing/housing';
-import { Zone, ZoneTyped } from '../../shared/polyzone/box.zone';
+import { ApartementTiers, Property } from '../../shared/housing/housing';
+import { HOUSE_FRIDGE_TIER_WEIGHTS, HOUSE_STORAGE_TIER_WEIGHTS } from '../../shared/inventory';
+import { Zone } from '../../shared/polyzone/box.zone';
 import { RpcServerEvent } from '../../shared/rpc';
 import { HousingProvider } from '../housing/housing.provider';
-import { InventoryManager } from '../inventory/inventory.manager';
+import { InventoryFactory } from '../inventory/inventory.factory';
+import { Notifier } from '../notifier';
+import { PlayerAppearanceService } from '../player/player.appearance.service';
 import { PlayerService } from '../player/player.service';
 import { HousingRepository } from '../repository/housing.repository';
 import { SenateRepository } from '../repository/senate.repository';
@@ -28,8 +35,14 @@ export class AdminMenuMapperProvider {
     @Inject(PlayerService)
     private playerService: PlayerService;
 
-    @Inject(InventoryManager)
-    private inventoryManager: InventoryManager;
+    @Inject(InventoryFactory)
+    private inventoryFactory: InventoryFactory;
+
+    @Inject(PlayerAppearanceService)
+    private playerAppearanceService: PlayerAppearanceService;
+
+    @Inject(Notifier)
+    private notifier: Notifier;
 
     @Rpc(RpcServerEvent.ADMIN_MAPPER_SET_APARTMENT_PRICE)
     public async setApartmentPrice(source: number, apartmentId: number, price: number): Promise<Property[]> {
@@ -123,18 +136,33 @@ export class AdminMenuMapperProvider {
         return this.housingRepository.get();
     }
 
-    @Rpc(RpcServerEvent.ADMIN_MAPPER_ADD_ZONE)
-    public async addZone(source: number, zone: Zone): Promise<ZoneTyped[]> {
+    @OnEvent(ServerEvent.ADMIN_MAPPER_ADD_ZONE)
+    public async addZone(source: number, zone: Zone) {
         await this.zoneRepository.addZone(zone);
-
-        return this.zoneRepository.get();
     }
 
-    @Rpc(RpcServerEvent.ADMIN_MAPPER_REMOVE_ZONE)
-    public async removeZone(source: number, id: number): Promise<ZoneTyped[]> {
+    @OnEvent(ServerEvent.ADMIN_MAPPER_REMOVE_ZONE)
+    public async removeZone(source: number, id: number) {
         await this.zoneRepository.removeZone(id);
+    }
 
-        return this.zoneRepository.get();
+    @OnEvent(ServerEvent.ADMIN_MAPPER_RENAME_ZONE)
+    public async renameZone(source: number, id: number, name: string) {
+        const zone = await this.zoneRepository.find(id);
+        zone.data.name = name;
+
+        this.zoneRepository.updateZone(zone);
+    }
+
+    @OnEvent(ServerEvent.ADMIN_MAPPER_UPDATE_ZONE)
+    public async updateZone(source: number, id: number, zoneLocation: Zone) {
+        let zone = await this.zoneRepository.find(id);
+        zone = {
+            ...zone,
+            ...zoneLocation,
+        };
+
+        this.zoneRepository.updateZone(zone);
     }
 
     @Rpc(RpcServerEvent.ADMIN_MAPPER_SET_SENATE_PARTY)
@@ -206,15 +234,70 @@ export class AdminMenuMapperProvider {
     }
 
     @Rpc(RpcServerEvent.ADMIN_MAPPER_SET_APARTMENT_TIER)
-    public async setTier(source: number, propertyId: number, apartmentId: number, tier: number): Promise<Property[]> {
+    public async setTier(
+        source: number,
+        propertyId: number,
+        apartmentId: number,
+        apartementTier: Partial<ApartementTiers>
+    ): Promise<Property[]> {
+        const [property, apartment] = await this.housingRepository.getApartment(propertyId, apartmentId);
+        const inventory = await this.inventoryFactory.get(`house_stash_${apartment.identifier}`);
+        const fridge = await this.inventoryFactory.get(`house_fridge_${apartment.identifier}`);
+
+        if (!property || !apartment) {
+            return this.housingRepository.get();
+        }
+
+        if (apartementTier.tier !== undefined) {
+            inventory?.updateConfiguration({
+                maxWeight: HOUSE_STORAGE_TIER_WEIGHTS[apartementTier.tier] || HOUSE_STORAGE_TIER_WEIGHTS[0],
+            });
+            fridge?.updateConfiguration({
+                maxWeight: HOUSE_FRIDGE_TIER_WEIGHTS[apartementTier.tier] || HOUSE_FRIDGE_TIER_WEIGHTS[0],
+            });
+        }
+
+        if (apartementTier.cloth_tier !== undefined) {
+            if (apartment.owner !== null) {
+                this.playerAppearanceService.trunckateCloakroom(apartment.owner, apartementTier.cloth_tier);
+            }
+            if (apartment.roommate !== null) {
+                this.playerAppearanceService.trunckateCloakroom(apartment.roommate, apartementTier.cloth_tier);
+            }
+        }
+
+        await this.housingRepository.setApartmentTier(apartment.id, apartementTier);
+        this.notifier.notify(
+            source,
+            `Vous venez ~g~d'améliorer~s~ l'habitation ~b~${apartment.identifier}~s~:<br>- ${Object.keys(apartementTier)
+                .map(tier => `${TYPE_LABEL[tier]} au palier ~g~${apartementTier[tier] + 1}~s~`)
+                .join('<br>- ')}`,
+            'success'
+        );
+
+        return this.housingRepository.get();
+    }
+
+    @Rpc(RpcServerEvent.ADMIN_MAPPER_SET_APARTMENT_TAXE)
+    public async setApartmentTaxe(
+        source: number,
+        propertyId: number,
+        apartmentId: number,
+        shouldTaxe: boolean
+    ): Promise<Property[]> {
         const [property, apartment] = await this.housingRepository.getApartment(propertyId, apartmentId);
 
         if (!property || !apartment) {
             return this.housingRepository.get();
         }
 
-        this.inventoryManager.setHouseStashMaxWeightFromTier(apartment.identifier, tier);
-        await this.housingRepository.setApartmentTier(apartment.id, tier);
+        await this.housingRepository.setApartmentTaxe(apartment.id, shouldTaxe);
+
+        this.notifier.notify(
+            source,
+            `Taxe ${shouldTaxe ? `activée` : `désactivée`} pour ${apartment.label}`,
+            'success'
+        );
 
         return this.housingRepository.get();
     }

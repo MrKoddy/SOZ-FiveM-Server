@@ -1,15 +1,19 @@
 import { FunctionComponent } from 'react';
 
+import { useAssetPath } from '../../hook/assets';
+
 type HealthCardProps = {
     account: string;
     name: string;
 };
 
 export const BankCard: FunctionComponent<HealthCardProps> = ({ name, account }) => {
+    const { getPath } = useAssetPath();
+
     return (
         <div
             style={{
-                backgroundImage: `url(/public/images/identity/bank.webp)`,
+                backgroundImage: `url(${getPath(`images/identity/bank.webp`)})`,
             }}
             className="transition bg-cover bg-no-repeat aspect-[855/539] h-[340px]"
         >

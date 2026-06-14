@@ -1,9 +1,8 @@
 import { Once, OnceStep } from '../../core/decorators/event';
 import { Inject } from '../../core/decorators/injectable';
 import { Provider } from '../../core/decorators/provider';
-import { emitRpc } from '../../core/rpc';
+import { emitRpc, emitRpcTimeout } from '../../core/rpc';
 import { JobPermission, JobType } from '../../shared/job';
-import { PositiveNumberValidator } from '../../shared/nui/input';
 import { Err, Ok } from '../../shared/result';
 import { RpcServerEvent } from '../../shared/rpc';
 import { InputService } from '../nui/input.service';
@@ -35,33 +34,24 @@ export class JobInvoiceProvider {
             this.targetFactory.createForAllPlayer([
                 {
                     label: `Facturer`,
-                    icon: 'c:jobs/facture.png',
+                    icon: 'jobs/facture',
                     blackoutGlobal: true,
                     blackoutJob: job.id,
                     job: job.id,
-                    color: job.id,
-                    canInteract: () => {
-                        const player = this.playerService.getPlayer();
-
-                        if (!player) {
-                            return false;
-                        }
-
-                        return player.job.onduty;
-                    },
+                    category: 'society',
                     action: this.invoicePlayer.bind(this),
                 },
                 {
                     label: 'Facture la société',
-                    icon: 'c:jobs/facture.png',
+                    icon: 'jobs/facture',
                     blackoutGlobal: true,
                     blackoutJob: job.id,
                     job: job.id,
-                    color: job.id,
+                    category: 'society',
                     canInteract: async entity => {
                         const player = this.playerService.getPlayer();
 
-                        if (!player || !player.job.onduty) {
+                        if (!player) {
                             return false;
                         }
 
@@ -93,7 +83,7 @@ export class JobInvoiceProvider {
         }
 
         const targetSource = GetPlayerServerId(NetworkGetPlayerIndexFromPed(entity));
-        TriggerServerEvent('banking:server:sendInvoice', targetSource, title, amount);
+        await emitRpcTimeout(RpcServerEvent.BANK_CREATE_INVOICE, 10000, targetSource, 'personal', title, amount);
     }
 
     public async invoicePlayerSociety(entity: number) {
@@ -104,7 +94,7 @@ export class JobInvoiceProvider {
         }
 
         const targetSource = GetPlayerServerId(NetworkGetPlayerIndexFromPed(entity));
-        TriggerServerEvent('banking:server:sendSocietyInvoice', targetSource, title, amount);
+        await emitRpcTimeout(RpcServerEvent.BANK_CREATE_INVOICE, 10000, targetSource, 'society', title, amount);
     }
 
     public async getTitleAndAmount(): Promise<[string, number]> {
@@ -114,11 +104,7 @@ export class JobInvoiceProvider {
                 maxCharacters: 200,
             },
             input => {
-                if (input === null) {
-                    return Ok(input);
-                }
-
-                if (input.length < 5) {
+                if (input === null || input.length < 5) {
                     return Err('Le titre doit faire au moins 5 caractères');
                 }
 
@@ -126,12 +112,24 @@ export class JobInvoiceProvider {
             }
         );
 
-        const amount = await this.inputService.askInput(
+        const amount = await this.inputService.askInput<number>(
             {
                 title: 'Montant de la facture',
                 maxCharacters: 10,
             },
-            PositiveNumberValidator
+            input => {
+                if (input === null || input.length < 1) {
+                    return Err('Le montant doit être renseigné');
+                }
+
+                const inputNumber = Number(input);
+
+                if (isNaN(inputNumber) || inputNumber < 0) {
+                    return Err('Veuillez entrer un nombre positif');
+                }
+
+                return Ok(inputNumber);
+            }
         );
 
         return [title, amount];

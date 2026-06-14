@@ -1,10 +1,12 @@
 import { Once } from '@public/core/decorators/event';
+import { InventoryFactory } from '@public/server/inventory/inventory.factory';
 import { PlayerPositionProvider } from '@public/server/player/player.position.provider';
 
 import { Inject } from '../../../core/decorators/injectable';
 import { Provider } from '../../../core/decorators/provider';
 import { Rpc } from '../../../core/decorators/rpc';
-import { Feature, isFeatureEnabled } from '../../../shared/features';
+import { Feature } from '../../../shared/features';
+import { ADD_ERROR_MESSAGE } from '../../../shared/inventory';
 import { RpcServerEvent } from '../../../shared/rpc';
 import {
     Halloween2022Scenario3,
@@ -12,7 +14,7 @@ import {
     Halloween2022Scenario3ExitBunker,
 } from '../../../shared/story/halloween-2022/scenario3';
 import { Dialog, ScenarioState } from '../../../shared/story/story';
-import { InventoryManager } from '../../inventory/inventory.manager';
+import { FeatureProvider } from '../../feature/feature.provider';
 import { Notifier } from '../../notifier';
 import { PlayerService } from '../../player/player.service';
 
@@ -26,11 +28,14 @@ export class Halloween2022Scenario3Provider {
     @Inject(Notifier)
     private notifier: Notifier;
 
-    @Inject(InventoryManager)
-    private inventoryManager: InventoryManager;
+    @Inject(InventoryFactory)
+    private inventoryFactory: InventoryFactory;
 
     @Inject(PlayerPositionProvider)
     private playerPositionProvider: PlayerPositionProvider;
+
+    @Inject(FeatureProvider)
+    private featureProvider: FeatureProvider;
 
     @Once()
     public onStart() {
@@ -39,8 +44,10 @@ export class Halloween2022Scenario3Provider {
     }
 
     @Rpc(RpcServerEvent.STORY_HALLOWEEN_SCENARIO3)
-    public onScenario3(source: number): Dialog | null {
-        if (!isFeatureEnabled(Feature.HalloweenScenario3)) {
+    public async onScenario3(source: number): Promise<Dialog | null> {
+        const inventory = await this.inventoryFactory.getPlayerInventory(source);
+
+        if (!this.featureProvider.isFeatureEnabled(Feature.HalloweenScenario3)) {
             return;
         }
 
@@ -69,8 +76,8 @@ export class Halloween2022Scenario3Provider {
                 });
                 return Halloween2022Scenario3.dialog['part2'];
             case 'part3':
-                if (this.inventoryManager.canCarryItem(source, 'zombie_hand', 1)) {
-                    this.inventoryManager.addItemToInventory(source, 'zombie_hand', 1);
+                if (inventory.canCarryItem('zombie_hand', 1)) {
+                    inventory.add('zombie_hand', 1);
                     this.playerService.setPlayerMetadata(source, 'halloween2022', {
                         ...player.metadata.halloween2022,
                         scenario3: {
@@ -81,11 +88,10 @@ export class Halloween2022Scenario3Provider {
                     });
                     return Halloween2022Scenario3.dialog['part3'];
                 }
-                this.notifier.notify(source, `Tu n’as pas assez de place dans ton inventaire.`, 'error');
+                this.notifier.notify(source, ADD_ERROR_MESSAGE['not_enough_space'], 'error');
                 return;
             case 'part4':
-                if (this.inventoryManager.getItem(source, 'zombie_hand') !== null) {
-                    this.inventoryManager.removeItemFromInventory(source, 'zombie_hand', 1);
+                if (inventory.remove('zombie_hand', 1, false)) {
                     this.playerService.setPlayerMetadata(source, 'halloween2022', {
                         ...player.metadata.halloween2022,
                         scenario3: {
@@ -98,8 +104,8 @@ export class Halloween2022Scenario3Provider {
                 }
                 return;
             case 'part5':
-                if (this.inventoryManager.canCarryItem(source, 'halloween2022_story', 1)) {
-                    this.inventoryManager.addItemToInventory(source, 'halloween2022_story', 1);
+                if (inventory.canCarryItem('halloween2022_story', 1)) {
+                    inventory.add('halloween2022_story', 1);
 
                     this.playerService.setPlayerMetadata(source, 'halloween2022', {
                         ...player.metadata.halloween2022,

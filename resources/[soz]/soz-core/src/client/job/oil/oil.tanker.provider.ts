@@ -1,3 +1,6 @@
+import { PlayerUpdate } from '@public/core/decorators/player';
+import { PlayerData } from '@public/shared/player';
+
 import { Once, OnceStep } from '../../../core/decorators/event';
 import { Inject } from '../../../core/decorators/injectable';
 import { Provider } from '../../../core/decorators/provider';
@@ -82,27 +85,19 @@ export class OilTankerProvider {
             ['tanker', 'tanker2'],
             [
                 {
-                    icon: 'c:fuel/pistolet.png',
-                    color: 'oil',
+                    icon: 'fuel/pistolet',
                     label: 'Connecter le Tanker',
                     job: JobType.Oil,
                     blackoutGlobal: true,
                     blackoutJob: JobType.Oil,
-                    canInteract: () => {
-                        const player = this.playerService.getPlayer();
-
-                        if (!player) {
-                            return false;
-                        }
-
-                        return !this.currentTankerAttached && player.job.onduty;
-                    },
+                    category: 'society',
+                    canInteract: () => !this.currentTankerAttached,
                     action: this.connectTanker.bind(this),
                 },
                 {
-                    icon: 'c:fuel/pistolet.png',
-                    color: 'oil',
+                    icon: 'fuel/pistolet',
                     label: 'Déconnecter le Tanker',
+                    category: 'society',
                     canInteract: () => {
                         const player = this.playerService.getPlayer();
 
@@ -130,21 +125,13 @@ export class OilTankerProvider {
             },
             [
                 {
-                    icon: 'c:fuel/remplir.png',
-                    color: 'oil',
+                    icon: 'fuel/remplir',
                     label: 'Relier le Tanker',
+                    category: 'society',
                     job: JobType.Oil,
                     blackoutGlobal: true,
                     blackoutJob: JobType.Oil,
-                    canInteract: () => {
-                        const player = this.playerService.getPlayer();
-
-                        if (!player) {
-                            return false;
-                        }
-
-                        return player.job.onduty && this.currentTankerAttached !== null;
-                    },
+                    canInteract: () => this.currentTankerAttached !== null,
                     action: this.tankerResell.bind(this),
                 },
             ]
@@ -153,21 +140,13 @@ export class OilTankerProvider {
         for (const zone of REFINERY_ZONES) {
             this.targetFactory.createForBoxZone(`mtp_fuel_refinery_${zone.center[0]}`, zone, [
                 {
-                    icon: 'c:fuel/remplir.png',
-                    color: 'oil',
+                    icon: 'fuel/remplir',
                     label: 'Relier le Tanker',
+                    category: 'society',
                     job: JobType.Oil,
                     blackoutGlobal: true,
                     blackoutJob: JobType.Oil,
-                    canInteract: () => {
-                        const player = this.playerService.getPlayer();
-
-                        if (!player) {
-                            return false;
-                        }
-
-                        return player.job.onduty && this.currentTankerAttached !== null;
-                    },
+                    canInteract: () => this.currentTankerAttached !== null,
                     action: this.refineTanker.bind(this),
                 },
             ]);
@@ -177,29 +156,26 @@ export class OilTankerProvider {
             ['p_oil_pjack_01_s', 'p_oil_pjack_02_s', 'p_oil_pjack_03_s'],
             [
                 {
-                    icon: 'c:fuel/remplir.png',
-                    color: 'oil',
+                    icon: 'fuel/remplir',
                     label: 'Relier le Tanker',
+                    category: 'society',
                     job: JobType.Oil,
                     blackoutGlobal: true,
                     blackoutJob: JobType.Oil,
-                    canInteract: () => {
-                        const player = this.playerService.getPlayer();
-
-                        if (!player) {
-                            return false;
-                        }
-
-                        if (!this.fieldZone.isPointInside(GetEntityCoords(PlayerPedId()) as Vector3)) {
-                            return false;
-                        }
-
-                        return player.job.onduty && this.currentTankerAttached !== null;
-                    },
+                    canInteract: () =>
+                        this.currentTankerAttached !== null &&
+                        this.fieldZone.isPointInside(GetEntityCoords(PlayerPedId()) as Vector3),
                     action: this.refillTanker.bind(this),
                 },
             ]
         );
+    }
+
+    @PlayerUpdate()
+    public async onPlayerUpdate(player: PlayerData) {
+        if (player.metadata.isdead || player.metadata.ishandcuffed) {
+            await this.disconnectTanker();
+        }
     }
 
     public async connectTanker(vehicle: number) {
@@ -267,14 +243,13 @@ export class OilTankerProvider {
         }
 
         const field = zone.data;
-        const entityModel = GetEntityModel(this.currentTankerAttached);
         const entityClass = GetVehicleClass(this.currentTankerAttached) as VehicleClass;
         const vehicleNetId = NetworkGetNetworkIdFromEntity(this.currentTankerAttached);
 
         TaskTurnPedToFaceEntity(PlayerPedId(), entity, 500);
         await wait(500);
 
-        TriggerServerEvent(ServerEvent.OIL_REFILL_TANKER, vehicleNetId, entityModel, entityClass, field);
+        TriggerServerEvent(ServerEvent.OIL_REFILL_TANKER, vehicleNetId, entityClass, field);
     }
 
     public refineTanker() {
@@ -282,11 +257,10 @@ export class OilTankerProvider {
             return;
         }
 
-        const entityModel = GetEntityModel(this.currentTankerAttached);
         const entityClass = GetVehicleClass(this.currentTankerAttached) as VehicleClass;
         const vehicleNetId = NetworkGetNetworkIdFromEntity(this.currentTankerAttached);
 
-        TriggerServerEvent(ServerEvent.OIL_REFINE_TANKER, vehicleNetId, entityModel, entityClass);
+        TriggerServerEvent(ServerEvent.OIL_REFINE_TANKER, vehicleNetId, entityClass);
     }
 
     public tankerResell() {
@@ -294,10 +268,9 @@ export class OilTankerProvider {
             return;
         }
 
-        const entityModel = GetEntityModel(this.currentTankerAttached);
         const entityClass = GetVehicleClass(this.currentTankerAttached) as VehicleClass;
         const vehicleNetId = NetworkGetNetworkIdFromEntity(this.currentTankerAttached);
 
-        TriggerServerEvent(ServerEvent.OIL_RESELL_TANKER, vehicleNetId, entityModel, entityClass);
+        TriggerServerEvent(ServerEvent.OIL_RESELL_TANKER, vehicleNetId, entityClass);
     }
 }

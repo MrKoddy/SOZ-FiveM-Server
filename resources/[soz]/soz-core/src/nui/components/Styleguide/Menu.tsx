@@ -1,7 +1,10 @@
 import { ChevronLeftIcon, ChevronRightIcon } from '@heroicons/react/outline';
-import { CheckIcon } from '@heroicons/react/solid';
+import { BorderBox } from '@public/nui/components/Styleguide/BorderBox';
+import { GlassMorphismContainer } from '@public/nui/components/Styleguide/GlassMorphismContainer';
 import { useNuiEvent } from '@public/nui/hook/nui';
 import { slugify } from '@public/nui/utils/slugify';
+import { RGBColor } from '@public/shared/color';
+import { MenuType } from '@public/shared/nui/menu';
 import {
     createDescendantContext,
     Descendant,
@@ -11,9 +14,13 @@ import {
     useDescendantsInit,
 } from '@reach/descendants';
 import cn from 'classnames';
+import clsx from 'clsx';
 import {
     createContext,
+    DetailedHTMLProps,
+    forwardRef,
     FunctionComponent,
+    InputHTMLAttributes,
     PropsWithChildren,
     ReactNode,
     useCallback,
@@ -26,8 +33,6 @@ import {
 } from 'react';
 import { Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 
-import { RGBColor } from '../../../shared/color';
-import { MenuType } from '../../../shared/nui/menu';
 import {
     useArrowDown,
     useArrowLeft,
@@ -56,11 +61,15 @@ const MenuContext = createContext<{
     setActiveIndex: (number: number) => void;
     visibility: boolean;
     setDescription: (desc: string | ReactNode) => void;
+    textFocus: boolean;
+    setTextFocus: (focus: boolean) => void;
 }>({
     activeIndex: 0,
     visibility: true,
     setActiveIndex: () => {},
     setDescription: () => {},
+    textFocus: false,
+    setTextFocus: () => {},
 });
 const MenuSelectedContext = createContext<boolean>(false);
 const MenuItemSelectContext = createContext<{
@@ -82,7 +91,7 @@ const MenuItemSelectContext = createContext<{
     showAllOptions: false,
     equalityFn: (a, b) => a === b,
 });
-const MenuTypeContext = createContext<MenuType | null>(null);
+export const MenuTypeContext = createContext<MenuType | null>(null);
 
 export type MenuProps = {
     type: MenuType;
@@ -98,61 +107,98 @@ export type SubMenuProps = {
 
 export const SubMenu: FunctionComponent<PropsWithChildren<SubMenuProps>> = ({ children, id }) => {
     const slugId = slugify(id);
+    const inSubMenu = useIsInSubMenu(slugId);
 
     return (
         <Routes>
-            <Route path={`/${slugId}`} element={<MenuContainer>{children}</MenuContainer>} />
+            <Route path={`/${slugId}`} element={inSubMenu ? <MenuContainer>{children}</MenuContainer> : null} />
         </Routes>
     );
 };
 
-export const MainMenu: FunctionComponent<PropsWithChildren> = ({ children }) => {
+export type MainMenuProps = PropsWithChildren<{
+    helpPanel?: ReactNode;
+}>;
+
+export const MainMenu: FunctionComponent<MainMenuProps> = ({ children, helpPanel }) => {
     return (
         <Routes>
-            <Route index element={<MenuContainer>{children}</MenuContainer>} />
+            <Route index element={<MenuContainer helpPanel={helpPanel}>{children}</MenuContainer>} />
         </Routes>
     );
 };
 
-export const MenuContainer: FunctionComponent<PropsWithChildren> = ({ children }) => {
+export const MenuContainer: FunctionComponent<MainMenuProps> = ({ children, helpPanel }) => {
     let leftOffset = 'left-8';
+    let rightOffset = 'right-8';
     if (
         (window.innerWidth > 5000 && window.innerHeight < 1500) ||
         (window.innerWidth > 3079 && window.innerHeight < 1200)
     ) {
         leftOffset = 'left-[94vh]';
+        rightOffset = 'right-[94vh]';
     }
-    return <div className={`absolute ${leftOffset} top-8 w-[36vh] min-w-[36vh] select-none`}>{children}</div>;
-};
 
-export type MenuTitleProps = {
-    banner?: string;
-};
-
-const MenuHeader: FunctionComponent<MenuTitleProps> = ({ banner }) => {
-    return <img src={banner} className="opacity-80 w-full h-[9vh] object-cover mb-[-2px]" alt="banner" />;
-};
-
-export const MenuTitle: FunctionComponent<PropsWithChildren<MenuTitleProps>> = ({ children, banner }) => {
     return (
         <>
-            {banner && <MenuHeader banner={banner} />}
-            <div
-                className={cn('px-3 py-1 font-semibold text-sm bg-black/80 text-white uppercase', {
-                    'rounded-t-lg text-center': !banner,
-                })}
-            >
+            <div className={clsx('absolute top-10 w-[36vh] min-w-[36vh] font-prompt select-none', leftOffset)}>
                 {children}
             </div>
+            {helpPanel && (
+                <div className={clsx('absolute top-10 w-[36vh] min-w-[36vh] font-prompt select-none', rightOffset)}>
+                    <div>
+                        <div
+                            className="mt-3 max-h-[40vh] overflow-hidden"
+                            style={{
+                                pointerEvents: 'none',
+                            }}
+                        >
+                            <GlassMorphismContainer duration="duration-0" borderClassName="rounded-lg" disableBorder>
+                                <ul>{helpPanel}</ul>
+                            </GlassMorphismContainer>
+                        </div>
+                    </div>
+                </div>
+            )}
         </>
     );
 };
 
-export const MenuContent: FunctionComponent<PropsWithChildren> = ({ children }) => {
+export type MenuTitleProps = {
+    type?: 'menu' | 'boutique' | 'abonnement';
+    title: string;
+};
+
+export const MenuTitle: FunctionComponent<MenuTitleProps> = ({ type = 'menu', title }) => {
+    return (
+        <header className="relative w-full py-3">
+            <div className="flex flex-col uppercase text-white drop-shadow-bg">
+                <h1 className="font-light text-base leading-3">{type}</h1>
+                <h2 className="font-semibold text-2xl">{title}</h2>
+            </div>
+        </header>
+    );
+};
+
+export const MenuSubTitle: FunctionComponent<PropsWithChildren> = ({ children }) => {
+    return (
+        <header className="flex justify-center uppercase text-white relative w-full py-1">
+            <h2 className="font-semibold text-sm">{children}</h2>
+        </header>
+    );
+};
+
+type MenuContentProps = PropsWithChildren & {
+    subtitle?: string;
+    helpPanel?: ReactNode;
+};
+
+export const MenuContent: FunctionComponent<MenuContentProps> = ({ children, subtitle, helpPanel }) => {
     const [descendants, setDescendants] = useDescendantsInit();
     const [activeIndex, setActiveIndex] = useState(0);
     const [description, setDescription] = useState<string | null | ReactNode>(null);
     const [visibility, setVisibility] = useState(true);
+    const [textFocus, setTextFocus] = useState(false);
     const [pauseMenuActive, setPauseMenuActive] = useState(true);
     const [previousLength, setPreviousLength] = useState(0);
 
@@ -176,15 +222,57 @@ export const MenuContent: FunctionComponent<PropsWithChildren> = ({ children }) 
     return (
         <DescendantProvider context={MenuDescendantContext} items={descendants} set={setDescendants}>
             <MenuContext.Provider
-                value={{ activeIndex, setActiveIndex, setDescription, visibility: visibility && !pauseMenuActive }}
+                value={{
+                    activeIndex,
+                    setActiveIndex,
+                    setDescription,
+                    visibility: visibility && !pauseMenuActive,
+                    textFocus,
+                    setTextFocus,
+                }}
             >
                 <MenuControls>
-                    <ul className="bg-black/50 py-1 rounded-b-lg max-h-[40vh] overflow-auto scrollbar-thin scrollbar-thumb-white/20 scrollbar-thumb-rounded-full scrollbar-track-rounded-full">
-                        {children}
-                    </ul>
-                    {description && (
-                        <div className="mt-2 p-2 bg-black/50 rounded-b-lg max-h-[20vh] text-white">{description}</div>
-                    )}
+                    <div>
+                        <GlassMorphismContainer duration="duration-0" borderClassName="rounded-lg" disableBorder>
+                            {subtitle && (
+                                <div className="flex items-center gap-2 text-sm font-semibold pt-3 px-4 text-white">
+                                    <ChevronLeftIcon className="size-4" />
+                                    <span>{subtitle}</span>
+                                </div>
+                            )}
+
+                            <ul className="p-2 max-h-[40vh] overflow-auto scrollbar-thin scrollbar-thumb-white/20 scrollbar-thumb-rounded-full scrollbar-track-rounded-full">
+                                {children}
+                            </ul>
+                        </GlassMorphismContainer>
+                        {description && (
+                            <div className="mt-3 w-full overflow-hidden text-white">
+                                <GlassMorphismContainer
+                                    duration="duration-0"
+                                    borderClassName="rounded-lg"
+                                    disableBorder
+                                >
+                                    <div className="px-2 py-1">{description}</div>
+                                </GlassMorphismContainer>
+                            </div>
+                        )}
+                        {helpPanel && (
+                            <div
+                                className="mt-3 max-h-[40vh] overflow-hidden"
+                                style={{
+                                    pointerEvents: 'none',
+                                }}
+                            >
+                                <GlassMorphismContainer
+                                    duration="duration-0"
+                                    borderClassName="rounded-lg"
+                                    disableBorder
+                                >
+                                    <ul>{helpPanel}</ul>
+                                </GlassMorphismContainer>
+                            </div>
+                        )}
+                    </div>
                 </MenuControls>
             </MenuContext.Provider>
         </DescendantProvider>
@@ -192,7 +280,7 @@ export const MenuContent: FunctionComponent<PropsWithChildren> = ({ children }) 
 };
 
 const MenuControls: FunctionComponent<PropsWithChildren> = ({ children }) => {
-    const { activeIndex, setActiveIndex, visibility } = useContext(MenuContext);
+    const { activeIndex, setActiveIndex, visibility, textFocus } = useContext(MenuContext);
     const menuItems = useDescendants(MenuDescendantContext);
     const location = useLocation();
     const navigate = useNavigate();
@@ -206,7 +294,7 @@ const MenuControls: FunctionComponent<PropsWithChildren> = ({ children }) => {
     useArrowDown(() => {
         let newIndex = activeIndex;
 
-        if (!visibility) {
+        if (!visibility || textFocus) {
             return;
         }
 
@@ -234,7 +322,7 @@ const MenuControls: FunctionComponent<PropsWithChildren> = ({ children }) => {
     useArrowUp(() => {
         let newIndex = activeIndex;
 
-        if (!visibility) {
+        if (!visibility || textFocus) {
             return;
         }
 
@@ -260,7 +348,7 @@ const MenuControls: FunctionComponent<PropsWithChildren> = ({ children }) => {
     });
 
     useBackspace(() => {
-        if (!visibility) {
+        if (!visibility || textFocus) {
             return;
         }
 
@@ -272,6 +360,7 @@ const MenuControls: FunctionComponent<PropsWithChildren> = ({ children }) => {
 
 type MenuItemProps = PropsWithChildren<{
     onConfirm?: () => void;
+    onClick?: (event: React.MouseEvent<HTMLElement>) => void;
     onSelected?: () => void;
     disabled?: boolean;
     selectable?: boolean;
@@ -282,6 +371,7 @@ type MenuItemProps = PropsWithChildren<{
 const MenuItemContainer: FunctionComponent<MenuItemProps> = ({
     children,
     onConfirm,
+    onClick,
     onSelected,
     disabled = false,
     selectable = null,
@@ -328,8 +418,13 @@ const MenuItemContainer: FunctionComponent<MenuItemProps> = ({
         onConfirm && onConfirm();
     });
 
-    const onClick = () => {
+    const handleClick = (event: React.MouseEvent<HTMLElement>) => {
         if (disabled || !visibility) {
+            return;
+        }
+
+        if (onClick) {
+            onClick(event);
             return;
         }
 
@@ -347,17 +442,26 @@ const MenuItemContainer: FunctionComponent<MenuItemProps> = ({
     return (
         <li
             ref={handleRefSet}
-            className={cn(className, 'px-4 py-1 pl-2 my-0.5 hover:bg-white/10 rounded', {
-                'bg-white/10': isSelected,
+            className={cn(className, 'my-1', {
                 'text-white/50': disabled,
                 'text-white': !disabled,
                 'cursor-not-allowed': disabled,
                 'cursor-pointer': !disabled,
             })}
-            onClick={onClick}
+            onClick={handleClick}
             onMouseEnter={onOver}
         >
-            <MenuSelectedContext.Provider value={isSelected}>{children}</MenuSelectedContext.Provider>
+            <MenuSelectedContext.Provider value={isSelected}>
+                <BorderBox
+                    duration="duration-0"
+                    borderClassName="rounded-lg"
+                    showBorder={isSelected}
+                    disableBackground={!isSelected}
+                    blur={false}
+                >
+                    <div className="px-4 py-1 pl-2">{children}</div>
+                </BorderBox>
+            </MenuSelectedContext.Provider>
         </li>
     );
 };
@@ -396,13 +500,167 @@ export const MenuItemButton: FunctionComponent<MenuItemButtonProps> = ({
 
 type MenuItemTextProps = PropsWithChildren<{
     onSelected?: () => void;
+    disabled?: boolean;
 }>;
 
-export const MenuItemText: FunctionComponent<MenuItemTextProps> = ({ children, onSelected }) => {
+export const MenuItemText: FunctionComponent<MenuItemTextProps> = ({ children, onSelected, disabled = true }) => {
     return (
-        <MenuItemContainer onSelected={onSelected} disabled={true}>
+        <MenuItemContainer onSelected={onSelected} disabled={disabled}>
             <h3 className="text-white cursor-default">{children}</h3>
         </MenuItemContainer>
+    );
+};
+
+type baseItemInputProps = PropsWithChildren<{
+    onConfirm?: () => void;
+    onSelected?: () => void;
+    setChildTextFocus?: (v: boolean) => void;
+    value?: any;
+    name: string;
+    handleOnChange: React.ChangeEventHandler<HTMLInputElement>;
+    onBlur?: () => void;
+}>;
+
+type InputType = DetailedHTMLProps<InputHTMLAttributes<HTMLInputElement>, HTMLInputElement>;
+
+const InputText = forwardRef<HTMLInputElement, InputType>(({ ...props }, ref) => {
+    return <input type="text" {...props} id="targeted-input" ref={ref} />;
+});
+
+type MenuItemNumberInputProps = PropsWithChildren<{
+    setChildTextFocus?: (v: boolean) => void;
+    onSelected?: () => void;
+    value?: string;
+    name: string;
+    onChange: (k: string, v: string) => void;
+    onBlur: () => void;
+    rounding?: number;
+}>;
+
+export const BaseItemInput: FunctionComponent<baseItemInputProps> = ({
+    children,
+    onSelected,
+    setChildTextFocus,
+    value,
+    name,
+    handleOnChange,
+    onBlur,
+}) => {
+    const ref = useRef<HTMLInputElement>(null);
+    const { setTextFocus } = useContext(MenuContext);
+
+    const handleOnFocus = () => {
+        setChildTextFocus && setChildTextFocus(true);
+        setTextFocus(true);
+    };
+
+    const handleBlur = async () => {
+        setChildTextFocus && setChildTextFocus(false);
+        setTextFocus(false);
+        if (typeof onBlur === 'function') {
+            onBlur();
+        }
+    };
+
+    const handleSelect = () => {
+        onSelected && onSelected();
+    };
+
+    const handleConfirm = async () => {
+        if (document.activeElement.id !== ref.current.id) {
+            ref.current.focus();
+        } else {
+            ref.current.blur();
+        }
+    };
+
+    const onClick = (event: React.MouseEvent) => {
+        const target = event.target as InputType;
+        if (document.activeElement.id === ref.current.id && target.id !== ref.current.id) {
+            ref.current.blur();
+        }
+    };
+
+    return (
+        <MenuItemContainer
+            onConfirm={handleConfirm}
+            onClick={onClick}
+            onSelected={handleSelect}
+            description={'Appuyer sur Entrée pour modifier la valeur et pour confirmer.'}
+        >
+            <div className="flex justify-between items-center">
+                <h3>{children}</h3>
+                <div className="border border-white w-50 rounded">
+                    <InputText
+                        className="w-full h-full"
+                        style={{ backgroundColor: 'transparent', textAlign: 'center' }}
+                        tabIndex={-1}
+                        onChange={handleOnChange}
+                        onFocus={handleOnFocus}
+                        onBlur={handleBlur}
+                        value={value}
+                        name={name}
+                        ref={ref}
+                    />
+                </div>
+            </div>
+        </MenuItemContainer>
+    );
+};
+
+export const MenuItemNumberInput: FunctionComponent<MenuItemNumberInputProps> = ({
+    children,
+    setChildTextFocus,
+    value,
+    name,
+    onChange,
+    onBlur,
+}) => {
+    const handleOnChange: React.ChangeEventHandler<HTMLInputElement> = e => {
+        onChange(e.currentTarget.name, e.currentTarget.value);
+    };
+
+    return (
+        <BaseItemInput
+            children={children}
+            setChildTextFocus={setChildTextFocus}
+            value={value}
+            name={name}
+            handleOnChange={handleOnChange}
+            onBlur={onBlur}
+        />
+    );
+};
+
+type MenuItemStringInputProps = PropsWithChildren<{
+    setChildTextFocus?: (v: boolean) => void;
+    onSelected?: () => void;
+    value?: string;
+    onChange: (v: string) => void;
+}>;
+
+export const MenuItemStringInput: FunctionComponent<MenuItemStringInputProps> = ({
+    children,
+    onSelected,
+    setChildTextFocus,
+    value,
+    onChange,
+}) => {
+    const handleOnChange: React.ChangeEventHandler<HTMLInputElement> = e => {
+        const text =
+            e.currentTarget.value && e.currentTarget.value.length ? e.currentTarget.value.toLocaleLowerCase() : null;
+        onChange(text);
+    };
+
+    return (
+        <BaseItemInput
+            children={children}
+            setChildTextFocus={setChildTextFocus}
+            onSelected={onSelected}
+            value={value}
+            name={null}
+            handleOnChange={handleOnChange}
+        />
     );
 };
 
@@ -433,10 +691,11 @@ export const MenuItemCheckbox: FunctionComponent<MenuItemCheckboxProps> = ({
         <MenuItemContainer description={description} onSelected={onSelected} onConfirm={onConfirm} disabled={disabled}>
             <div className="flex justify-between items-center">
                 <h3>{children}</h3>
-                <div className="border border-white w-5 h-5 rounded bg-black/20">
-                    {isChecked && (
-                        <CheckIcon className="w-full h-full text-white" aria-hidden="true" focusable="false" />
-                    )}
+
+                <div className="relative">
+                    <div className="border border-white size-4 rounded-full bg-black/20">
+                        {isChecked && <div className="absolute top-0.5 left-0.5 size-3 rounded-full bg-white" />}
+                    </div>
                 </div>
             </div>
         </MenuItemContainer>
@@ -447,7 +706,9 @@ type MenuItemSubMenuLinkProps = PropsWithChildren<{
     id: string;
     onSelected?: () => void;
     disabled?: boolean;
-    description?: string;
+    selectable?: boolean;
+    description?: ReactNode;
+    noChevron?: boolean;
 }>;
 
 export const useMenuNavigate = (id: string): (() => void) => {
@@ -466,25 +727,72 @@ export const useMenuNavigate = (id: string): (() => void) => {
         });
 };
 
+export const useCurrentMenu = (): [MenuType, string | null] => {
+    const type = useContext(MenuTypeContext);
+    const location = useLocation();
+
+    if (type === null) {
+        return [null, null];
+    }
+
+    const subPath = location.pathname.replace(`/${type}/`, '');
+
+    if (subPath === '') {
+        return [type, null];
+    }
+
+    return [type, subPath];
+};
+
+export const useIsInSubMenu = (id: string | string[]): boolean => {
+    const [, subPath] = useCurrentMenu();
+
+    if (Array.isArray(id)) {
+        return id.some(subId => subPath === subId);
+    }
+
+    return subPath === id;
+};
+
 export const MenuItemSubMenuLink: FunctionComponent<MenuItemSubMenuLinkProps> = ({
     children,
     id,
     onSelected,
     description = null,
     disabled = false,
+    selectable = null,
+    noChevron = false,
 }) => {
     const navigateTo = useMenuNavigate(id);
 
-    return (
-        <MenuItemContainer onSelected={onSelected} onConfirm={navigateTo} disabled={disabled} description={description}>
-            <div className="flex items-center justify-between">
-                <div>{children}</div>
-                <div>
-                    <ChevronRightIcon className="h-5 w-5 p-0.5 ml-2 bg-black/20 rounded-full" />
+    if (noChevron) {
+        return (
+            <MenuItemContainer
+                onSelected={onSelected}
+                onConfirm={navigateTo}
+                disabled={disabled}
+                selectable={selectable}
+                description={description}
+            >
+                {children}
+            </MenuItemContainer>
+        );
+    } else {
+        return (
+            <MenuItemContainer
+                onSelected={onSelected}
+                onConfirm={navigateTo}
+                disabled={disabled}
+                selectable={selectable}
+                description={description}
+            >
+                <div className="flex items-center justify-between">
+                    <div className="grow">{children}</div>
+                    <ChevronRightIcon className="size-5 p-0.5" />
                 </div>
-            </div>
-        </MenuItemContainer>
-    );
+            </MenuItemContainer>
+        );
+    }
 };
 
 export const MenuItemGoBack: FunctionComponent = () => {
@@ -540,9 +848,13 @@ const MenuSelectControls: FunctionComponent<MenuSelectControlsProps> = ({ onChan
         }
 
         if (defaultIndex !== null) {
-            setActiveOptionIndex(defaultIndex);
+            if (defaultIndex !== activeOptionIndex) {
+                setActiveOptionIndex(defaultIndex);
+            }
         } else {
-            setActiveOptionIndex(0);
+            if (activeOptionIndex != 0) {
+                setActiveOptionIndex(0);
+            }
         }
     }, [menuItems]);
 
@@ -591,7 +903,7 @@ const MenuSelectControls: FunctionComponent<MenuSelectControlsProps> = ({ onChan
 
                         event.stopPropagation();
                     }}
-                    className="h-5 w-5 p-0.5 mr-2 bg-black/20 rounded-full"
+                    className="size-5 p-0.5"
                 />
             )}
             <div className="overflow-hidden">{children}</div>
@@ -602,7 +914,7 @@ const MenuSelectControls: FunctionComponent<MenuSelectControlsProps> = ({ onChan
 
                         event.stopPropagation();
                     }}
-                    className="h-5 w-5 p-0.5 ml-2 bg-black/20 rounded-full"
+                    className="size-5 p-0.5"
                 />
             )}
         </div>
@@ -625,8 +937,9 @@ type MenuItemSelectProps = PropsWithChildren<{
     description?: string | ReactNode;
     useGrid?: boolean;
     alignRight?: boolean;
-    descriptionValue?: (value: any) => string;
+    descriptionValue?: (value: any) => string | ReactNode;
     equalityFn?: (a: any, b: any) => boolean;
+    syncValue?: boolean;
 }>;
 
 export const MenuItemSelect: FunctionComponent<MenuItemSelectProps> = ({
@@ -646,6 +959,7 @@ export const MenuItemSelect: FunctionComponent<MenuItemSelectProps> = ({
     description = null,
     useGrid = false,
     alignRight = false,
+    syncValue = false,
     descriptionValue,
     equalityFn = (a, b) => a === b,
 }) => {
@@ -668,6 +982,12 @@ export const MenuItemSelect: FunctionComponent<MenuItemSelectProps> = ({
         }
     }, [descendants.length, previousLength]);
 
+    useEffect(() => {
+        if (syncValue) {
+            setActiveValue(value);
+        }
+    }, [syncValue, value]);
+
     const onItemConfirm = useCallback(() => {
         onConfirm && onConfirm(activeOptionIndex, activeValue);
     }, [activeOptionIndex, onConfirm, activeValue]);
@@ -689,8 +1009,8 @@ export const MenuItemSelect: FunctionComponent<MenuItemSelectProps> = ({
                 onSelected
                     ? onSelected
                     : onSelectedValue
-                    ? () => onSelectedValue(activeOptionIndex, activeValue)
-                    : undefined
+                      ? () => onSelectedValue(activeOptionIndex, activeValue)
+                      : undefined
             }
             onConfirm={onItemConfirm}
             disabled={disabled}
@@ -773,9 +1093,6 @@ export const MenuItemSelectHelperItem: FunctionComponent<MenuItemSelectHelperIte
     const { activeOptionIndex, setActiveOptionIndex } = useContext(MenuItemSelectContext);
     const ref = useRef(null);
     const onScreen = useOnScreen(ref);
-    const classes = cn('px-2 py-0', {
-        'bg-white/10': index === activeOptionIndex,
-    });
 
     useEffect(() => {
         if (index === activeOptionIndex && ref && !onScreen) {
@@ -786,16 +1103,20 @@ export const MenuItemSelectHelperItem: FunctionComponent<MenuItemSelectHelperIte
     return (
         <li
             ref={ref}
-            onMouseEnter={() => {
-                setActiveOptionIndex(index);
-            }}
-            onClick={() => {
-                setActiveOptionIndex(index);
-            }}
-            className={classes}
+            onMouseEnter={() => setActiveOptionIndex(index)}
+            onClick={() => setActiveOptionIndex(index)}
+            className="capitalize"
             key={index}
         >
-            {children}
+            <BorderBox
+                duration="duration-0"
+                borderClassName="rounded-lg"
+                showBorder={index === activeOptionIndex}
+                disableBackground={index !== activeOptionIndex}
+                blur={false}
+            >
+                <div className="px-4 py-0.5 pl-2">{children}</div>
+            </BorderBox>
         </li>
     );
 };
@@ -817,20 +1138,35 @@ export const MenuItemSelectHelper: FunctionComponent = () => {
         return null;
     }
 
+    let leftOffset = 'left-12';
+    let width = 'w-1/5';
+
+    if (window.innerWidth > 3079 && window.innerHeight < 1200) {
+        leftOffset = 'left-[96vh]';
+        width = 'w-[10vh]';
+    }
+
+    if (window.innerWidth > 5000 && window.innerHeight < 1500) {
+        leftOffset = 'left-[104vh]';
+        width = 'w-[10vh]';
+    }
+
     return (
-        <div className="absolute -right-3 translate-x-full top-0 w-1/5 min-w-[24rem] bg-black/50 rounded-b-lg max-h-[40vh]">
-            <ul
-                onClick={() => setClicked(true)}
-                className="bg-black/50 py-2 rounded-b-lg max-h-[40vh] overflow-auto scrollbar-thin scrollbar-thumb-white/20 scrollbar-thumb-rounded-full scrollbar-track-rounded-full"
-            >
-                {helpers.map((helper, index) => {
-                    return (
-                        <MenuItemSelectHelperItem key={index} index={index}>
-                            {helper}
-                        </MenuItemSelectHelperItem>
-                    );
-                })}
-            </ul>
+        <div className={clsx('fixed translate-x-full top-28 min-w-[24rem] max-h-[40vh]', leftOffset, width)}>
+            <GlassMorphismContainer duration="duration-0" className="p-1" borderClassName="rounded-lg" disableBorder>
+                <ul
+                    onClick={() => setClicked(true)}
+                    className="rounded-lg max-h-[40vh] overflow-auto scrollbar-thin scrollbar-thumb-white/20 scrollbar-thumb-rounded-full scrollbar-track-rounded-full"
+                >
+                    {helpers.map((helper, index) => {
+                        return (
+                            <MenuItemSelectHelperItem key={index} index={index}>
+                                {helper}
+                            </MenuItemSelectHelperItem>
+                        );
+                    })}
+                </ul>
+            </GlassMorphismContainer>
         </div>
     );
 };

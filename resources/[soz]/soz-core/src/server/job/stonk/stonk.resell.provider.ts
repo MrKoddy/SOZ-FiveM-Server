@@ -1,13 +1,16 @@
+import { InventoryFactory } from '@public/server/inventory/inventory.factory';
+
 import { OnEvent } from '../../../core/decorators/event';
 import { Inject } from '../../../core/decorators/injectable';
 import { Provider } from '../../../core/decorators/provider';
 import { Logger } from '../../../core/logger';
 import { ServerEvent } from '../../../shared/event';
+import { isInventoryItemExpired } from '../../../shared/inventory';
 import { JobPermission, JobType } from '../../../shared/job';
 import { StonkBagType, StonkConfig } from '../../../shared/job/stonk';
 import { toVector3Object, Vector3 } from '../../../shared/polyzone/vector';
 import { BankService } from '../../bank/bank.service';
-import { InventoryManager } from '../../inventory/inventory.manager';
+import { Inventory } from '../../inventory/inventory';
 import { ItemService } from '../../item/item.service';
 import { JobService } from '../../job.service';
 import { Monitor } from '../../monitor/monitor';
@@ -20,8 +23,8 @@ export class StonkResellProvider {
     @Inject(ItemService)
     private itemService: ItemService;
 
-    @Inject(InventoryManager)
-    private inventoryManager: InventoryManager;
+    @Inject(InventoryFactory)
+    private inventoryFactory: InventoryFactory;
 
     @Inject(PlayerService)
     private playerService: PlayerService;
@@ -61,38 +64,34 @@ export class StonkResellProvider {
         }
 
         this.notifier.notify(source, 'Vous ~g~commencez~s~ à déposer.', 'success');
+        const inventory = await this.inventoryFactory.getPlayerInventory(source);
 
-        while (this.canResell(source, item)) {
+        while (inventory.hasEnoughItem(item, 1)) {
             const outputItemLabel = this.itemService.getItem(item).label;
-            const [hasResold, resellAmount] = await this.doResell(source, item);
+            const [hasResold, resellAmount] = await this.doResell(source, inventory, item);
 
             if (hasResold) {
-                this.monitor.publish(
-                    'job_stonk_resale_bag',
-                    {
-                        item_id: item,
-                        player_source: source,
-                    },
-                    {
-                        item_label: outputItemLabel,
-                        quantity: resellAmount,
-                        position: toVector3Object(GetEntityCoords(GetPlayerPed(source)) as Vector3),
-                    }
-                );
+                this.monitor.traceEvent('job_stonk_resale_bag', {
+                    item_id: item,
+                    player_source: source,
+                    item_label: outputItemLabel,
+                    amount: resellAmount,
+                    position: toVector3Object(GetEntityCoords(GetPlayerPed(source)) as Vector3),
+                });
 
-                const transfer = await this.bankService.transferBankMoney(
+                const transfer = await this.bankService.transferFarmMoney(
+                    source,
                     StonkConfig.bankAccount.farm,
                     StonkConfig.bankAccount.safe,
                     StonkConfig.collection[item].society_gain * resellAmount
                 );
                 if (!transfer) {
                     this.logger.error(
-                        'Failed to transfer money to safe',
-                        JSON.stringify({
+                        `Failed to transfer money to safe ${JSON.stringify({
                             account_source: StonkConfig.bankAccount.farm,
                             account_destination: StonkConfig.bankAccount.safe,
                             amount: StonkConfig.collection[item].society_gain * resellAmount,
-                        })
+                        })}`
                     );
                 }
 
@@ -104,11 +103,7 @@ export class StonkResellProvider {
         }
     }
 
-    private canResell(source: number, item: StonkBagType): boolean {
-        return this.inventoryManager.getFirstItemInventory(source, item) !== null;
-    }
-
-    private async doResell(source: number, item: StonkBagType): Promise<[boolean, number]> {
+    private async doResell(source: number, inventory: Inventory, item: StonkBagType): Promise<[boolean, number]> {
         const { completed } = await this.progressService.progress(
             source,
             'stonk_resell',
@@ -130,18 +125,19 @@ export class StonkResellProvider {
             return [false, 0];
         }
 
-        const items = this.inventoryManager.getFirstItemInventory(source, item);
-        let resoldAmount = items.amount;
+        const inventoryItem = inventory.findItem(elem => elem.name == item && !isInventoryItemExpired(elem));
 
-        if (!items) {
+        if (!inventoryItem) {
             return [false, 0];
         }
+
+        let resoldAmount = inventoryItem.amount;
 
         if (resoldAmount > StonkConfig.resell.amount) {
             resoldAmount = StonkConfig.resell.amount;
         }
 
-        const removeRequest = this.inventoryManager.removeItemFromInventory(source, item, resoldAmount);
+        const removeRequest = inventory.removeAtSlot(inventoryItem.slot, resoldAmount);
 
         return [removeRequest, resoldAmount];
     }

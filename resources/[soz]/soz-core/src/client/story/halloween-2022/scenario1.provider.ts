@@ -4,16 +4,18 @@ import { Once, OnceStep } from '../../../core/decorators/event';
 import { Inject } from '../../../core/decorators/injectable';
 import { Provider } from '../../../core/decorators/provider';
 import { emitRpc } from '../../../core/rpc';
-import { Feature, isFeatureEnabled } from '../../../shared/features';
+import { Feature } from '../../../shared/features';
 import { RpcServerEvent } from '../../../shared/rpc';
 import { Halloween2022Scenario1 } from '../../../shared/story/halloween-2022/scenario1';
 import { Dialog } from '../../../shared/story/story';
+import { TargetOption } from '../../../shared/target';
 import { AnimationService } from '../../animation/animation.service';
 import { BlipFactory } from '../../blip';
 import { EntityFactory } from '../../factory/entity.factory';
 import { PedFactory } from '../../factory/ped.factory';
+import { FeatureProvider } from '../../feature/feature.provider';
 import { ProgressService } from '../../progress.service';
-import { TargetFactory, TargetOptions } from '../../target/target.factory';
+import { TargetFactory } from '../../target/target.factory';
 import { StoryProvider } from '../story.provider';
 
 @Provider()
@@ -39,9 +41,12 @@ export class Halloween2022Scenario1Provider {
     @Inject(BlipFactory)
     private blipFactory: BlipFactory;
 
+    @Inject(FeatureProvider)
+    private featureProvider: FeatureProvider;
+
     @Once(OnceStep.PlayerLoaded)
     public async onPlayerLoaded() {
-        if (!isFeatureEnabled(Feature.HalloweenScenario1)) {
+        if (!this.featureProvider.isFeatureEnabled(Feature.HalloweenScenario1)) {
             return;
         }
 
@@ -56,7 +61,7 @@ export class Halloween2022Scenario1Provider {
     }
 
     public createBlip(player: PlayerData) {
-        if (!isFeatureEnabled(Feature.HalloweenScenario1)) {
+        if (!this.featureProvider.isFeatureEnabled(Feature.HalloweenScenario1)) {
             return;
         }
 
@@ -121,7 +126,8 @@ export class Halloween2022Scenario1Provider {
             [
                 {
                     label: 'Parler',
-                    icon: 'fas fa-comment',
+                    icon: 'global/comment',
+                    category: 'citizen',
                     canInteract: () => this.storyService.canInteractForPart('halloween2022', 'scenario1', 0),
                     action: async () => {
                         const dialog = await emitRpc<Dialog | null>(RpcServerEvent.STORY_HALLOWEEN_SCENARIO1, 'diag1');
@@ -132,7 +138,8 @@ export class Halloween2022Scenario1Provider {
                 },
                 {
                     label: 'Parler',
-                    icon: 'fas fa-comment',
+                    icon: 'global/comment',
+                    category: 'citizen',
                     canInteract: () => this.storyService.canInteractForPart('halloween2022', 'scenario1', 2),
                     action: async () => {
                         const dialog = await emitRpc<Dialog | null>(RpcServerEvent.STORY_HALLOWEEN_SCENARIO1, 'part2');
@@ -151,31 +158,11 @@ export class Halloween2022Scenario1Provider {
     private async createGangPed(): Promise<void> {
         await this.pedFactory.createPedOnGrid({
             model: 'mp_m_freemode_01',
-            modelCustomization: {
-                ShapeMix: 0.8,
-                SkinMix: 0.4,
-                Hash: 1885233650,
-                Father: 44,
-                Mother: 21,
-            },
             coords: { x: -1021.85, y: -1020.17, z: 1.15, w: 32.55 },
             invincible: true,
             freeze: true,
             blockevents: true,
             flag: 1,
-            makeup: {
-                LipstickColor: 0,
-                FullMakeupDefaultColor: 1,
-                FullMakeupOpacity: 1.0,
-                FullMakeupType: -1,
-                LipstickOpacity: 1.0,
-                LipstickType: -1,
-                BlushColor: 0,
-                FullMakeupPrimaryColor: 0,
-                BlushOpacity: 1.0,
-                FullMakeupSecondaryColor: 0,
-                BlushType: -1,
-            },
             components: {
                 9: [0, 0, 0],
                 7: [0, 0, 0],
@@ -189,78 +176,100 @@ export class Halloween2022Scenario1Provider {
                 0: [7, 2, 0],
                 1: [7, 0, 0],
             },
-            face: {
-                NosePeakLower: 0.0,
-                EyebrowHigh: 0.0,
-                LipsThickness: 0.3,
-                AddBodyBlemish: -1,
-                JawBoneBackLength: 0.0,
-                CheeksBoneWidth: 0.0,
-                EyeColor: -1,
-                Ageing: 11,
-                Moles: -1,
-                Blemish: -1,
-                NeckThickness: 0.0,
-                EyesOpening: 0.9,
-                ChimpHole: 0.0,
-                CheeksBoneHigh: 0.3,
-                NoseBoneTwist: 0.0,
-                Complexion: -1,
-                NosePeakHeight: 0.0,
-                NoseWidth: 0.0,
-                BodyBlemish: -1,
-                NosePeakLength: 0.4,
-                ChimpBoneLength: 0.0,
-                JawBoneWidth: 0.0,
-                ChimpBoneWidth: 0.0,
-                NoseBoneHigh: -0.2,
-                CheeksWidth: 0.0,
-                EyebrowForward: -0.3,
-                ChimpBoneLower: 0.0,
-            },
-            tattoos: [
-                {
-                    overlay: -969415240,
-                    collection: -1016521996,
+            skin: {
+                Model: {
+                    ShapeMix: 0.8,
+                    SkinMix: 0.4,
+                    Hash: 1885233650,
+                    Father: 44,
+                    Mother: 21,
                 },
-                {
-                    overlay: -1912858770,
-                    collection: 598190139,
+                Makeup: {
+                    LipstickColor: 0,
+                    FullMakeupDefaultColor: true,
+                    FullMakeupOpacity: 1.0,
+                    FullMakeupType: -1,
+                    LipstickOpacity: 1.0,
+                    LipstickType: -1,
+                    BlushColor: 0,
+                    FullMakeupPrimaryColor: 0,
+                    BlushOpacity: 1.0,
+                    FullMakeupSecondaryColor: 0,
+                    BlushType: -1,
                 },
-                {
-                    overlay: -394853815,
-                    collection: -240234547,
+                FaceTrait: {
+                    NosePeakLower: 0.0,
+                    EyebrowHigh: 0.0,
+                    LipsThickness: 0.3,
+                    AddBodyBlemish: -1,
+                    JawBoneBackLength: 0.0,
+                    CheeksBoneWidth: 0.0,
+                    EyeColor: -1,
+                    Ageing: 11,
+                    Moles: -1,
+                    Blemish: -1,
+                    NeckThickness: 0.0,
+                    EyesOpening: 0.9,
+                    ChimpHole: 0.0,
+                    CheeksBoneHigh: 0.3,
+                    NoseBoneTwist: 0.0,
+                    Complexion: -1,
+                    NosePeakHeight: 0.0,
+                    NoseWidth: 0.0,
+                    BodyBlemish: -1,
+                    NosePeakLength: 0.4,
+                    ChimpBoneLength: 0.0,
+                    JawBoneWidth: 0.0,
+                    ChimpBoneWidth: 0.0,
+                    NoseBoneHigh: -0.2,
+                    CheeksWidth: 0.0,
+                    EyebrowForward: -0.3,
+                    ChimpBoneLower: 0.0,
                 },
-                {
-                    overlay: 2088037441,
-                    collection: 1529191571,
+                Tattoos: [
+                    {
+                        Overlay: -969415240,
+                        Collection: -1016521996,
+                    },
+                    {
+                        Overlay: -1912858770,
+                        Collection: 598190139,
+                    },
+                    {
+                        Overlay: -394853815,
+                        Collection: -240234547,
+                    },
+                    {
+                        Overlay: 2088037441,
+                        Collection: 1529191571,
+                    },
+                    {
+                        Overlay: 1942093304,
+                        Collection: -1016521996,
+                    },
+                    {
+                        Overlay: -1365916084,
+                        Collection: 1616273011,
+                    },
+                    {
+                        Overlay: -221624488,
+                        Collection: -1719270477,
+                    },
+                ],
+                Hair: {
+                    EyebrowOpacity: 1.0,
+                    BeardColor: 17,
+                    BeardType: 26,
+                    ChestHairOpacity: 1.0,
+                    HairSecondaryColor: 2,
+                    HairColor: 4,
+                    BeardOpacity: 1.0,
+                    ChestHairType: -1,
+                    EyebrowType: 5,
+                    HairType: 9,
+                    ChestHairColor: 0,
+                    EyebrowColor: 27,
                 },
-                {
-                    overlay: 1942093304,
-                    collection: -1016521996,
-                },
-                {
-                    overlay: -1365916084,
-                    collection: 1616273011,
-                },
-                {
-                    overlay: -221624488,
-                    collection: -1719270477,
-                },
-            ],
-            hair: {
-                EyebrowOpacity: 1.0,
-                BeardColor: 17,
-                BeardType: 26,
-                ChestHairOpacity: 1.0,
-                HairSecondaryColor: 2,
-                HairColor: 4,
-                BeardOpacity: 1.0,
-                ChestHairType: -1,
-                EyebrowType: 5,
-                HairType: 9,
-                ChestHairColor: 0,
-                EyebrowColor: 27,
             },
         });
 
@@ -283,10 +292,11 @@ export class Halloween2022Scenario1Provider {
         );
     }
 
-    private interactionPedGang(part: number): TargetOptions {
+    private interactionPedGang(part: number): TargetOption {
         return {
             label: 'Parler',
-            icon: 'fas fa-comment',
+            icon: 'global/comment',
+            category: 'citizen',
             canInteract: () => this.storyService.canInteractForPart('halloween2022', 'scenario1', part),
             action: async () => {
                 const dialog = await emitRpc<Dialog | null>(RpcServerEvent.STORY_HALLOWEEN_SCENARIO1, `part${part}`);
@@ -329,10 +339,11 @@ export class Halloween2022Scenario1Provider {
         );
     }
 
-    private interactionPedPolice(part: number): TargetOptions {
+    private interactionPedPolice(part: number): TargetOption {
         return {
             label: 'Parler',
-            icon: 'fas fa-comment',
+            icon: 'global/comment',
+            category: 'citizen',
             canInteract: () => this.storyService.canInteractForPart('halloween2022', 'scenario1', part),
             action: async () => {
                 const dialog = await emitRpc<Dialog | null>(RpcServerEvent.STORY_HALLOWEEN_SCENARIO1, `part${part}`);
@@ -355,6 +366,7 @@ export class Halloween2022Scenario1Provider {
                 {
                     label: zone.label,
                     icon: zone.icon,
+                    category: 'citizen',
                     canInteract: () => this.storyService.canInteractForPart('halloween2022', 'scenario1', zone.part),
                     action: async () => {
                         const animationPromise = this.animationService.playAnimation({

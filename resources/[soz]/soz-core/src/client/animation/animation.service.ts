@@ -30,12 +30,13 @@ export class AnimationService {
         const playerPed = PlayerPedId();
         TaskGoStraightToCoord(PlayerPedId(), coords[0], coords[1], coords[2], 1.0, duration, coords[3], 0.1);
 
-        const zone: BoxZone = new BoxZone([coords[0], coords[1], coords[2]], 1, 1);
+        const zone: BoxZone = new BoxZone([coords[0], coords[1], coords[2]], 1.0, 1.0);
         const interval = 500;
         for (let i = 0; i < duration - interval; i += interval) {
             if (
                 zone.isPointInside(GetEntityCoords(playerPed) as Vector3) &&
-                Math.abs(GetEntityHeading(playerPed) - coords[3]) < 5
+                (Math.abs(GetEntityHeading(playerPed) - coords[3]) < 5 ||
+                    Math.abs(GetEntityHeading(playerPed) - coords[3]) > 355)
             ) {
                 break;
             }
@@ -69,6 +70,7 @@ export class AnimationService {
             this.runningAnimations.get(id).runner.cancel(AnimationStopReason.Canceled);
         }
     }
+
     public async walkToCoordsAvoidObstacles(coords: Vector3 | Vector4, maxDuration = 5000) {
         const ped = PlayerPedId();
         await this.goToCoordsAvoidObstaclesForPed(ped, coords, maxDuration);
@@ -188,16 +190,17 @@ export class AnimationService {
     }
 
     public async stop(ped = PlayerPedId()): Promise<void> {
+        if (this.runningAnimations.size == 0) {
+            ClearPedTasks(ped);
+            ClearPedSecondaryTask(ped);
+        }
+
         for (const [id, anim] of this.runningAnimations.entries()) {
             if (!anim.runner.cancellable) {
                 continue;
             }
-            StopAnimTask(ped, anim.dictionary, anim.name, 3);
+            anim.runner.cancel();
             this.runningAnimations.delete(id);
-        }
-        if (this.runningAnimations.size == 0) {
-            ClearPedTasks(ped);
-            ClearPedSecondaryTask(ped);
         }
 
         await waitUntil(async () => !IsPedUsingAnyScenario(ped), 1000);

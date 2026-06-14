@@ -1,11 +1,17 @@
 import { Inject, Injectable } from '@core/decorators/injectable';
 import { Logger } from '@core/logger';
 import { wait } from '@core/utils';
+import { FeatureProvider } from '@public/client/feature/feature.provider';
+import { billboardOffsets, getScreenModel } from '@public/shared/billboard';
+import { BLACK_SCREEN_URL } from '@public/shared/global';
+import { applyOffset, Vector4 } from '@public/shared/polyzone/vector';
 
-import { Feature, isFeatureEnabled } from '../../shared/features';
+import { Feature } from '../../shared/features';
 import { joaat } from '../../shared/joaat';
 import { WorldObject } from '../../shared/object';
+import { ModelSwapRepository } from '../repository/modelswap.repository';
 import { ResourceLoader } from '../repository/resource.loader';
+import { TextureReplacerProvider } from './texture.replacer.provider';
 
 const HalloweenMapping: Record<number, number> = {
     [GetHashKey('soz_prop_bb_bin')]: GetHashKey('soz_hw_bin_1'),
@@ -23,10 +29,22 @@ export class ObjectService {
     @Inject(ResourceLoader)
     private resourceLoader: ResourceLoader;
 
+    @Inject(FeatureProvider)
+    private featureProvider: FeatureProvider;
+
+    @Inject(ModelSwapRepository)
+    private modelSwapRepository: ModelSwapRepository;
+
+    @Inject(TextureReplacerProvider)
+    private textureReplacerProvider: TextureReplacerProvider;
+
+    private duiObjects: Map<string, { dui: number; textureId: string }> = new Map();
+    private textureDict = 0;
+
     public async createObject(object: WorldObject) {
         let model = object.model;
 
-        if (isFeatureEnabled(Feature.Halloween)) {
+        if (this.featureProvider.isFeatureEnabled(Feature.Halloween)) {
             model = HalloweenMapping[model] || model;
         }
 
@@ -34,6 +52,14 @@ export class ObjectService {
             this.logger.warn(`Model ${model} is not valid for ${object.id}`);
 
             return null;
+        }
+
+        const swap = this.modelSwapRepository.findSwap(model, object.position);
+        if (swap) {
+            if (!swap.target) {
+                return null;
+            }
+            model = joaat(swap.target);
         }
 
         if (!(await this.resourceLoader.loadModel(model))) {
@@ -74,12 +100,12 @@ export class ObjectService {
 
         this.resourceLoader.unloadModel(model);
 
-        this.updateObject(entity, object);
+        await this.updateObject(entity, object);
 
         return entity;
     }
 
-    public updateObject(entity: number, object: WorldObject) {
+    public async updateObject(entity: number, object: WorldObject) {
         const model = GetEntityModel(entity);
 
         SetEntityHeading(entity, object.position[3]);
@@ -90,6 +116,17 @@ export class ObjectService {
 
         if (object.placeOnGround) {
             PlaceObjectOnGroundProperly(entity);
+        }
+
+        if (object.rotation) {
+            SetEntityRotation(
+                entity,
+                object.rotation[0],
+                object.rotation[1],
+                object.rotation[2],
+                object.rotationOrder ?? 0,
+                false
+            );
         }
 
         if (object.matrix) {
@@ -104,19 +141,78 @@ export class ObjectService {
                     object.matrix[14] = z + 0.01;
                 }
             }
-            this.applyEntityMatrix(entity, object.matrix);
-        }
 
-        if (object.rotation) {
-            SetEntityRotation(entity, object.rotation[0], object.rotation[1], object.rotation[2], 0, false);
+            this.applyEntityMatrix(entity, object.matrix);
+        } else if (object.growth) {
+            this.computeGrowth(entity, object);
         }
 
         if (object.invisible) {
             SetEntityVisible(entity, false, false);
         }
 
+        if (object.highlight) {
+            SetEntityDrawOutlineColor(0, 180, 0, 255);
+            SetEntityDrawOutlineShader(1);
+            SetEntityDrawOutline(entity, true);
+        } else {
+            SetEntityDrawOutline(entity, false);
+        }
+
         SetEntityCollision(entity, !object.noCollision, false);
         SetEntityInvincible(entity, true);
+
+        RemoveParticleFxFromEntity(entity);
+        if (object.vfx) {
+            await this.resourceLoader.loadPtfxAsset(object.vfx.dictionary);
+            UseParticleFxAsset(object.vfx.dictionary);
+            object.vfx.id = StartParticleFxLoopedOnEntity(
+                object.vfx.name,
+                entity,
+                object.vfx.position[0],
+                object.vfx.position[1],
+                object.vfx.position[2],
+                object.vfx.rotation[0],
+                object.vfx.rotation[1],
+                object.vfx.rotation[2],
+                object.vfx.scale,
+                false,
+                false,
+                false
+            );
+            if (object.vfx.rgb) {
+                SetParticleFxLoopedColour(object.vfx.id, object.vfx.rgb[0], object.vfx.rgb[1], object.vfx.rgb[2], true);
+            }
+            this.resourceLoader.unloadPtfxAsset(object.vfx.dictionary);
+        }
+
+        if (object.permanent) {
+            SetEntityLodDist(entity, 0xfff);
+        } else {
+            SetEntityLodDist(entity, 0x200);
+        }
+
+        if (object.alpha) {
+            SetEntityAlpha(entity, object.alpha, false);
+        }
+
+        if (object.textureVariation) {
+            SetObjectTextureVariation(entity, object.textureVariation);
+        }
+
+        if (object.dynamicTexture && object.dynamicTexture.url) {
+            const conf = billboardOffsets[object.dynamicTexture.baseModel];
+            if (conf) {
+                const oriTxd = getScreenModel(object.dynamicTexture.baseModel, object.dynamicTexture.index);
+                for (const texture of conf.textures) {
+                    this.textureReplacerProvider.replaceTexture({
+                        baseDict: oriTxd,
+                        baseTexture: texture,
+                        url: object.dynamicTexture.url,
+                    });
+                }
+            }
+        }
     }
 
     public deleteObject(entity: number, object: WorldObject) {
@@ -128,28 +224,53 @@ export class ObjectService {
 
         let model = object.model;
 
-        if (isFeatureEnabled(Feature.Halloween)) {
+        if (this.featureProvider.isFeatureEnabled(Feature.Halloween)) {
             model = HalloweenMapping[model] || model;
         }
 
-        if (GetEntityModel(entity) !== model) {
-            this.logger.error(`Attemp to delete an entity of wrong model ${GetEntityModel(entity)} expected ${model}`);
+        const swap = this.modelSwapRepository.findSwap(model, object.position);
+        let model2 = null;
+        if (swap) {
+            if (!swap.target) {
+                return false;
+            }
+            model2 = joaat(swap.target);
+        }
+
+        if (![model, model2].includes(GetEntityModel(entity))) {
+            this.logger.error(
+                `Attemp to delete an entity of wrong model ${GetEntityModel(entity)} expected ${model} or ${model2} for ${object.id}`
+            );
 
             return false;
         }
 
         DeleteEntity(entity);
+        if (object.dynamicTexture && object.dynamicTexture.url) {
+            const conf = billboardOffsets[object.dynamicTexture.baseModel];
+            if (conf) {
+                const oriTxd = getScreenModel(object.dynamicTexture.baseModel, object.dynamicTexture.index);
+                for (const texture of conf.textures) {
+                    RemoveReplaceTexture(oriTxd, texture);
+                }
+
+                const duiObject = this.duiObjects.get(object.id);
+                if (duiObject) {
+                    SetDuiUrl(duiObject.dui, BLACK_SCREEN_URL);
+                }
+            }
+        }
 
         return true;
     }
 
-    public getEntityMatrix(entity: number): Float32Array {
+    public getEntityMatrix(entity: number): number[] {
         const [f, r, u, a] = GetEntityMatrix(entity);
 
-        return new Float32Array([r[0], r[1], r[2], 0, f[0], f[1], f[2], 0, u[0], u[1], u[2], 0, a[0], a[1], a[2], 1]);
+        return [r[0], r[1], r[2], 0, f[0], f[1], f[2], 0, u[0], u[1], u[2], 0, a[0], a[1], a[2], 1];
     }
 
-    public applyEntityMatrix(entity: number, matrix: Float32Array) {
+    public applyEntityMatrix(entity: number, matrix: number[]) {
         SetEntityMatrix(
             entity,
             matrix[4],
@@ -167,7 +288,7 @@ export class ObjectService {
         );
     }
 
-    public applyEntityNormalizedMatrix(entity: number, matrix: Float32Array) {
+    public applyEntityNormalizedMatrix(entity: number, matrix: number[]) {
         const norm_F = Math.sqrt(matrix[0] ** 2 + matrix[1] ** 2);
         SetEntityMatrix(
             entity,
@@ -184,5 +305,116 @@ export class ObjectService {
             matrix[13],
             matrix[14] // Position
         );
+    }
+
+    public computeGrowth(entity: number, object: WorldObject) {
+        let ratio = object.growth.endSize;
+        if (Date.now() < object.growth.beginTime) {
+            ratio = object.growth.beginSize;
+        } else if (Date.now() < object.growth.endTime) {
+            ratio =
+                ((Date.now() - object.growth.beginTime) / (object.growth.endTime - object.growth.beginTime)) *
+                    (object.growth.endSize - object.growth.beginSize) +
+                object.growth.beginSize;
+        }
+        const matrix = this.getEntityMatrix(entity);
+        matrix[0] = ratio;
+        matrix[5] = ratio;
+        matrix[10] = ratio;
+
+        SetEntityMatrix(
+            entity,
+            matrix[4],
+            matrix[5],
+            matrix[6], // Right
+            matrix[0],
+            matrix[1],
+            matrix[2], // Forward
+            matrix[8],
+            matrix[9],
+            matrix[10], // Up
+            matrix[12],
+            matrix[13],
+            matrix[14] // Position
+        );
+    }
+
+    public updateObjectTexture(entity: number, textureUrl: string) {
+        if (!DoesEntityExist(entity) || !textureUrl) return;
+
+        const coords = GetEntityCoords(entity, false);
+        const model = GetEntityModel(entity);
+
+        function computeCorners(coordsWithHeading: Vector4): Vector4[] {
+            return billboardOffsets[model].offsets.map(offset => applyOffset(coordsWithHeading, offset));
+        }
+
+        function drawQuad(c1: Vector4, c2: Vector4, c3: Vector4, c4: Vector4, textureName: string) {
+            DrawTexturedPoly(
+                c1[0],
+                c1[1],
+                c1[2],
+                c3[0],
+                c3[1],
+                c3[2],
+                c2[0],
+                c2[1],
+                c2[2],
+                255,
+                255,
+                255,
+                255,
+                'dynamic_prop_textures',
+                textureName,
+                1,
+                0,
+                1,
+                0,
+                0,
+                1,
+                1,
+                1,
+                1
+            );
+            DrawTexturedPoly(
+                c3[0],
+                c3[1],
+                c3[2],
+                c4[0],
+                c4[1],
+                c4[2],
+                c2[0],
+                c2[1],
+                c2[2],
+                255,
+                255,
+                255,
+                255,
+                'dynamic_prop_textures',
+                textureName,
+                0,
+                0,
+                1,
+                0,
+                1,
+                1,
+                1,
+                1,
+                1
+            );
+        }
+
+        const baseHeading = GetEntityHeading(entity);
+        const headings = [baseHeading];
+
+        if (model === GetHashKey('soz_news_billboard_02')) {
+            headings.push(baseHeading + 120, baseHeading - 120);
+        }
+
+        headings.forEach(heading => {
+            const coordsWithHeading = [...coords, heading] as Vector4;
+            const [c1, c2, c3, c4] = computeCorners(coordsWithHeading);
+            drawQuad(c1, c2, c3, c4, `${textureUrl}_texture`);
+        });
     }
 }

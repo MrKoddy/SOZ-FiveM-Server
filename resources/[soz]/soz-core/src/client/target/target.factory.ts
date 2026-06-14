@@ -1,48 +1,38 @@
-import { JobType } from '@public/shared/job';
+import { Inject, Injectable } from '@core/decorators/injectable';
+import { TargetStore } from '@public/client/target/target.store';
 import { PolygonZone } from '@public/shared/polyzone/polygon.zone';
+import { TargetOption } from '@public/shared/target';
 
-import { Inject, Injectable } from '../../core/decorators/injectable';
-import { Zone } from '../../shared/polyzone/box.zone';
+import { BoxZone, Zone } from '../../shared/polyzone/box.zone';
 import { Ped, PedFactory } from '../factory/ped.factory';
-
-export type TargetOptions = {
-    label: string;
-    icon?: string;
-    color?: string;
-    type?: string;
-    event?: string;
-    blackoutGlobal?: boolean;
-    blackoutJob?: string;
-    canInteract?: (entity) => boolean | Promise<boolean>;
-    action?: (entity) => void;
-    job?: string | JobType | Partial<{ [key in JobType]: number }>;
-    item?: string;
-};
+import { DnDCallback, InventoryDragAndDropProvider } from '../inventory/inventory.draganddrop.provider';
 
 export type PedOptions = Ped & {
     spawnNow?: boolean;
     length?: number;
     width?: number;
     minusOne?: boolean;
-    debugPoly?: boolean;
     target: {
-        options: TargetOptions[];
+        options: TargetOption[];
         distance: number;
     };
+    dragAndDrop?: DnDCallback[];
 };
 
 const DEFAULT_DISTANCE = 2.5;
 
 @Injectable()
 export class TargetFactory {
-    private zones: { [id: string]: any } = {};
-    private players: { [id: string]: any } = {};
-    private vehicles: { [id: string]: any } = {};
+    @Inject(InventoryDragAndDropProvider)
+    private inventoryDragAndDropProvider: InventoryDragAndDropProvider;
 
     @Inject(PedFactory)
-    private pedFactory: PedFactory;
+    private readonly pedFactory: PedFactory;
 
-    public createForBoxZone(id: string, zone: Zone<any>, targets: TargetOptions[], distance = DEFAULT_DISTANCE) {
+    @Inject(TargetStore)
+    private readonly targetStore: TargetStore;
+
+    public async createForBoxZone(id: string, zone: Zone<any>, targets: TargetOption[], distance = DEFAULT_DISTANCE) {
         zone = {
             length: 1,
             width: 1,
@@ -52,144 +42,96 @@ export class TargetFactory {
             ...zone,
         };
 
-        exports['qb-target'].AddBoxZone(
-            id,
-            { x: zone.center[0], y: zone.center[1], z: zone.center[2] },
-            zone.length,
-            zone.width,
-            {
-                debugPoly: zone.debugPoly || false,
-                heading: zone.heading,
-                minZ: zone.minZ,
-                maxZ: zone.maxZ,
-                name: id,
-            },
-            {
-                options: targets,
-                distance: distance,
-            }
-        );
-
-        this.zones[id] = zone;
+        await this.targetStore.addZone(id, BoxZone.fromZone(zone), targets, distance);
     }
 
-    public createForPolygoneZone(
+    public async createForPolygoneZone(
         id: string,
         zone: PolygonZone<any>,
-        targets: TargetOptions[],
+        targets: TargetOption[],
         distance = DEFAULT_DISTANCE
     ) {
-        exports['qb-target'].AddPolyZone(
-            id,
-            zone.getPoints().map(vector => ({ x: vector[0], y: vector[1] })),
-            {
-                debugPoly: zone.debugPoly || false,
-                minZ: zone.minZ,
-                maxZ: zone.maxZ,
-                name: id,
-            },
-            {
-                options: targets,
-                distance: distance,
-            }
-        );
-
-        this.zones[id] = zone;
+        await this.targetStore.addZone(id, zone, targets, distance);
     }
 
-    public createForAllPlayer(targets: TargetOptions[], distance = DEFAULT_DISTANCE) {
-        exports['qb-target'].AddGlobalPlayer({
-            options: targets,
-            distance: distance,
-        });
-
-        for (const target of targets) {
-            this.players[target.label] = target;
-        }
-    }
-
-    public unload() {
-        for (const id of Object.keys(this.zones)) {
-            exports['qb-target'].RemoveZone(id);
-        }
-
-        // for (const id of Object.keys(this.players)) {
-        //     exports['qb-target'].RemoveGlobalPlayer(id);
-        // }
-        //
-        // for (const id of Object.keys(this.vehicles)) {
-        //     exports['qb-target'].RemoveGlobalVehicle(id);
-        // }
-
-        //exports['qb-target'].DeletePeds();
+    public createForAllPlayer(targets: TargetOption[], distance = DEFAULT_DISTANCE) {
+        this.targetStore.players.add({ player: -1, targets, distance });
     }
 
     public async createForPed(ped: PedOptions) {
         const id = await this.pedFactory.createPedOnGrid(ped);
 
-        this.createForBoxZone(
-            `entity_${id}`,
-            {
-                center: [ped.coords.x, ped.coords.y, ped.coords.z],
-                heading: ped.coords.w,
-                width: ped.width || 0.8,
-                length: ped.length || 0.8,
-                minZ: ped.coords.z - 1,
-                maxZ: ped.coords.z + 2,
-                debugPoly: ped.debugPoly,
-            },
-            ped.target.options
-        );
+        const zone: Zone<any> = {
+            center: [ped.coords.x, ped.coords.y, ped.coords.z],
+            heading: ped.coords.w,
+            width: ped.width || 0.8,
+            length: ped.length || 0.8,
+            minZ: ped.coords.z - 1,
+            maxZ: ped.coords.z + 2,
+        };
+        this.createForBoxZone(`entity_${id}`, zone, ped.target.options);
+        if (ped.dragAndDrop) {
+            this.inventoryDragAndDropProvider.registerZoneTarget(
+                'dnd_ped_' + id,
+                BoxZone.fromZone(zone),
+                ped.dragAndDrop
+            );
+        }
+
+        return id;
+    }
+
+    public deleteForPed(id: string) {
+        this.pedFactory.deletePedOnGrid(id);
+        this.removeBoxZone(`entity_${id}`);
     }
 
     public createForModel(
         models: string[] | number[] | string | number,
-        targets: TargetOptions[],
+        targets: TargetOption[],
         distance = DEFAULT_DISTANCE
     ) {
-        exports['qb-target'].AddTargetModel(models, {
-            options: targets,
-            distance: distance,
-        });
+        return this.targetStore.addModels(models, targets, distance);
     }
 
     public createForEntity(
-        entities: string[] | number[] | string | number,
-        targets: TargetOptions[],
-        distance = DEFAULT_DISTANCE
+        entities: number[] | number,
+        targets: TargetOption[],
+        distance = DEFAULT_DISTANCE,
+        id?: string
     ) {
-        exports['qb-target'].AddTargetEntity(entities, {
-            options: targets,
-            distance: distance,
-        });
+        return this.targetStore.addEntities(entities, targets, distance, id);
     }
 
-    public createForAllVehicle(targets: TargetOptions[], distance = DEFAULT_DISTANCE) {
-        exports['qb-target'].AddGlobalVehicle({
-            options: targets,
-            distance: distance,
-        });
+    public createForAllVehicle(targets: TargetOption[], distance = 3.0) {
+        return this.targetStore.vehicles.add({ vehicle: -1, targets, distance });
+    }
 
-        for (const target of targets) {
-            this.vehicles[target.label] = target;
+    public createForAllPed(targets: TargetOption[], distance = DEFAULT_DISTANCE) {
+        return this.targetStore.peds.add({ ped: -1, targets, distance });
+    }
+
+    public removeTargetModel(models: string[]) {
+        const targetsModel = this.targetStore.models.find(([, value]) =>
+            models.map(m => this.targetStore.getId(m)).includes(value.model)
+        );
+        for (const [key] of targetsModel) {
+            this.targetStore.models.remove(key);
         }
     }
 
-    public createForAllPed(targets: TargetOptions[], distance = DEFAULT_DISTANCE) {
-        exports['qb-target'].AddGlobalPed({
-            options: targets,
-            distance: distance,
-        });
-    }
-
-    public removeTargetModel(models: string[], labels: string[]) {
-        exports['qb-target'].RemoveTargetModel(models, labels);
+    public removeForEntity(entities: number[]) {
+        const targetsEntity = this.targetStore.entities.find(([, value]) => entities.includes(value.entity));
+        for (const [key] of targetsEntity) {
+            this.targetStore.entities.remove(key);
+        }
     }
 
     public removeBoxZone(id: string) {
-        exports['qb-target'].RemoveZone(id);
+        return this.targetStore.zones.remove(id);
     }
 
-    // // @TODO - Implement it when needed
-    // public removeTargetEntity(entities: string[], labels: string[]) {}
+    public async createForBone(bones: string[] | string, targets: TargetOption[], distance = 1.5) {
+        return this.targetStore.addBones(bones, targets, distance);
+    }
 }

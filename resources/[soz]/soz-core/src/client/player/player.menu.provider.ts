@@ -1,26 +1,26 @@
-import { emitRpc } from '@public/core/rpc';
+import { CasinoService } from '@private/client/casino/casino.service';
+import { GamesProvider } from '@public/client/games/games.provider';
 import { wait } from '@public/core/utils';
-import { Feature, isFeatureEnabled } from '@public/shared/features';
-import { CardType } from '@public/shared/nui/card';
-import { Vector3 } from '@public/shared/polyzone/vector';
-import { RpcServerEvent } from '@public/shared/rpc';
 
 import { Command } from '../../core/decorators/command';
-import { Once, OnEvent, OnNuiEvent } from '../../core/decorators/event';
+import { Once, OnNuiEvent } from '../../core/decorators/event';
 import { Inject } from '../../core/decorators/injectable';
 import { Provider } from '../../core/decorators/provider';
 import { ClothConfig } from '../../shared/cloth';
-import { ClientEvent, NuiEvent, ServerEvent } from '../../shared/event';
+import { NuiEvent } from '../../shared/event';
 import { MenuType } from '../../shared/nui/menu';
 import { AnimationService } from '../animation/animation.service';
+import { HudGlassmorphismProvider } from '../hud/hud.glassmorphism.provider';
 import { HudMinimapProvider } from '../hud/hud.minimap.provider';
 import { HudStateProvider } from '../hud/hud.state.provider';
 import { JobMenuProvider } from '../job/job.menu.provider';
-import { Notifier } from '../notifier';
 import { NuiDispatch } from '../nui/nui.dispatch';
 import { NuiMenu } from '../nui/nui.menu';
 import { HalloweenSpiderService } from '../object/halloween.spider.service';
 import { ProgressService } from '../progress.service';
+import { Election2024CeremonyProvider } from '../story/election-2024/ceremony.provider';
+import { ParadeProvider } from '../story/parade.provider';
+import { StreamProvider } from '../stream/stream.provider';
 import { VoiceProvider } from '../voip/voice/voice.provider';
 import { PlayerAnimationProvider } from './player.animation.provider';
 import { PlayerService } from './player.service';
@@ -64,8 +64,23 @@ export class PlayerMenuProvider {
     @Inject(VoiceProvider)
     private voiceProvider: VoiceProvider;
 
-    @Inject(Notifier)
-    private notifier: Notifier;
+    @Inject(GamesProvider)
+    private readonly gamesProvider: GamesProvider;
+
+    @Inject(HudGlassmorphismProvider)
+    private hudGlassmorphismProvider: HudGlassmorphismProvider;
+
+    @Inject(Election2024CeremonyProvider)
+    private ceremonyProvider: Election2024CeremonyProvider;
+
+    @Inject(ParadeProvider)
+    private paradeProvider: ParadeProvider;
+
+    @Inject(StreamProvider)
+    private streamProvider: StreamProvider;
+
+    @Inject(CasinoService)
+    private readonly casinoService: CasinoService;
 
     @Once()
     public async init() {
@@ -83,6 +98,12 @@ export class PlayerMenuProvider {
         ],
     })
     public async togglePersonalMenu() {
+        if (this.casinoService.usingMinigame()) return;
+
+        if (this.ceremonyProvider.isRunning || this.paradeProvider.isRunning) {
+            return;
+        }
+
         if (this.menu.getOpened() === MenuType.PlayerPersonal) {
             this.menu.closeMenu();
             return;
@@ -92,79 +113,25 @@ export class PlayerMenuProvider {
             ...this.hudStateProvider.getState(),
             scaledNui: this.hudMinimapProvider.scaledNui,
             shortcuts: this.playerAnimationProvider.getShortcuts(),
+            favorites: this.playerAnimationProvider.getFavorites(),
+            combatMode: this.playerAnimationProvider.getCombatMode(),
             job: this.jobMenuProvider.getJobMenuData(),
             deguisement: this.playerService.hasDeguisement(),
             naked: this.playerService.getPlayer().cloth_config.Config.Naked,
-            halloween: isFeatureEnabled(Feature.Halloween),
             arachnophobe: this.halloweenSpiderService.isArachnophobeMode(),
-        });
-    }
-
-    @Command('openPlayerKeyInventory', {
-        description: 'Ouvrir le trousseau de clés',
-        keys: [{ mapper: 'keyboard', key: '' }],
-    })
-    @OnNuiEvent(NuiEvent.PlayerMenuOpenKeys)
-    public async openKeys() {
-        TriggerServerEvent(ServerEvent.VEHICLE_OPEN_KEYS);
-
-        this.menu.closeMenu();
-    }
-
-    @OnEvent(ClientEvent.PLAYER_CARD_SHOW)
-    @OnNuiEvent(NuiEvent.PlayerMenuCardShow)
-    public async onPlayerMenuCardShow(type, accountId?: string) {
-        await this.showCard(type, accountId);
-    }
-
-    public async showCard(type: CardType, accountId?: string) {
-        const position = GetEntityCoords(PlayerPedId()) as Vector3;
-        const players = this.playerService.getPlayersAround(position, 3.0);
-
-        if (players.length <= 1) {
-            this.notifier.notify("Il n'y a personne à proximité", 'error');
-            return;
-        }
-
-        const player = this.playerService.getId();
-        await this.animationService.playAnimation({
-            base: {
-                dictionary: 'mp_common',
-                name: 'givetake2_a',
-                blendInSpeed: 8.0,
-                blendOutSpeed: 8.0,
-                options: {
-                    enablePlayerControl: true,
-                    onlyUpperBody: true,
-                },
-            },
-        });
-
-        TriggerServerEvent(ServerEvent.PLAYER_SHOW_IDENTITY, type, players, player, accountId);
-    }
-
-    @OnEvent(ClientEvent.PLAYER_CARD_SEE)
-    @OnNuiEvent(NuiEvent.PlayerMenuCardSee)
-    public async seeCard({ type }) {
-        const player = this.playerService.getId();
-        let iban = '';
-        if (!player) {
-            return;
-        }
-
-        if (type === 'bank') {
-            iban = await emitRpc<string>(RpcServerEvent.BANK_GET_ACCOUNT, player.citizenid);
-        }
-
-        this.dispatcher.dispatch('card', 'addCard', {
-            type,
-            player,
-            iban,
+            isGlassmorphismActive: this.hudGlassmorphismProvider.glassmorphism,
+            glassmorphismFpsLimit: this.hudGlassmorphismProvider.glassmorphismFpsLimit,
+            voipIntent: this.voiceProvider.intent,
+            videoVolume: this.streamProvider.videoVolume * 100,
         });
     }
 
     @OnNuiEvent(NuiEvent.PlayerMenuClothConfigUpdate)
     public async clothComponentUpdate({ key, value }: { key: keyof ClothConfig['Config']; value: boolean }) {
+        if (this.gamesProvider.areAnyGameRunning()) {
+            return;
+        }
+
         const player = this.playerService.getPlayer();
 
         if (!player) {
@@ -209,9 +176,29 @@ export class PlayerMenuProvider {
         this.hudMinimapProvider.scaledNui = value;
     }
 
+    @OnNuiEvent(NuiEvent.PlayerMenuHudSetGlassmorphism)
+    public async hudComponentSetGlassmorphism({ value }: { value: boolean }) {
+        this.hudGlassmorphismProvider.glassmorphism = value;
+    }
+
+    @OnNuiEvent(NuiEvent.PlayerMenuHudSetGlassmorphismFpsLimit)
+    public async hudComponentSetGlassmorphismFpsLimit({ value }: { value: number }) {
+        this.hudGlassmorphismProvider.glassmorphismFpsLimit = value;
+    }
+
     @OnNuiEvent(NuiEvent.PlayerMenuVoipReset)
     public async resetVoip() {
         await this.voiceProvider.reconnect(true, 'Demande joueur');
+    }
+
+    @OnNuiEvent(NuiEvent.PlayerMenuVoipSetIntent)
+    public async setVoipIntent({ value }: { value: string }) {
+        this.voiceProvider.setIntent(value);
+    }
+
+    @OnNuiEvent(NuiEvent.PlayerMenuSetVideoVolume)
+    public async setVideoVolume({ value }: { value: number }) {
+        this.streamProvider.setVideoVolume(value / 100);
     }
 
     @OnNuiEvent(NuiEvent.PlayerMenuHudSetArachnophobe)
@@ -237,10 +224,6 @@ export class PlayerMenuProvider {
     @OnNuiEvent(NuiEvent.PlayerMenuReDress)
     public async reDrees() {
         const progress = await this.playerWardrobe.waitProgress(false);
-
-        if (!progress.completed) {
-            return;
-        }
 
         if (!progress.completed) {
             return;

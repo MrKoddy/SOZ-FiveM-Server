@@ -1,3 +1,5 @@
+import { VehicleBusinessProvider } from '@private/client/gang/business.vehicle.provider';
+
 import { OnEvent, OnNuiEvent } from '../../core/decorators/event';
 import { Inject } from '../../core/decorators/injectable';
 import { Provider } from '../../core/decorators/provider';
@@ -8,7 +10,7 @@ import { Err, Ok } from '../../shared/result';
 import { RpcServerEvent } from '../../shared/rpc';
 import { groupBy } from '../../shared/utils/array';
 import { VehicleConfiguration, VehicleModType } from '../../shared/vehicle/modification';
-import { Vehicle, VehicleCategory } from '../../shared/vehicle/vehicle';
+import { LSCustomMode, Vehicle, VehicleCategory } from '../../shared/vehicle/vehicle';
 import { InputService } from '../nui/input.service';
 import { VehicleDamageProvider } from '../vehicle/vehicle.damage.provider';
 import { VehicleModificationService } from '../vehicle/vehicle.modification.service';
@@ -27,6 +29,9 @@ export class AdminMenuVehicleProvider {
 
     @Inject(VehicleDamageProvider)
     private vehicleDamageProvider: VehicleDamageProvider;
+
+    @Inject(VehicleBusinessProvider)
+    private vehicleBusinessProvider: VehicleBusinessProvider;
 
     private noBurstTyre = false;
 
@@ -144,7 +149,10 @@ export class AdminMenuVehicleProvider {
                 RpcServerEvent.VEHICLE_CUSTOM_SET_MODS,
                 vehicleNetworkId,
                 fbiConfiguration,
-                configuration
+                configuration,
+                null,
+                true,
+                LSCustomMode.Admin
             );
 
             this.vehicleModificationService.applyVehicleConfiguration(vehicle, newVehicleConfiguration);
@@ -218,5 +226,21 @@ export class AdminMenuVehicleProvider {
 
     public getNoBurstTyres(): boolean {
         return this.noBurstTyre;
+    }
+
+    @OnNuiEvent(NuiEvent.AdminMenuVehicleNos)
+    public async setNos(): Promise<void> {
+        const veh = GetVehiclePedIsIn(PlayerPedId(), false);
+        if (veh) {
+            TriggerServerEvent(ServerEvent.ADMIN_VEHICLE_NOS, VehToNet(veh));
+        }
+    }
+
+    @OnNuiEvent(NuiEvent.AdminMenuVehicleMapping)
+    public async setMapping(): Promise<void> {
+        const veh = GetVehiclePedIsIn(PlayerPedId(), false);
+        if (veh) {
+            this.vehicleBusinessProvider.mapping(veh, true);
+        }
     }
 }

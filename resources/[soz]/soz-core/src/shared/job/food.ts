@@ -14,21 +14,21 @@ export const FoodHuntConfig = {
 export const CraftZones: NamedZone[] = [
     {
         name: 'food_craft_1',
-        center: [-1882.53, 2069.2, 141.0],
-        length: 2.2,
-        width: 1.15,
-        heading: 340,
-        minZ: 140.0,
-        maxZ: 141.45,
+        center: [-1895.98, 2067.29, 140.33],
+        length: 1.8,
+        width: 4.2,
+        heading: 321.79,
+        minZ: 139.33,
+        maxZ: 141.33,
     },
     {
         name: 'food_craft_2',
-        center: [-1880.22, 2068.34, 141.0],
-        length: 2.15,
-        width: 1.15,
-        heading: 340,
-        minZ: 140.0,
-        maxZ: 141.45,
+        center: [-1900.68, 2071.03, 140.19],
+        length: 1.8,
+        width: 4.4,
+        heading: 321.21,
+        minZ: 139.19,
+        maxZ: 141.19,
     },
 ];
 
@@ -251,6 +251,145 @@ export const FoodCraftsLists: Record<string, CraftCategory> = {
             },
         },
     },
+    ['Plats à base de viande']: {
+        duration: 8000,
+        icon: '🥩',
+        event: 'job_cm_food_craft',
+        recipes: {
+            beef_symfony_truffle: {
+                inputs: {
+                    abat: { count: 1 },
+                    langue: { count: 1 },
+                    rognon: { count: 1 },
+                    tripe: { count: 1 },
+                    mushroom: { count: 3 },
+                    wine1: { count: 1 },
+                },
+                amount: 10,
+            },
+            crunchy_lamp_chop: {
+                inputs: {
+                    viande: { count: 2 },
+                    potato: { count: 5 },
+                    tomato: { count: 5 },
+                    corn: { count: 5 },
+                    cabage: { count: 2 },
+                    milk: { count: 1 },
+                },
+                amount: 10,
+            },
+            rosmarino_veal_filet: {
+                inputs: {
+                    viande: { count: 2 },
+                    potato: { count: 2 },
+                    milk: { count: 1 },
+                },
+                amount: 10,
+            },
+            spicy_sichuan_duck_breast: {
+                inputs: {
+                    viande: { count: 2 },
+                    potato: { count: 2 },
+                    wine4: { count: 1 },
+                },
+                amount: 10,
+            },
+        },
+    },
+    ['Plats à base de poissons/crustacés']: {
+        duration: 8000,
+        icon: '🐟',
+        event: 'job_cm_food_craft',
+        recipes: {
+            scallops_goldn_corn: {
+                inputs: {
+                    fish_preparation: { count: 4 },
+                    corn: { count: 2 },
+                    milk: { count: 1 },
+                    sausage3: { count: 1 },
+                },
+                amount: 10,
+            },
+            deep_sea_turbot: {
+                inputs: {
+                    fish_preparation: { count: 4 },
+                    tomato: { count: 1 },
+                    lemon: { count: 1 },
+                    cabage: { count: 1 },
+                },
+                amount: 10,
+            },
+            herbarium_cod: {
+                inputs: {
+                    fish_preparation: { count: 4 },
+                    potato: { count: 5 },
+                    tomato: { count: 5 },
+                    corn: { count: 5 },
+                    cabage: { count: 2 },
+                    wine3: { count: 1 },
+                },
+                amount: 10,
+            },
+            ocean_awakening: {
+                inputs: {
+                    fish_preparation: { count: 4 },
+                    apple: { count: 1 },
+                    milk: { count: 1 },
+                    wine3: { count: 1 },
+                },
+                amount: 10,
+            },
+        },
+    },
+    ['Plats exotiques']: {
+        duration: 8000,
+        icon: '🌴',
+        event: 'job_cm_food_craft',
+        recipes: {
+            tropical_goat_curry: {
+                inputs: {
+                    viande: { count: 2 },
+                    potato: { count: 1 },
+                    tomato: { count: 1 },
+                    lemon: { count: 1 },
+                },
+                amount: 10,
+            },
+            tikka_royal: {
+                inputs: {
+                    viande: { count: 2 },
+                    milk: { count: 1 },
+                    potato: { count: 5 },
+                    tomato: { count: 5 },
+                    corn: { count: 5 },
+                    cabage: { count: 2 },
+                    lemon: { count: 1 },
+                },
+                amount: 10,
+            },
+            sand_tagine: {
+                inputs: {
+                    viande: { count: 2 },
+                    potato: { count: 5 },
+                    tomato: { count: 5 },
+                    corn: { count: 5 },
+                    cabage: { count: 2 },
+                    lemon: { count: 1 },
+                    orange: { count: 1 },
+                },
+                amount: 10,
+            },
+            end_world_tataki: {
+                inputs: {
+                    viande: { count: 2 },
+                    potato: { count: 2 },
+                    lemon: { count: 1 },
+                    smuggling_zibwasser_zoublon: { count: 1 },
+                },
+                amount: 10,
+            },
+        },
+    },
     Halloween: {
         feature: Feature.Halloween,
         duration: 5000,
@@ -274,77 +413,118 @@ export const FoodCraftsLists: Record<string, CraftCategory> = {
             },
         },
     },
+    Noël: {
+        feature: Feature.Christmas,
+        duration: 5000,
+        icon: '🎅',
+        event: 'job_cm_food_craft',
+        recipes: {
+            christmas_wine: {
+                inputs: {
+                    grape1: { count: 2 },
+                    grape2: { count: 2 },
+                    grape3: { count: 2 },
+                    grape4: { count: 2 },
+                },
+                amount: 10,
+            },
+            christmas_roast_turkey: {
+                inputs: {
+                    viande: { count: 1 },
+                    abat: { count: 2 },
+                    rognon: { count: 2 },
+                    orange: { count: 2 },
+                },
+                amount: 10,
+            },
+            christmas_pudding: {
+                inputs: {
+                    milk: { count: 2 },
+                    rhum: { count: 1 },
+                    orange: { count: 1 },
+                    lemon: { count: 1 },
+                },
+                amount: 10,
+            },
+            christmas_mille_feuille: {
+                inputs: {
+                    semi_skimmed_milk: { count: 3 },
+                    skimmed_milk: { count: 3 },
+                },
+                amount: 10,
+            },
+        },
+    },
 };
 
 export const FoodCloakroom: WardrobeConfig = {
     [joaat('mp_m_freemode_01')]: {
-        ['Tenue de Direction']: {
+        ['Tenue Patron']: {
             Components: {
-                [3]: { Drawable: 6, Texture: 0, Palette: 0 },
-                [4]: { Drawable: 24, Texture: 0, Palette: 0 },
-                [6]: { Drawable: 10, Texture: 0, Palette: 0 },
-                [7]: { Drawable: 117, Texture: 4, Palette: 0 },
-                [8]: { Drawable: 31, Texture: 0, Palette: 0 },
-                [9]: { Drawable: 0, Texture: 0, Palette: 0 },
+                [3]: { Drawable: 11, Texture: 0, Palette: 0 },
+                [4]: { Drawable: 187, Texture: 0, Palette: 0 },
+                [6]: { Drawable: 104, Texture: 3, Palette: 0 },
+                [8]: { Drawable: 6, Texture: 0, Palette: 0 },
                 [10]: { Drawable: 0, Texture: 0, Palette: 0 },
-                [11]: { Drawable: 29, Texture: 0, Palette: 0 },
+                [11]: { Drawable: 40, Texture: 1, Palette: 0 },
             },
             Props: {},
+            GlovesID: 56011,
         },
-        ['Tenue de travail']: {
+        ['Tenue Direction']: {
+            Components: {
+                [3]: { Drawable: 11, Texture: 0, Palette: 0 },
+                [4]: { Drawable: 4, Texture: 0, Palette: 0 },
+                [6]: { Drawable: 146, Texture: 0, Palette: 0 },
+                [8]: { Drawable: 6, Texture: 0, Palette: 0 },
+                [10]: { Drawable: 0, Texture: 0, Palette: 0 },
+                [11]: { Drawable: 40, Texture: 0, Palette: 0 },
+            },
+            Props: {},
+            GlovesID: 56000,
+        },
+        ['Tenue Prestation']: {
+            Components: {
+                [3]: { Drawable: 1, Texture: 0, Palette: 0 },
+                [4]: { Drawable: 24, Texture: 5, Palette: 0 },
+                [6]: { Drawable: 10, Texture: 0, Palette: 0 },
+                [8]: { Drawable: 32, Texture: 0, Palette: 0 },
+                [10]: { Drawable: 0, Texture: 0, Palette: 0 },
+                [11]: { Drawable: 29, Texture: 4, Palette: 0 },
+            },
+            Props: {},
+            GlovesID: 56000,
+        },
+        ['Tenue été']: {
             Components: {
                 [3]: { Drawable: 0, Texture: 0, Palette: 0 },
-                [4]: { Drawable: 90, Texture: 0, Palette: 0 },
-                [6]: { Drawable: 51, Texture: 0, Palette: 0 },
-                [7]: { Drawable: 0, Texture: 0, Palette: 0 },
+                [4]: { Drawable: 4, Texture: 0, Palette: 0 },
+                [6]: { Drawable: 32, Texture: 3, Palette: 0 },
                 [8]: { Drawable: 15, Texture: 0, Palette: 0 },
-                [9]: { Drawable: 0, Texture: 0, Palette: 0 },
                 [10]: { Drawable: 0, Texture: 0, Palette: 0 },
-                [11]: { Drawable: 1, Texture: 4, Palette: 0 },
+                [11]: { Drawable: 472, Texture: 0, Palette: 0 },
             },
             Props: {},
-        },
-        ['Tenue de prestation']: {
-            Components: {
-                [3]: { Drawable: 33, Texture: 0, Palette: 0 },
-                [4]: { Drawable: 24, Texture: 4, Palette: 0 },
-                [5]: { Drawable: 86, Texture: 9, Palette: 0 },
-                [6]: { Drawable: 10, Texture: 0, Palette: 0 },
-                [7]: { Drawable: 31, Texture: 2, Palette: 0 },
-                [8]: { Drawable: 148, Texture: 10, Palette: 0 },
-                [9]: { Drawable: 0, Texture: 0, Palette: 0 },
-                [10]: { Drawable: 0, Texture: 0, Palette: 0 },
-                [11]: { Drawable: 32, Texture: 4, Palette: 0 },
-            },
-            Props: {
-                [Prop.Hat]: {
-                    Drawable: 7,
-                    Texture: 2,
-                    Palette: 0,
-                },
-            },
+            GlovesID: 56000,
         },
         ["Tenue d'hiver"]: {
             Components: {
-                [3]: { Drawable: 96, Texture: 0, Palette: 0 },
-                [4]: { Drawable: 0, Texture: 8, Palette: 0 },
-                [6]: { Drawable: 12, Texture: 6, Palette: 0 },
-                [7]: { Drawable: 0, Texture: 0, Palette: 0 },
-                [8]: { Drawable: 24, Texture: 1, Palette: 0 },
-                [9]: { Drawable: 0, Texture: 0, Palette: 0 },
+                [3]: { Drawable: 14, Texture: 0, Palette: 0 },
+                [4]: { Drawable: 4, Texture: 0, Palette: 0 },
+                [6]: { Drawable: 50, Texture: 0, Palette: 0 },
+                [8]: { Drawable: 2, Texture: 2, Palette: 0 },
                 [10]: { Drawable: 0, Texture: 0, Palette: 0 },
                 [11]: { Drawable: 69, Texture: 3, Palette: 0 },
             },
             Props: {},
+            GlovesID: 56002,
         },
         ['Tenue de Chasse']: {
             Components: {
                 [3]: { Drawable: 208, Texture: 5, Palette: 0 },
                 [4]: { Drawable: 97, Texture: 5, Palette: 0 },
                 [6]: { Drawable: 72, Texture: 23, Palette: 0 },
-                [7]: { Drawable: 0, Texture: 0, Palette: 0 },
-                [8]: { Drawable: 0, Texture: 20, Palette: 0 },
-                [9]: { Drawable: 0, Texture: 0, Palette: 0 },
+                [8]: { Drawable: 15, Texture: 0, Palette: 0 },
                 [10]: { Drawable: 0, Texture: 0, Palette: 0 },
                 [11]: { Drawable: 248, Texture: 3, Palette: 0 },
             },
@@ -359,72 +539,71 @@ export const FoodCloakroom: WardrobeConfig = {
     },
 
     [joaat('mp_f_freemode_01')]: {
+        ['Tenue Patron']: {
+            Components: {
+                [3]: { Drawable: 9, Texture: 0, Palette: 0 },
+                [4]: { Drawable: 54, Texture: 2, Palette: 0 },
+                [6]: { Drawable: 108, Texture: 3, Palette: 0 },
+                [8]: { Drawable: 185, Texture: 0, Palette: 0 },
+                [10]: { Drawable: 0, Texture: 0, Palette: 0 },
+                [11]: { Drawable: 334, Texture: 9, Palette: 0 },
+            },
+            Props: {},
+            GlovesID: 55011,
+        },
         ['Tenue de Direction']: {
             Components: {
-                [3]: { Drawable: 6, Texture: 0, Palette: 0 },
-                [4]: { Drawable: 12, Texture: 7, Palette: 0 },
-                [6]: { Drawable: 11, Texture: 2, Palette: 0 },
-                [8]: { Drawable: 151, Texture: 0, Palette: 0 },
-                [9]: { Drawable: 0, Texture: 0, Palette: 0 },
+                [3]: { Drawable: 9, Texture: 0, Palette: 0 },
+                [4]: { Drawable: 75, Texture: 0, Palette: 0 },
+                [6]: { Drawable: 11, Texture: 3, Palette: 0 },
+                [8]: { Drawable: 185, Texture: 0, Palette: 0 },
                 [10]: { Drawable: 0, Texture: 0, Palette: 0 },
-                [11]: { Drawable: 25, Texture: 7, Palette: 0 },
+                [11]: { Drawable: 334, Texture: 8, Palette: 0 },
             },
             Props: {},
-        },
-        ['Tenue de travail']: {
-            Components: {
-                [3]: { Drawable: 0, Texture: 0, Palette: 0 },
-                [4]: { Drawable: 93, Texture: 0, Palette: 0 },
-                [6]: { Drawable: 52, Texture: 0, Palette: 0 },
-                [7]: { Drawable: 0, Texture: 0, Palette: 0 },
-                [8]: { Drawable: 1, Texture: 0, Palette: 0 },
-                [9]: { Drawable: 0, Texture: 0, Palette: 0 },
-                [10]: { Drawable: 0, Texture: 0, Palette: 0 },
-                [11]: { Drawable: 0, Texture: 4, Palette: 0 },
-            },
-            Props: {},
+            GlovesID: 55000,
         },
         ['Tenue de prestation']: {
             Components: {
                 [3]: { Drawable: 7, Texture: 0, Palette: 0 },
-                [4]: { Drawable: 133, Texture: 14, Palette: 0 },
-                [5]: { Drawable: 86, Texture: 9, Palette: 0 },
-                [6]: { Drawable: 13, Texture: 0, Palette: 0 },
-                [7]: { Drawable: 31, Texture: 2, Palette: 0 },
-                [8]: { Drawable: 38, Texture: 2, Palette: 0 },
-                [9]: { Drawable: 0, Texture: 0, Palette: 0 },
+                [4]: { Drawable: 133, Texture: 3, Palette: 0 },
+                [6]: { Drawable: 29, Texture: 0, Palette: 0 },
+                [8]: { Drawable: 64, Texture: 0, Palette: 0 },
                 [10]: { Drawable: 0, Texture: 0, Palette: 0 },
                 [11]: { Drawable: 25, Texture: 7, Palette: 0 },
             },
-            Props: {
-                [Prop.Hat]: {
-                    Drawable: 168,
-                    Texture: 2,
-                    Palette: 0,
-                },
+            Props: {},
+            GlovesID: 55000,
+        },
+        ['Tenue été']: {
+            Components: {
+                [3]: { Drawable: 0, Texture: 0, Palette: 0 },
+                [4]: { Drawable: 54, Texture: 2, Palette: 0 },
+                [6]: { Drawable: 27, Texture: 0, Palette: 0 },
+                [8]: { Drawable: 14, Texture: 0, Palette: 0 },
+                [10]: { Drawable: 0, Texture: 0, Palette: 0 },
+                [11]: { Drawable: 507, Texture: 0, Palette: 0 },
             },
+            Props: {},
         },
         ["Tenue d'hiver"]: {
             Components: {
-                [3]: { Drawable: 44, Texture: 0, Palette: 0 },
-                [4]: { Drawable: 1, Texture: 4, Palette: 0 },
-                [6]: { Drawable: 101, Texture: 0, Palette: 0 },
-                [7]: { Drawable: 0, Texture: 0, Palette: 0 },
-                [8]: { Drawable: 44, Texture: 1, Palette: 0 },
-                [9]: { Drawable: 0, Texture: 0, Palette: 0 },
+                [3]: { Drawable: 3, Texture: 0, Palette: 0 },
+                [4]: { Drawable: 4, Texture: 9, Palette: 0 },
+                [6]: { Drawable: 51, Texture: 0, Palette: 0 },
+                [8]: { Drawable: 69, Texture: 1, Palette: 0 },
                 [10]: { Drawable: 0, Texture: 0, Palette: 0 },
                 [11]: { Drawable: 63, Texture: 3, Palette: 0 },
             },
             Props: {},
+            GlovesID: 55002,
         },
         ['Tenue de Chasse']: {
             Components: {
                 [3]: { Drawable: 227, Texture: 5, Palette: 0 },
                 [4]: { Drawable: 4, Texture: 15, Palette: 0 },
                 [6]: { Drawable: 73, Texture: 4, Palette: 0 },
-                [7]: { Drawable: 0, Texture: 0, Palette: 0 },
-                [8]: { Drawable: 229, Texture: 19, Palette: 0 },
-                [9]: { Drawable: 0, Texture: 0, Palette: 0 },
+                [8]: { Drawable: 14, Texture: 0, Palette: 0 },
                 [10]: { Drawable: 0, Texture: 0, Palette: 0 },
                 [11]: { Drawable: 256, Texture: 3, Palette: 0 },
             },

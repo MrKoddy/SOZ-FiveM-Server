@@ -5,22 +5,20 @@ import { TargetFactory } from '@public/client/target/target.factory';
 import { emitRpc } from '@public/core/rpc';
 import { CraftsList } from '@public/shared/craft/craft';
 import { ClientEvent, NuiEvent, ServerEvent } from '@public/shared/event';
-import { Feature, isFeatureEnabled } from '@public/shared/features';
+import { Feature } from '@public/shared/features';
 import { JobType } from '@public/shared/job';
+import { CraftZones } from '@public/shared/job/food';
 import { MenuType } from '@public/shared/nui/menu';
 import { RpcServerEvent } from '@public/shared/rpc';
 
 import { BlipFactory } from '../../blip';
+import { FeatureProvider } from '../../feature/feature.provider';
 import { NuiMenu } from '../../nui/nui.menu';
-import { PlayerService } from '../../player/player.service';
 
 @Provider()
 export class FoodProvider {
     @Inject(NuiMenu)
     private nuiMenu: NuiMenu;
-
-    @Inject(PlayerService)
-    private playerService: PlayerService;
 
     @Inject(BlipFactory)
     private blipFactory: BlipFactory;
@@ -28,8 +26,10 @@ export class FoodProvider {
     @Inject(TargetFactory)
     private targetFactory: TargetFactory;
 
+    @Inject(FeatureProvider)
+    private featureProvider: FeatureProvider;
+
     private state = {
-        displayMilkBlip: false,
         displayEasterEggBlip: false,
         easterEnabled: false,
     };
@@ -42,16 +42,26 @@ export class FoodProvider {
 
     @Once(OnceStep.PlayerLoaded)
     public setupFoodJob() {
-        this.blipFactory.create('displayMilkBlip', {
-            name: 'Point de récolte du lait',
-            coords: { x: 2416.01, y: 4993.49, z: 46.22 },
-            sprite: 176,
-            scale: 0.9,
-        });
+        CraftZones.forEach(zone =>
+            this.targetFactory.createForBoxZone(`${zone.name}-fish`, zone, [
+                {
+                    icon: 'food/fish',
+                    label: 'Préparation marine',
+                    job: JobType.Food,
+                    blackoutGlobal: true,
+                    blackoutJob: JobType.Food,
+                    category: 'society',
+                    canInteract: () => {
+                        return true;
+                    },
+                    action: async () => {
+                        TriggerServerEvent(ServerEvent.FOOD_FISH_PREPARATION);
+                    },
+                },
+            ])
+        );
 
-        this.blipFactory.hide('displayMilkBlip', true);
-
-        if (isFeatureEnabled(Feature.EasterFood)) {
+        if (this.featureProvider.isFeatureEnabled(Feature.EasterFood)) {
             this.state.easterEnabled = true;
 
             this.blipFactory.create('displayEasterEggBlip', {
@@ -76,12 +86,9 @@ export class FoodProvider {
                 [
                     {
                         label: 'Récolter',
-                        icon: 'c:food/collecter.png',
-                        color: 'food',
-                        job: 'food',
-                        canInteract: () => {
-                            return this.playerService.isOnDuty();
-                        },
+                        icon: 'food/collecter',
+                        job: JobType.Food,
+                        category: 'society',
                         action: () => {
                             TriggerServerEvent(ServerEvent.FOOD_EASTER_HARVEST);
                         },
@@ -101,7 +108,6 @@ export class FoodProvider {
         this.nuiMenu.openMenu(MenuType.FoodJobMenu, {
             recipes: crafting.categories,
             state: this.state,
-            onDuty: this.playerService.isOnDuty(),
         });
     }
 }

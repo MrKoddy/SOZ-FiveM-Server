@@ -2,7 +2,7 @@ import { On, Once, OnEvent } from '@core/decorators/event';
 import { Inject } from '@core/decorators/injectable';
 import { Provider } from '@core/decorators/provider';
 import { PlayerInjuryProvider } from '@private/server/player/player.injuries.provider';
-import { InventoryManager } from '@public/server/inventory/inventory.manager';
+import { InventoryFactory } from '@public/server/inventory/inventory.factory';
 import { Monitor } from '@public/server/monitor/monitor';
 import { Notifier } from '@public/server/notifier';
 import { PlayerPositionProvider } from '@public/server/player/player.position.provider';
@@ -14,7 +14,10 @@ import { BedLocations, FailoverLocation, FailoverLocationName, getBedName } from
 import { PlayerData, PlayerMetadata } from '@public/shared/player';
 import { Vector3 } from '@public/shared/polyzone/vector';
 
+import { Feature } from '../../../shared/features';
+import { FeatureProvider } from '../../feature/feature.provider';
 import { PlayerStateService } from '../../player/player.state.service';
+import { WhatIfProvider } from '../../world/whatif.provider';
 
 @Provider()
 export class LSMCDeathProvider {
@@ -30,8 +33,8 @@ export class LSMCDeathProvider {
     @Inject(Notifier)
     private notifier: Notifier;
 
-    @Inject(InventoryManager)
-    private inventoryManager: InventoryManager;
+    @Inject(InventoryFactory)
+    private inventoryFactory: InventoryFactory;
 
     @Inject(ServerStateService)
     private serverStateService: ServerStateService;
@@ -41,6 +44,12 @@ export class LSMCDeathProvider {
 
     @Inject(PlayerInjuryProvider)
     private playerInjuryProvider: PlayerInjuryProvider;
+
+    @Inject(FeatureProvider)
+    private readonly featureProvider: FeatureProvider;
+
+    @Inject(WhatIfProvider)
+    private readonly whatIfProvider: WhatIfProvider;
 
     private occupiedBeds: Record<number, number> = {};
 
@@ -62,13 +71,20 @@ export class LSMCDeathProvider {
             targetid = source;
         }
 
+        if (uniteHU && this.featureProvider.isFeatureEnabled(Feature.WhatIfSecondEpisode)) {
+            this.playerService.setPlayerMetadata(targetid, 'stress_level', 0);
+            this.whatIfProvider.giveDefaultItems(targetid, false);
+            TriggerClientEvent(ClientEvent.WHAT_IF_UHU, targetid);
+        }
+
         if (!admin && !uniteHU) {
-            if (!this.inventoryManager.removeNotExpiredItem(source, bloodbag ? 'bloodbag' : 'defibrillator')) {
+            const inventory = await this.inventoryFactory.getPlayerInventory(source);
+            if (!inventory.remove(bloodbag ? 'bloodbag' : 'defibrillator', 1, false)) {
                 return;
             }
 
             if (bloodbag) {
-                this.inventoryManager.addItemToInventory(source, 'used_bloodbag');
+                inventory.add('used_bloodbag');
             }
         }
 
@@ -77,7 +93,7 @@ export class LSMCDeathProvider {
 
         const datas = {} as Partial<PlayerMetadata>;
 
-        if (uniteHU) {
+        if (uniteHU && !this.featureProvider.isFeatureEnabled(Feature.WhatIfSecondEpisode)) {
             uniteHUBed = this.getFreeBed(source);
             this.playerStateService.setClientState(targetid, {
                 isWearingPatientOutfit: true,
@@ -94,12 +110,18 @@ export class LSMCDeathProvider {
             this.notifier.notify(source, 'Cette personne a subit une overdose de drogue.', 'success', 30000);
         }
 
-        const isRPdeath = this.playerInjuryProvider.handleInjuryRevive(source, targetid);
+        const isRPdeath = await this.playerInjuryProvider.handleInjuryRevive(source, targetid);
 
         TriggerClientEvent(ClientEvent.LSMC_REVIVE, player.source, admin, uniteHU, uniteHUBed, isRPdeath);
         if (!admin) {
             TriggerClientEvent(ClientEvent.LSMC_REVIVE_DOC, source, isRPdeath);
         }
+
+        this.monitor.traceEvent(bloodbag ? 'job_lsmc_revive_bloodbag' : 'job_lsmc_revive_defibrillator', {
+            player_source: source,
+            target_source: targetid,
+            position: GetEntityCoords(GetPlayerPed(targetid)) as Vector3,
+        });
 
         if (!isRPdeath) {
             datas.hunger = this.playerService.getIncrementedMetadata(player, 'hunger', 30, 0, 100);
@@ -162,7 +184,7 @@ export class LSMCDeathProvider {
     public deathReason(source: number, reason: string) {
         const deathDescription = reason ? reason : '';
         this.playerService.setPlayerMetadata(source, 'mort', deathDescription);
-        this.monitor.publish('player_dead', { player_source: source }, { reason: deathDescription });
+        this.monitor.traceEvent('player_dead', { player_source: source, reason: deathDescription });
     }
 
     @OnEvent(ServerEvent.LSMC_NEW_URGENCY)

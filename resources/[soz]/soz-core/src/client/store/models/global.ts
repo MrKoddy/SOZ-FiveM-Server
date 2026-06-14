@@ -40,9 +40,7 @@ export const global = createModel<RootModel>()({
         },
         weather: 'CLEAR',
         snow: false,
-        streamUrls: {
-            bennys: BLACK_SCREEN_URL,
-        },
+        streamUrls: {},
     } as GlobalState,
     reducers: {
         set(state, global: GlobalState) {

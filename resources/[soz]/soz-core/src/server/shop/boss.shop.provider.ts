@@ -1,10 +1,10 @@
 import { Tick, TickInterval } from '@public/core/decorators/tick';
+import { InventoryFactory } from '@public/server/inventory/inventory.factory';
 import { ServerEvent } from '@public/shared/event/server';
 
 import { OnEvent } from '../../core/decorators/event';
 import { Inject } from '../../core/decorators/injectable';
 import { Provider } from '../../core/decorators/provider';
-import { InventoryManager } from '../inventory/inventory.manager';
 import { ItemService } from '../item/item.service';
 import { Monitor } from '../monitor/monitor';
 import { Notifier } from '../notifier';
@@ -26,8 +26,8 @@ export class BossShopProvider {
     @Inject(Notifier)
     private notifier: Notifier;
 
-    @Inject(InventoryManager)
-    private inventoryManager: InventoryManager;
+    @Inject(InventoryFactory)
+    private inventoryFactory: InventoryFactory;
 
     @Inject(PlayerMoneyService)
     private playerMoneyService: PlayerMoneyService;
@@ -64,36 +64,33 @@ export class BossShopProvider {
         const item = this.itemService.getItem(itemId);
         this.notifier.notify(source, 'Vous avez commandé un ~g~' + item.label);
 
-        this.monitor.publish(
-            'boss_shop_order',
-            {
-                player_source: source,
-                inv: inv,
-            },
-            {
-                item: item.name,
-                price: price,
-            }
-        );
+        this.monitor.traceEvent('boss_shop_order', {
+            player_source: source,
+            inventory_id: inv,
+            item_id: item.name,
+            money: price,
+        });
     }
 
     @Tick(TickInterval.EVERY_MINUTE)
-    public shopOrderTick() {
+    public async shopOrderTick() {
         const delay = GetConvar('soz_core_environment', 'development') == 'production' ? prdDelay : tstDelay;
         const delayDate = Date.now() - delay;
+
         for (const order of this.orders) {
+            const inventory = await this.inventoryFactory.get(order.inv);
+
+            if (!inventory) {
+                continue;
+            }
+
             if (order.date < delayDate) {
-                this.inventoryManager.addItemToInventoryNotPlayer(order.inv, order.item);
-                this.monitor.publish(
-                    'boss_shop_deliver_order',
-                    {
-                        player_source: source,
-                        inv: order.inv,
-                    },
-                    {
-                        item: order.item,
-                    }
-                );
+                inventory.add(order.item);
+                this.monitor.traceEvent('boss_shop_deliver_order', {
+                    player_source: source,
+                    inventory_id: order.inv,
+                    item_id: order.item,
+                });
 
                 const player = this.playerService.getPlayerByCitizenId(order.citizenId);
                 if (player && player.source) {

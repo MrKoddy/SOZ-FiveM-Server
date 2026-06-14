@@ -4,8 +4,21 @@ Citizen.CreateThread(function()
 
     AddTextEntryByHash(GetHashKey("ambcar"), "Granger du LSMC")
     AddTextEntryByHash(GetHashKey("lspd10"), "Buffalo STX Police")
+    AddTextEntryByHash(GetHashKey("lspd20"), "Vapid Scout")
+    AddTextEntryByHash(GetHashKey("lspd30"), "Moto de Police")
+    AddTextEntryByHash(GetHashKey("lspd40"), "eHSU")
+    AddTextEntryByHash(GetHashKey("lspd50"), "Lampadati Felo Banalisé")
+    AddTextEntryByHash(GetHashKey("lspd51"), "Sultan Banalisé")
     AddTextEntryByHash(GetHashKey("paragonfbi"), "Paragon FBI")
+    AddTextEntryByHash(GetHashKey("paragonsfbi"), "Paragon S FBI")
     AddTextEntryByHash(GetHashKey("cogfbi"), "Cognoscenti FBI")
+    AddTextEntryByHash(GetHashKey("bcso10"), "Bravado Sheriff")
+    AddTextEntryByHash(GetHashKey("bcso20"), "Vapid 4x4 Caracara")
+    AddTextEntryByHash(GetHashKey("bcso40"), "Coil eCoquette")
+    AddTextEntryByHash(GetHashKey("bcso50"), "Buffalo Gresley Banalisé")
+    AddTextEntryByHash(GetHashKey("bcso51"), "Cheval Fugitive Banalisé")
+    AddTextEntryByHash(GetHashKey("dodgebana"), "Buffalo STX Banalisé")
+
 
     -- Enterprises
 
@@ -18,7 +31,7 @@ Citizen.CreateThread(function()
     AddTextEntryByHash(GetHashKey("flatbed4"), "Flatbed New Gahray")
     AddTextEntryByHash(GetHashKey("frogger3"), "Twitch News")
     AddTextEntryByHash(GetHashKey("hauler1"), "Hauler PAWL")
-    AddTextEntryByHash(GetHashKey("maverick2"), "Sheriff")
+    AddTextEntryByHash(GetHashKey("maverick3"), "Sheriff")
     AddTextEntryByHash(GetHashKey("mule6"), "Mule Chateau Marius")
     AddTextEntryByHash(GetHashKey("newsvan"), "Rumpo Twitch News")
     AddTextEntryByHash(GetHashKey("packer2"), "MTP")
@@ -43,9 +56,15 @@ Citizen.CreateThread(function()
 
     AddTextEntryByHash(GetHashKey('SASP1'), "Dominator GTX")
     AddTextEntryByHash(GetHashKey('SASP1_LIV_1'), "SASP Livery")
+    AddTextEntryByHash(GetHashKey('volatus_sign_1'), "Default")
+    AddTextEntryByHash(GetHashKey('volatus_sign_2'), "GOUV")
+    AddTextEntryByHash(GetHashKey('polgreen_livery23'), "SASP")
+    AddTextEntryByHash(GetHashKey('POLGRE_LIV23'), "SASP")
+    AddTextEntryByHash(GetHashKey('SASP_LIV1'), "SASP")
 
     AddTextEntryByHash(GetHashKey('POLICE_ANTENNA'), "Antenna")
     AddTextEntryByHash(GetHashKey('POLICE_DIVIDER'), "Divider")
+
 
     -- LSPD10 Customisation
 
@@ -118,7 +137,39 @@ Citizen.CreateThread(function()
     AddTextEntryByHash(GetHashKey('CALLSIGN_C8'), "8")
     AddTextEntryByHash(GetHashKey('CALLSIGN_C9'), "9")
 
+    --Vehicles Custom
 
+    AddTextEntryByHash(GetHashKey("argento"), "Argento")
+    AddTextEntryByHash(GetHashKey("asteropers"), "Asterope RS")
+    AddTextEntryByHash(GetHashKey("elegyr"), "Elegy R")
+    AddTextEntryByHash(GetHashKey("oracxsle"), "Oracle XS-LE")
+    AddTextEntryByHash(GetHashKey("rumpo4"), "Bravado Rumpo")
+    AddTextEntryByHash(GetHashKey("motovampire"), "Douce Démoniaque")
+    AddTextEntryByHash(GetHashKey("zrtblizzard"), "ZRT Blizzard")
+    AddTextEntryByHash(GetHashKey("sandstorm"), "Sandstorm")
 
+    -- zr360 Custom names
+
+    AddTextEntryByHash(GetHashKey("ZR360_BUMF_1"), "Lights Front Bumper")
+    AddTextEntryByHash(GetHashKey("ZR360_BUMR_1"), "Black Diffuser Rear Bumper")
+    AddTextEntryByHash(GetHashKey("ZR360_BUMR_2"), "Racing Diffuser Rear Bumper")
+    AddTextEntryByHash(GetHashKey("ZR360_WING_1"), "Racing Spoiler")
+    AddTextEntryByHash(GetHashKey("ZR360_WING_2"), "Minimal Spoiler")
+    AddTextEntryByHash(GetHashKey("ZR360_WING_3"), "Carbon Racing Spoiler")
+    AddTextEntryByHash(GetHashKey("ZR360_BODY"), "Under body Kit")
+    AddTextEntryByHash(GetHashKey("ZR360_EXH1"), "Huge Exhaust")
+    AddTextEntryByHash(GetHashKey("RE_ANEMIYA_ZR360"), "Kit With Front Bumper")
+    AddTextEntryByHash(GetHashKey("RE_ANEMIYA_ZR360_1"), "Kit With Front Bumper And Hood")
+    AddTextEntryByHash(GetHashKey("RE_ANEMIYA_ZR360_2"), "Kit With Front  And Carbon Hood")
+
+    --Vehicles Custom 07/2025
+
+    AddTextEntryByHash(GetHashKey("previons"), "Previons S")
+    AddTextEntryByHash(GetHashKey("sultans"), "Sultan S")
+    AddTextEntryByHash(GetHashKey("kurumas"), "Kuruma S")
+    AddTextEntryByHash(GetHashKey("elegys"), "Elegy S")
+    AddTextEntryByHash(GetHashKey("penumbras"), "Penumbra S")
+    AddTextEntryByHash(GetHashKey("zr360"), "ZR360")
+    AddTextEntryByHash(GetHashKey("ttrz"), "TT RZ")
 
 end)

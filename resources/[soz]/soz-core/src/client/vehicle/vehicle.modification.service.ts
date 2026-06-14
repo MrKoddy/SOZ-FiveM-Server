@@ -1,7 +1,11 @@
+import { emitRpc } from '@public/core/rpc';
+import { RpcServerEvent } from '@public/shared/rpc';
+
 import { Injectable } from '../../core/decorators/injectable';
 import {
     HornLabelList,
     VehicleConfiguration,
+    VehicleHandling,
     VehicleModification,
     VehicleModType,
     VehicleNeonLight,
@@ -597,6 +601,8 @@ export class VehicleModificationService {
 
         if (GetVehicleClass(vehicle) === VehicleClass.Motorcycles) {
             options.wheelType[VehicleWheelType.BikeWheels] = 'Motorcycles';
+        } else if (GetVehicleClass(vehicle) === VehicleClass.OpenWheel) {
+            options.wheelType[VehicleWheelType.OpenWheel] = 'Open Wheel';
         } else {
             options.wheelType[VehicleWheelType.Sport] = 'Sport';
             options.wheelType[VehicleWheelType.Muscle] = 'Muscle';
@@ -605,6 +611,10 @@ export class VehicleModificationService {
             options.wheelType[VehicleWheelType.Offroad] = 'Offroad';
             options.wheelType[VehicleWheelType.Tuner] = 'Tuner';
             options.wheelType[VehicleWheelType.HighEnd] = 'HighEnd';
+            options.wheelType[VehicleWheelType.BennysOriginal] = 'Bennys Original';
+            options.wheelType[VehicleWheelType.BennysBespoke] = 'Bennys Bespoke';
+            options.wheelType[VehicleWheelType.Street] = 'Street';
+            options.wheelType[VehicleWheelType.Track] = 'Track';
         }
 
         for (let i = 1; i < 15; i++) {
@@ -621,7 +631,7 @@ export class VehicleModificationService {
 
         if (configuration.color) {
             const isPrimaryColorRgb = typeof configuration.color.primary === 'object';
-            const isSecondaryColorRgb = typeof configuration.color.primary === 'object';
+            const isSecondaryColorRgb = typeof configuration.color.secondary === 'object';
 
             if (!isPrimaryColorRgb || !isSecondaryColorRgb) {
                 SetVehicleColours(
@@ -750,6 +760,28 @@ export class VehicleModificationService {
                 }
             }
         }
+
+        this.applyVehicleHandling(vehicle, configuration.handling);
+        this.applyVehicleManualBox(vehicle, configuration.manualGearbox);
+    }
+
+    public applyVehicleHandling(vehicle: number, vehiculeHandling: VehicleHandling) {
+        if (vehiculeHandling) {
+            for (const handling of Object.keys(vehiculeHandling)) {
+                SetVehicleHandlingFloat(vehicle, 'CHandlingData', handling, vehiculeHandling[handling]);
+            }
+        }
+    }
+
+    public applyVehicleManualBox(vehicle: number, manual: boolean) {
+        const advancedFlag = GetVehicleHandlingInt(vehicle, 'CCarHandlingData', 'strAdvancedFlags');
+        if (advancedFlag) {
+            if (manual) {
+                SetVehicleHandlingInt(vehicle, 'CCarHandlingData', 'strAdvancedFlags', advancedFlag | 0x400);
+            } else {
+                SetVehicleHandlingInt(vehicle, 'CCarHandlingData', 'strAdvancedFlags', advancedFlag & ~0x400);
+            }
+        }
     }
 
     public applyVehicleModification(
@@ -830,5 +862,9 @@ export class VehicleModificationService {
             modification,
             extra,
         };
+    }
+
+    public async getVehicleServerConfiguration(vehicle: number): Promise<VehicleConfiguration> {
+        return emitRpc<VehicleConfiguration>(RpcServerEvent.VEHICLE_GET_CONFIGURATION, VehToNet(vehicle));
     }
 }

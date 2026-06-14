@@ -1,7 +1,7 @@
 import { FunctionComponent } from 'react';
 
 import { SozRole } from '../../../core/permissions';
-import { LICENCES, MONEY_OPTIONS } from '../../../shared/admin/admin';
+import { GameMasterSubMenuState, LICENCES, MONEY_OPTIONS } from '../../../shared/admin/admin';
 import { NuiEvent } from '../../../shared/event';
 import { fetchNui } from '../../fetch';
 import { usePlayer } from '../../hook/data';
@@ -16,19 +16,14 @@ import {
 } from '../Styleguide/Menu';
 
 export type GameMasterSubMenuProps = {
-    banner: string;
     permission: SozRole;
-    state: {
-        adminGPS: boolean;
-        moneyCase: boolean;
-        invisible: boolean;
-        adminPoliceLocator: boolean;
-    };
+    state: GameMasterSubMenuState;
 };
 
-export const GameMasterSubMenu: FunctionComponent<GameMasterSubMenuProps> = ({ banner, permission, state }) => {
+export const GameMasterSubMenu: FunctionComponent<GameMasterSubMenuProps> = ({ permission, state }) => {
     const isAdmin = permission === 'admin';
     const isAdminOrStaff = isAdmin || permission === 'staff';
+    const isAdminOrStaffOrHelper = isAdminOrStaff || permission === 'helper';
     const isAdminOrStaffOrGM = isAdminOrStaff || permission === 'gamemaster';
     const player = usePlayer();
 
@@ -38,8 +33,8 @@ export const GameMasterSubMenu: FunctionComponent<GameMasterSubMenuProps> = ({ b
 
     return (
         <SubMenu id="game_master">
-            <MenuTitle banner={banner}>Dieu ? C'est toi ?</MenuTitle>
-            <MenuContent>
+            <MenuTitle title={permission} />
+            <MenuContent subtitle="Dieu ? C'est toi ?">
                 <MenuItemSelect
                     title="💰 Se donner de l'argent propre"
                     disabled={!isAdmin}
@@ -149,6 +144,26 @@ export const GameMasterSubMenu: FunctionComponent<GameMasterSubMenuProps> = ({ b
                 >
                     𐂫 Armure
                 </MenuItemButton>
+                <MenuItemCheckbox
+                    checked={state.adminInfiniteAmmo}
+                    disabled={!isAdminOrStaffOrHelper}
+                    onChange={async value => {
+                        state.adminInfiniteAmmo = value;
+                        await fetchNui(NuiEvent.AdminSetAdminInfiniteAmmo, value);
+                    }}
+                >
+                    🔫 Munitions infinis
+                </MenuItemCheckbox>
+                <MenuItemCheckbox
+                    checked={state.adminNoRecoil}
+                    disabled={!isAdminOrStaffOrHelper}
+                    onChange={async value => {
+                        state.adminNoRecoil = value;
+                        await fetchNui(NuiEvent.AdminSetAdminNoRecoil, value);
+                    }}
+                >
+                    🔫 Pas de recul
+                </MenuItemCheckbox>
             </MenuContent>
         </SubMenu>
     );

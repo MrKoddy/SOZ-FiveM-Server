@@ -1,4 +1,6 @@
-import { PlayerUpdate } from '@public/core/decorators/player';
+import { FeatureProvider } from '@public/client/feature/feature.provider';
+import { PlayerInventoryUpdate } from '@public/core/decorators/player';
+import { Feature } from '@public/shared/features';
 
 import { Once, OnceStep, OnEvent, OnNuiEvent } from '../../../core/decorators/event';
 import { Inject } from '../../../core/decorators/injectable';
@@ -6,6 +8,7 @@ import { Provider } from '../../../core/decorators/provider';
 import { Tick } from '../../../core/decorators/tick';
 import { AnimationStopReason } from '../../../shared/animation';
 import { ClientEvent, NuiEvent } from '../../../shared/event';
+import { BIN_MODELS } from '../../../shared/job/garbage';
 import { MenuType } from '../../../shared/nui/menu';
 import { AnimationRunner } from '../../animation/animation.factory';
 import { AnimationService } from '../../animation/animation.service';
@@ -13,7 +16,6 @@ import { BlipFactory } from '../../blip';
 import { InventoryManager } from '../../inventory/inventory.manager';
 import { NuiMenu } from '../../nui/nui.menu';
 import { ObjectProvider } from '../../object/object.provider';
-import { PlayerService } from '../../player/player.service';
 
 @Provider()
 export class GarbageProvider {
@@ -29,11 +31,11 @@ export class GarbageProvider {
     @Inject(InventoryManager)
     private inventoryManager: InventoryManager;
 
-    @Inject(PlayerService)
-    private playerService: PlayerService;
-
     @Inject(AnimationService)
     private animationService: AnimationService;
+
+    @Inject(FeatureProvider)
+    private featureProvider: FeatureProvider;
 
     private displayBinBlip = false;
 
@@ -41,8 +43,21 @@ export class GarbageProvider {
 
     private garbageAnimationProgress: AnimationRunner | null = null;
 
+    @Tick()
+    public async handleCurrentBlipSelected() {
+        const blip = GetNewSelectedMissionCreatorBlip();
+
+        if (blip) {
+            console.log(blip);
+        }
+    }
+
     @Once(OnceStep.PlayerLoaded)
     public async onPlayerLoaded() {
+        if (this.featureProvider.isFeatureEnabled(Feature.WhatIfFirstEpisode)) {
+            return;
+        }
+
         this.blipFactory.create('jobs:garbage:truck', {
             name: 'BlueBird',
             position: [-621.98, -1640.79, 25.97],
@@ -55,19 +70,14 @@ export class GarbageProvider {
     public async onDisplayBlip({ value }: { value: boolean }) {
         this.displayBinBlip = value;
 
-        const binModels = [
-            GetHashKey('soz_prop_bb_bin'),
-            GetHashKey('soz_prop_bb_bin_hs2'),
-            GetHashKey('soz_prop_bb_bin_hs3'),
-        ];
-
         const colorModels: Record<any, number> = {
             [GetHashKey('soz_prop_bb_bin')]: 68,
             [GetHashKey('soz_prop_bb_bin_hs2')]: 70,
             [GetHashKey('soz_prop_bb_bin_hs3')]: 49,
         };
 
-        const bins = this.objectProvider.getObjects(object => binModels.includes(object.model));
+        const bins = this.objectProvider.getObjects(object => BIN_MODELS.includes(object.model));
+
         for (const bin of bins) {
             if (value) {
                 this.blipFactory.create(bin.id, {
@@ -117,7 +127,7 @@ export class GarbageProvider {
         this.garbageAnimationProgress = null;
     }
 
-    @PlayerUpdate()
+    @PlayerInventoryUpdate()
     public onPlayerUpdate() {
         this.hasGarbageBag = this.inventoryManager.hasEnoughItem('garbagebag', 1);
 
@@ -135,7 +145,6 @@ export class GarbageProvider {
 
         this.nuiMenu.openMenu(MenuType.GarbageJobMenu, {
             displayBinBlip: this.displayBinBlip,
-            onDuty: this.playerService.isOnDuty(),
         });
     }
 }

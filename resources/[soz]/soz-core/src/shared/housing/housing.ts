@@ -1,5 +1,7 @@
+import { FOURNITURE_PER_TIER, HousingTiers } from '@public/shared/housing/upgrades';
 import { isGameMaster, PlayerData } from '@public/shared/player';
 
+import { FDO, JobType } from '../job';
 import { Zone } from '../polyzone/box.zone';
 import { Vector4 } from '../polyzone/vector';
 
@@ -19,6 +21,7 @@ export type Apartment = {
     label: string;
     price: number;
     owner: string | null;
+    tenant: string | null;
     roommate: string | null;
     position: Vector4;
     exitZone: Zone | null;
@@ -26,9 +29,18 @@ export type Apartment = {
     stashZone: Zone | null;
     closetZone: Zone | null;
     moneyZone: Zone | null;
-    tier: number;
+    shell: boolean;
     hasParkingPlace: boolean;
     senatePartyId: string | null;
+    search_warrant_access: number;
+    housing_taxe_enabled: boolean;
+} & ApartementTiers;
+
+export type RentTaxe = {
+    id: number;
+    citizenid: string;
+    value: number;
+    created_at: Date;
 };
 
 export type ApartmentMenuData = {
@@ -36,7 +48,16 @@ export type ApartmentMenuData = {
     apartments: Apartment[];
 };
 
-export const UPGRADE_TIER_PERCENT: [number, number, number, number, number] = [0, 20, 45, 70, 100];
+export type ApartmentSelectUpgradesMenuData = {
+    apartments: Apartment[];
+};
+
+export type ApartementTiers = {
+    tier: number | null;
+    cloth_tier: number | null;
+    money_tier: number | null;
+    park_tier: number | null;
+};
 
 export const isBuilding = (property: Property) => {
     return property.apartments.length > 1;
@@ -58,20 +79,63 @@ export const isTrailer = (property: Property) => {
     return property.identifier.includes('trailer');
 };
 
+export const isMotel = (appartement: Apartment) => {
+    return appartement.identifier.toLowerCase().startsWith('trailer_motel');
+};
+
+export const hasOwnedOrAccess = (property: Property, player: PlayerData, temporaryAccess: Set<number>) => {
+    return (
+        (isAdminHouse(property) && isGameMaster(player)) ||
+        hasTemporaryAccess(property, temporaryAccess) ||
+        hasPartyAccess(property, player.partyMember?.partyId) ||
+        hasPlayerOwnedOrRentedApartmentInProperty(property, player.citizenid)
+    );
+};
+
 export const hasAccess = (property: Property, player: PlayerData, temporaryAccess: Set<number>) => {
     return (
         (isAdminHouse(property) && isGameMaster(player)) ||
         hasTemporaryAccess(property, temporaryAccess) ||
         hasPartyAccess(property, player.partyMember?.partyId) ||
-        hasPlayerRentedApartment(property, player.citizenid)
+        hasPlayerRentedApartmentInProperty(property, player.citizenid) ||
+        hasSearchWarrantAccessInProperty(property, player)
     );
+};
+
+export const hasSearchWarrantAccessInProperty = (property: Property, player: PlayerData) => {
+    const now = new Date();
+    const apartement = property.apartments.some(apartment => {
+        return (
+            (apartment.owner || apartment.senatePartyId) &&
+            apartment.search_warrant_access &&
+            new Date(apartment.search_warrant_access) > now
+        );
+    });
+
+    if (!apartement) {
+        return false;
+    }
+
+    return (FDO.includes(player.job.id) || player.job.id === JobType.MDR) && player.job.onduty;
+};
+
+export const hasSearchWarrantAccessInApartment = (apartment: Apartment, player: PlayerData) => {
+    const now = new Date();
+    if (
+        (!apartment.owner && !apartment.senatePartyId) ||
+        !apartment.search_warrant_access ||
+        new Date(apartment.search_warrant_access) <= now
+    ) {
+        return false;
+    }
+
+    return (FDO.includes(player.job.id) || player.job.id === JobType.MDR) && player.job.onduty;
 };
 
 export const hasApartmentAccess = (apartment: Apartment, player: PlayerData, temporaryAccess: Set<number>) => {
     return (
         (isAdminApartment(apartment) && isGameMaster(player)) ||
-        apartment.owner === player.citizenid ||
-        apartment.roommate === player.citizenid ||
+        hasPlayerRentedApartment(apartment, player.citizenid) ||
         temporaryAccess.has(apartment.id) ||
         (apartment.senatePartyId !== null && apartment.senatePartyId === player.partyMember?.partyId)
     );
@@ -104,20 +168,66 @@ export const hasAvailableApartment = (property: Property) => {
     );
 };
 
-export const hasRentedApartment = (property: Property, excludeCitizenId: string = null) => {
-    return property.apartments.some(apartment => apartment.owner !== null && apartment.owner !== excludeCitizenId);
+export const hasApartmentWithoutAccessInProperty = (
+    property: Property,
+    player: PlayerData,
+    temporaryAccess: Set<number>
+) => {
+    return property.apartments.some(
+        apartment =>
+            (apartment.owner || apartment.senatePartyId) && !hasApartmentAccess(apartment, player, temporaryAccess)
+    );
 };
 
 export const hasPlayerOwnedApartment = (property: Property, citizenId: string) => {
     return property.apartments.some(apartment => apartment.owner === citizenId);
 };
 
+export const hasPlayerOwnedEmptyApartment = (property: Property, citizenId: string) => {
+    return property.apartments.some(
+        apartment => apartment.owner === citizenId && apartment.tenant === null && apartment.roommate === null
+    );
+};
+
+export const hasPlayerOwnedNonEmptyApartment = (property: Property, citizenId: string) => {
+    return property.apartments.some(
+        apartment =>
+            apartment.owner === citizenId &&
+            (apartment.tenant !== null || apartment.roommate !== null) &&
+            apartment.tenant !== citizenId
+    );
+};
+
+export const hasPlayerTenantOrRoommateApartment = (property: Property, citizenId: string) => {
+    return property.apartments.some(apartment => apartment.tenant === citizenId || apartment.roommate === citizenId);
+};
+
+export const hasPlayerTenantApartment = (property: Property, citizenId: string) => {
+    return property.apartments.some(apartment => apartment.tenant === citizenId && apartment.owner !== citizenId);
+};
+
 export const hasPlayerRoommateApartment = (property: Property, citizenId: string) => {
     return property.apartments.some(apartment => apartment.roommate === citizenId);
 };
 
-export const hasPlayerRentedApartment = (property: Property, citizenId: string) => {
-    return property.apartments.some(apartment => apartment.owner === citizenId || apartment.roommate === citizenId);
+const hasPlayerOwnedOrRentedApartmentInProperty = (property: Property, citizenId: string) => {
+    return property.apartments.some(apartment => hasPlayerOwnedOrRentedApartment(apartment, citizenId));
+};
+
+export const hasPlayerOwnedOrRentedApartment = (apartment: Apartment, citizenId: string) => {
+    return apartment.owner === citizenId || apartment.tenant === citizenId || apartment.roommate === citizenId;
+};
+
+const hasPlayerRentedApartmentInProperty = (property: Property, citizenId: string) => {
+    return property.apartments.some(apartment => hasPlayerRentedApartment(apartment, citizenId));
+};
+
+export const hasPlayerRentedApartment = (apartment: Apartment, citizenId: string) => {
+    return (
+        (apartment.owner === citizenId && apartment.tenant === null && apartment.roommate === null) ||
+        apartment.tenant === citizenId ||
+        apartment.roommate === citizenId
+    );
 };
 
 export const hasPropertyGarage = (property: Property) => {
@@ -130,27 +240,58 @@ export const hasPropertyGarage = (property: Property) => {
     return property.apartments.some(apartment => !isPropertyTrailer || apartment.hasParkingPlace);
 };
 
+export const canPlayerAddTenant = (property: Property, citizenId: string) => {
+    return property.apartments.some(apartment => apartment.owner === citizenId && apartment.tenant === null);
+};
+
 export const canPlayerAddRoommate = (property: Property, citizenId: string) => {
-    return property.apartments.some(apartment => apartment.owner === citizenId && apartment.roommate === null);
+    return property.apartments.some(
+        apartment => apartment.owner === citizenId && apartment.tenant !== null && apartment.roommate === null
+    );
+};
+
+export const canPlayerRemoveTenant = (property: Property, citizenId: string) => {
+    return property.apartments.some(
+        apartment => apartment.owner === citizenId && apartment.tenant !== citizenId && apartment.tenant !== null
+    );
 };
 
 export const canPlayerRemoveRoommate = (property: Property, citizenId: string) => {
-    return property.apartments.some(apartment => apartment.owner === citizenId && apartment.roommate !== null);
+    return property.apartments.some(
+        apartment => apartment.owner === citizenId && apartment.roommate !== citizenId && apartment.roommate !== null
+    );
 };
 
-export const getResellPrice = (apartment: Apartment, property: Property) => {
-    let price = apartment.price / 2;
+export const getApartmentPriceWithUpgrade = (apartment: Apartment, property: Property) => {
+    let price = apartment.price;
 
     if (isTrailer(property) && apartment.hasParkingPlace) {
-        price += price / 2;
+        price += price;
     }
 
-    for (let i = 0; i < apartment.tier + 1; i++) {
-        const tierPrice = (apartment.price * UPGRADE_TIER_PERCENT[i]) / 100;
-        price += tierPrice / 2;
+    for (const type of Object.keys(HousingTiers)) {
+        for (let i = 0; i < (apartment[type] | 0) + 1; i++) {
+            const tierPrice = (apartment.price * HousingTiers[type][i].pricePercent) / 100;
+            price += tierPrice;
+        }
     }
 
     return Math.round(price);
+};
+
+export const getResellPrice = (apartment: Apartment, property: Property) => {
+    return Math.round(getApartmentPriceWithUpgrade(apartment, property) / 2);
+};
+
+export const getMaxFourntiure = (apartment: Apartment): number => {
+    return (
+        ((apartment.tier | 0) +
+            (apartment.money_tier | 0) +
+            (apartment.park_tier | 0) +
+            (apartment.cloth_tier | 0) +
+            4) *
+        FOURNITURE_PER_TIER
+    );
 };
 
 export const getPropertyGarageName = (property: Property) => {
@@ -167,5 +308,56 @@ export const isPlayerInsideApartment = (player: PlayerData): boolean => {
         player.metadata.inside &&
         player.metadata.inside.property &&
         player.metadata.inside.apartment !== false
+    );
+};
+
+const includeHousingApartment = ['v_trailer', 'V_TRAILER', 'house', 'appartements', 'soz_villa'];
+
+export const isApartmentExcludeFromHousing = (apartment: Apartment) => {
+    return !includeHousingApartment.some(k => apartment.identifier.includes(k));
+};
+
+export const canUseHousingInAppartment = (
+    player: PlayerData,
+    apartment: Apartment,
+    temporaryAccess: Set<number>
+): boolean => {
+    return (
+        player &&
+        apartment.owner &&
+        (apartment.owner === player.citizenid ||
+            apartment.tenant === player.citizenid ||
+            apartment.roommate === player.citizenid ||
+            ['staff', 'admin'].includes(player.role) ||
+            temporaryAccess.has(apartment.id)) &&
+        !isApartmentExcludeFromHousing(apartment)
+    );
+};
+
+export const canUseHousingInAppartmentNoStaff = (
+    player: PlayerData,
+    apartment: Apartment,
+    temporaryAccess: Set<number>
+): boolean => {
+    return (
+        player &&
+        apartment.owner &&
+        (apartment.owner === player.citizenid ||
+            apartment.tenant === player.citizenid ||
+            apartment.roommate === player.citizenid ||
+            temporaryAccess.has(apartment.id)) &&
+        !isApartmentExcludeFromHousing(apartment)
+    );
+};
+
+export const canUseHousingInProperty = (
+    player: PlayerData,
+    property: Property,
+    temporaryAccess: Set<number>
+): boolean => {
+    return property.apartments.some(
+        apartment =>
+            (apartment.senatePartyId !== null || apartment.owner !== null) &&
+            canUseHousingInAppartmentNoStaff(player, apartment, temporaryAccess)
     );
 };

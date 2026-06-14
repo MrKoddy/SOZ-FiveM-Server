@@ -1,53 +1,31 @@
 import { Provider } from '@core/decorators/provider';
 import { FemaleJewelryItems, MaleJewelryItems } from '@public/config/jewelry';
-import { On, Once, OnceStep } from '@public/core/decorators/event';
+import { On } from '@public/core/decorators/event';
 import { Inject } from '@public/core/decorators/injectable';
 import { Tick, TickInterval } from '@public/core/decorators/tick';
 import { emitRpc } from '@public/core/rpc';
 import { Component, Outfit } from '@public/shared/cloth';
+import { Feature } from '@public/shared/features';
 import { joaat } from '@public/shared/joaat';
 import { JobType } from '@public/shared/job';
 import { HAZMAT_OUTFIT_NAME, LsmcCloakroom } from '@public/shared/job/lsmc';
-import { ObjectOutFits, POLICE_CLOAKROOM } from '@public/shared/job/police';
+import { DUTY_OUTFIT_NAME, ObjectOutFits, POLICE_CLOAKROOM, SASP_DARK } from '@public/shared/job/police';
 import { StonkCloakroom } from '@public/shared/job/stonk';
 import { PlayerPedHash } from '@public/shared/player';
+import { getRandomItem } from '@public/shared/random';
 import { RpcServerEvent } from '@public/shared/rpc';
+import { deepCopy } from '@public/shared/utils/array';
 import { Weather } from '@public/shared/weather';
 
 import { ClothingService } from '../clothing/clothing.service';
+import { FeatureProvider } from '../feature/feature.provider';
+import { HudWeatherIconProvider } from '../hud/hud.weathericon.provider';
+import { LSMCDamageProvider } from '../job/lsmc/lsmc.damage.provider';
 import { NuiDispatch } from '../nui/nui.dispatch';
 import { Store } from '../store/store';
 import { PlayerService } from './player.service';
 
 const ColdWeather: Weather[] = ['BLIZZARD', 'SNOW', 'SNOWLIGHT', 'XMAS'];
-const WarmClothCategory = [
-    4, //'Manteaux',
-    5, //'Sweats & Hoodies',
-    6, //'Costumes',
-    9, //'Pulls',
-    10, //'Deguisements',
-    11, //'Gilets',
-    12, //'Vestes',
-    16, //'Pantalons',
-    19, //'Jeans',
-    20, //'Déguisements'
-    28, //'Bottes/Bottines'
-    29, //'Baskets'
-    30, //'Chaussures plates'
-    31, //'Déguisements'
-    32, //'Hiver'
-    63, //'Déguisements'
-    64, //'Pulls'
-    35, //'Bandana'
-    37, //'Intégral'
-    38, //'Costume'
-    39, //'Cagoule'
-];
-
-const ColdClothCategory = [
-    21, //'Sous-vêtements',
-    24, //'Maillots de bain',
-];
 
 const ExtraWarnCloths: Record<number, Outfit[]> = {
     [joaat('mp_m_freemode_01')]: [
@@ -65,6 +43,8 @@ const ExtraWarnCloths: Record<number, Outfit[]> = {
         LsmcCloakroom[joaat('mp_m_freemode_01')][HAZMAT_OUTFIT_NAME],
         LsmcCloakroom[joaat('mp_m_freemode_01')]['Tenue Hiver'],
         StonkCloakroom[joaat('mp_m_freemode_01')]['Tenue Hiver'],
+        POLICE_CLOAKROOM[JobType.SASP][joaat('mp_m_freemode_01')][DUTY_OUTFIT_NAME],
+        POLICE_CLOAKROOM[JobType.SASP][joaat('mp_m_freemode_01')][SASP_DARK],
     ],
     [joaat('mp_f_freemode_01')]: [
         POLICE_CLOAKROOM[JobType.LSPD][joaat('mp_f_freemode_01')]['Tenue Hiver'],
@@ -81,6 +61,8 @@ const ExtraWarnCloths: Record<number, Outfit[]> = {
         LsmcCloakroom[joaat('mp_f_freemode_01')][HAZMAT_OUTFIT_NAME],
         LsmcCloakroom[joaat('mp_f_freemode_01')]['Tenue Hiver'],
         StonkCloakroom[joaat('mp_f_freemode_01')]['Tenue Hiver'],
+        POLICE_CLOAKROOM[JobType.SASP][joaat('mp_f_freemode_01')][DUTY_OUTFIT_NAME],
+        POLICE_CLOAKROOM[JobType.SASP][joaat('mp_f_freemode_01')][SASP_DARK],
     ],
 };
 
@@ -113,12 +95,21 @@ export class PlayerSnowProvider {
     @Inject(ClothingService)
     public clothingService: ClothingService;
 
+    @Inject(HudWeatherIconProvider)
+    public hudWeatherIconProvider: HudWeatherIconProvider;
+
+    @Inject(FeatureProvider)
+    private featureProvider: FeatureProvider;
+
+    @Inject(LSMCDamageProvider)
+    private LSMCDamageProvider: LSMCDamageProvider;
+
     private lastSlipDate = 0;
     private cold = false;
     private coldProtected = false;
     private blizzardProtected = false;
-    private nuiReady = false;
     private frozenDeath = false;
+    private unprotectedBone: number;
 
     @Tick(TickInterval.EVERY_MINUTE)
     public onSlipCheck() {
@@ -159,21 +150,57 @@ export class PlayerSnowProvider {
     }
 
     @On('soz-character:Client:Cloth:Applied')
-    async onClothUpdate(outfit: Outfit): Promise<void> {
+    async onClothUpdate(outfitInput: Outfit): Promise<void> {
+        if (this.featureProvider.isFeatureEnabled(Feature.SummerHeat)) {
+            return;
+        }
+        if (this.featureProvider.isFeatureEnabled(Feature.WhatIfSecondEpisode)) {
+            return;
+        }
+
         const player = this.playerService.getPlayer();
         if (!player) {
             return;
         }
 
-        const clothConfig = player.cloth_config.Config;
+        const ped = PlayerPedId();
+        const outfit = deepCopy(outfitInput);
+        for (const comp of Object.keys(outfit.Components)) {
+            const component: Component = Number(comp);
+            if (outfit.Components[component].Collection) {
+                outfit.Components[component].Drawable = GetPedDrawableGlobalIndexFromCollection(
+                    ped,
+                    component as number,
+                    outfit.Components[component].Collection,
+                    outfit.Components[component].Drawable
+                );
+                outfit.Components[component].Collection = null;
+            }
+        }
 
-        if (clothConfig.HidePants || clothConfig.HideShoes || clothConfig.HideTop || clothConfig.Naked) {
+        const clothConfig = player.cloth_config.Config;
+        const unprotectedBones = [];
+
+        if (clothConfig.HidePants || clothConfig.Naked) {
+            unprotectedBones.push(36864, 63931);
+        }
+
+        if (clothConfig.HideShoes || clothConfig.Naked) {
+            unprotectedBones.push(52301, 14201);
+        }
+
+        if (clothConfig.HideTop || clothConfig.Naked) {
+            unprotectedBones.push(0, 24817, 24816, 64729, 10706);
+        }
+
+        if (unprotectedBones.length > 0) {
             this.coldProtected = false;
+            this.unprotectedBone = getRandomItem(unprotectedBones);
             return;
         }
 
         const data = await emitRpc<Partial<Record<Component, number>>>(
-            RpcServerEvent.CLOTHING_GET_CATEGORY,
+            RpcServerEvent.CLOTHING_GET_WARM_SCORE,
             outfit.Components
         );
         if (!data) {
@@ -181,34 +208,31 @@ export class PlayerSnowProvider {
         }
 
         let coldScore = 0;
-        [Component.Tops, Component.Legs, Component.Shoes].forEach(component => {
+        [Component.Tops, Component.Legs, Component.Shoes, Component.Undershirt].forEach(component => {
             if (data[component] == null) {
                 const extra = ExtraWarnCloths[player.skin.Model.Hash].find(
                     item =>
-                        item.Components[component] &&
-                        outfit.Components[component] &&
-                        item.Components[component].Drawable == outfit.Components[component].Drawable
+                        item?.Components[component] &&
+                        outfitInput?.Components[component] &&
+                        item?.Components[component].Drawable == outfitInput.Components[component].Drawable &&
+                        item?.Components[component].Collection == outfitInput.Components[component].Collection
                 );
                 if (extra) {
-                    coldScore++;
+                    coldScore += 2;
                 }
-            }
-        });
-
-        for (const cat of Object.values(data)) {
-            if (WarmClothCategory.includes(cat)) {
-                coldScore++;
-            }
-            if (ColdClothCategory.includes(cat)) {
+            } else if (data[component] == 0) {
                 this.coldProtected = false;
                 return;
+            } else {
+                coldScore += data[component];
             }
-        }
+        });
 
         if (this.clothingService.checkWearingGloves()) {
             coldScore++;
             this.blizzardProtected = true;
         } else {
+            unprotectedBones.push(57005, 18905);
             this.blizzardProtected = false;
         }
 
@@ -216,15 +240,18 @@ export class PlayerSnowProvider {
             item =>
                 item.Components[Component.Mask] &&
                 outfit.Components[Component.Mask] &&
-                item.Components[Component.Mask].Drawable == outfit.Components[Component.Mask].Drawable
+                item.Components[Component.Mask].Drawable == outfitInput.Components[Component.Mask].Drawable &&
+                item.Components[Component.Mask].Collection == outfitInput.Components[Component.Mask].Collection
         );
 
         const jewels = player.skin.Model.Hash == PlayerPedHash.Male ? MaleJewelryItems : FemaleJewelryItems;
-        const neckJewels = jewels['Cou'];
+        const neckJewels = jewels['Accessoires'];
         const scarfs = Object.keys(neckJewels.items['Echarpes']).map(item => Number(item));
         const neckProtected = scarfs.includes(outfit.Components[neckJewels.componentId].Drawable);
         if (neckProtected) {
-            coldScore++;
+            coldScore += 2;
+        } else {
+            unprotectedBones.push(10706, 64729);
         }
 
         const hatJewels = jewels['Chapeaux'];
@@ -235,11 +262,11 @@ export class PlayerSnowProvider {
             bonnets.includes(outfit.Props[hatJewels.propId]?.Drawable) ||
             helmets.includes(outfit.Props[helmetJewels.propId]?.Drawable) ||
             !!hasCustomCagoule ||
-            data[Component.Mask] == 39 ||
-            data[Component.Mask] == 37 ||
-            data[Component.Mask] == 35;
+            data[Component.Mask] > 0;
         if (headProtected) {
-            coldScore++;
+            coldScore += 2;
+        } else {
+            unprotectedBones.push(31086);
         }
 
         //Cagoule - bandana - écharpes
@@ -249,24 +276,29 @@ export class PlayerSnowProvider {
             this.blizzardProtected = false;
         }
 
-        this.coldProtected = coldScore >= 3;
-        this.blizzardProtected = this.blizzardProtected && coldScore >= 5;
-    }
-
-    @Once(OnceStep.NuiLoaded)
-    public nuiloaded() {
-        this.nuiReady = true;
+        this.coldProtected = coldScore >= 6;
+        this.blizzardProtected = this.blizzardProtected && coldScore >= 10;
+        this.unprotectedBone = getRandomItem(unprotectedBones);
     }
 
     private setCold(cold: boolean) {
-        if (this.cold != cold && this.nuiReady) {
-            this.nuiDispatch.dispatch('cold', 'cold', cold);
-            this.cold = cold;
+        if (cold) {
+            this.hudWeatherIconProvider.add('snowflake');
+        } else {
+            this.hudWeatherIconProvider.remove('snowflake');
         }
+        this.cold = cold;
     }
 
     @Tick(TickInterval.EVERY_SECOND)
     public onColdCheckTick() {
+        if (this.featureProvider.isFeatureEnabled(Feature.SummerHeat)) {
+            return;
+        }
+        if (this.featureProvider.isFeatureEnabled(Feature.WhatIfSecondEpisode)) {
+            return;
+        }
+
         const player = this.playerService.getPlayer();
         if (!player) {
             return;
@@ -314,6 +346,7 @@ export class PlayerSnowProvider {
         const newHealth = GetEntityHealth(playerPed) - 1;
         this.frozenDeath = newHealth <= 100;
         SetEntityHealth(playerPed, newHealth);
+        this.LSMCDamageProvider.overrideLastDamage(911, this.unprotectedBone);
     }
 
     public isFrozenDeath() {

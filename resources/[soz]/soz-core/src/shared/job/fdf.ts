@@ -2,7 +2,7 @@ import { WardrobeConfig } from '../cloth';
 import { CraftCategory } from '../craft/craft';
 import { Environment, Feature } from '../features';
 import { joaat } from '../joaat';
-import { BoxZone, NamedZone } from '../polyzone/box.zone';
+import { NamedZone } from '../polyzone/box.zone';
 import { PolygonZone } from '../polyzone/polygon.zone';
 import { Vector3, Vector4 } from '../polyzone/vector';
 import { ProgressAnimation } from '../progress';
@@ -294,6 +294,10 @@ export const FDFFields: Record<string, PolygonZone<Vector4>> = {
         }
     ),
 };
+
+export const MILK_TIME = 10_000;
+export const MILK_QTY = 1;
+export const MILK_ITEM = 'cow_milk';
 
 export const FDFGreenHouse: Record<string, PolygonZone<Vector4>> = {
     4: new PolygonZone(
@@ -596,21 +600,11 @@ export const FDFConfig = {
     resellZones: [
         {
             name: 'Resell:FDF:Silo',
-            zone: new BoxZone([2892.55, 4391.29, 50.35], 4.4, 4.6, {
-                heading: 23.57,
-                minZ: 49.35,
-                maxZ: 51.35,
-            }),
             npcCoord: [2890.95, 4391.49, 49.34, 250.01] as Vector4,
             npcModel: 'a_m_m_farmer_01',
         },
         {
             name: 'Resell:FDF:Bell-Farm',
-            zone: new BoxZone([90.2, 6363.95, 31.23], 6.0, 5.0, {
-                heading: 204.35,
-                minZ: 30.23,
-                maxZ: 32.23,
-            }),
             npcCoord: [91.34, 6361.86, 30.23, 25.42] as Vector4,
             npcModel: 'a_m_m_farmer_01',
         },
@@ -676,33 +670,33 @@ export const FDFCraftsLists: Record<string, CraftCategory> = {
         event: 'job_fdf_craft',
         recipes: {
             popcorn: {
-                amount: 8,
+                amount: 10,
                 inputs: {
                     corn: { count: 8 },
                 },
             },
             fruit_salad: {
-                amount: 8,
+                amount: 10,
                 inputs: {
                     apple: { count: 2 },
                     orange: { count: 2 },
                 },
             },
             lemon_cheesecake: {
-                amount: 8,
+                amount: 10,
                 inputs: {
                     lemon: { count: 2 },
                     milk: { count: 2 },
                 },
             },
             creamed_corn: {
-                amount: 8,
+                amount: 10,
                 inputs: {
                     corn: { count: 2 },
                 },
             },
             vegetable_festival: {
-                amount: 8,
+                amount: 10,
                 inputs: {
                     potato: { count: 2 },
                     tomato: { count: 2 },
@@ -712,19 +706,19 @@ export const FDFCraftsLists: Record<string, CraftCategory> = {
                 },
             },
             cabbage_salad: {
-                amount: 8,
+                amount: 10,
                 inputs: {
                     cabage: { count: 1 },
                 },
             },
             stuffed_tomatoes: {
-                amount: 8,
+                amount: 10,
                 inputs: {
                     tomato: { count: 2 },
                 },
             },
             veggie_gathering: {
-                amount: 8,
+                amount: 10,
                 inputs: {
                     potato: { count: 2 },
                     cabage: { count: 1 },
@@ -732,7 +726,7 @@ export const FDFCraftsLists: Record<string, CraftCategory> = {
                 },
             },
             country_feast: {
-                amount: 8,
+                amount: 10,
                 inputs: {
                     pumpkin_fresh: { count: 1 },
                     cabage: { count: 1 },
@@ -741,20 +735,20 @@ export const FDFCraftsLists: Record<string, CraftCategory> = {
                 },
             },
             fried_potatoes: {
-                amount: 8,
+                amount: 10,
                 inputs: {
                     potato: { count: 2 },
                 },
             },
             vegetable_dance: {
-                amount: 8,
+                amount: 10,
                 inputs: {
                     potato: { count: 2 },
                     corn: { count: 2 },
                 },
             },
             autumn_symphony: {
-                amount: 8,
+                amount: 10,
                 inputs: {
                     potato: { count: 2 },
                     corn: { count: 1 },
@@ -769,38 +763,38 @@ export const FDFCraftsLists: Record<string, CraftCategory> = {
         event: 'job_fdf_craft',
         recipes: {
             pumpkin_potage: {
-                amount: 8,
+                amount: 10,
                 inputs: {
                     pumpkin_fresh: { count: 1 },
                 },
             },
             smoothie_fruity: {
-                amount: 8,
+                amount: 10,
                 inputs: {
                     apple: { count: 2 },
                     orange: { count: 2 },
                 },
             },
             apple_juice_drink: {
-                amount: 8,
+                amount: 10,
                 inputs: {
                     apple: { count: 2 },
                 },
             },
             tomato_juice: {
-                amount: 8,
+                amount: 10,
                 inputs: {
                     tomato: { count: 2 },
                 },
             },
             orange_juice_drink: {
-                amount: 8,
+                amount: 10,
                 inputs: {
                     orange: { count: 2 },
                 },
             },
             multifruit: {
-                amount: 8,
+                amount: 10,
                 inputs: {
                     orange: { count: 2 },
                     apple: { count: 2 },
@@ -809,36 +803,60 @@ export const FDFCraftsLists: Record<string, CraftCategory> = {
                 },
             },
             pumpkin_lemonade: {
-                amount: 8,
+                amount: 10,
                 inputs: {
                     orange: { count: 2 },
                     pumpkin_fresh: { count: 1 },
                 },
             },
             lemonade_bottle: {
-                amount: 8,
+                amount: 10,
                 inputs: {
                     lemon: { count: 2 },
                 },
             },
             tomato_tonic: {
-                amount: 8,
+                amount: 10,
                 inputs: {
                     apple: { count: 2 },
                     tomato: { count: 1 },
                 },
             },
             cabbage_chaos: {
-                amount: 8,
+                amount: 10,
                 inputs: {
                     cabage: { count: 1 },
                 },
             },
             fresh_tomachou: {
-                amount: 8,
+                amount: 10,
                 inputs: {
                     cabage: { count: 1 },
                     tomato: { count: 2 },
+                },
+            },
+        },
+    },
+    Lait: {
+        duration: 6000,
+        event: 'job_fdf_craft',
+        recipes: {
+            milk: {
+                amount: 4,
+                inputs: {
+                    cow_milk: { count: 1 },
+                },
+            },
+            semi_skimmed_milk: {
+                amount: 4,
+                inputs: {
+                    cow_milk: { count: 1 },
+                },
+            },
+            skimmed_milk: {
+                amount: 4,
+                inputs: {
+                    cow_milk: { count: 1 },
                 },
             },
         },
@@ -855,6 +873,41 @@ export const FDFCraftsLists: Record<string, CraftCategory> = {
                     pumpkin_fresh: { count: 2 },
                 },
             },
+            halloween_bruschetta_exorciste: {
+                amount: 4,
+                inputs: {
+                    garlic: { count: 16 },
+                    halloween_pure_blood: { count: 8 },
+                    halloween_blessed_water: { count: 4 },
+                },
+            },
+            halloween_sacred_stew: {
+                amount: 4,
+                inputs: {
+                    garlic: { count: 16 },
+                    halloween_pure_blood: { count: 8 },
+                    halloween_blessed_water: { count: 8 },
+                },
+            },
+            halloween_eternal_red_beef: {
+                amount: 4,
+                inputs: {
+                    garlic: { count: 16 },
+                    halloween_pure_blood: { count: 4 },
+                    raw_coal: { count: 2 },
+                    viande: { count: 4 },
+                    halloween_blessed_water: { count: 2 },
+                },
+            },
+            halloween_black_shadow_ribs: {
+                amount: 4,
+                inputs: {
+                    garlic: { count: 16 },
+                    halloween_pure_blood: { count: 4 },
+                    viande: { count: 4 },
+                    halloween_blessed_water: { count: 2 },
+                },
+            },
         },
     },
 };
@@ -868,6 +921,7 @@ export const FDFCloakroom: WardrobeConfig = {
                 [5]: { Drawable: 82, Texture: 0, Palette: 0 },
                 [6]: { Drawable: 62, Texture: 4, Palette: 0 },
                 [8]: { Drawable: 15, Texture: 0, Palette: 0 },
+                [10]: { Drawable: 0, Texture: 0, Palette: 0 },
                 [11]: { Drawable: 313, Texture: 17, Palette: 0 },
             },
             Props: { [0]: { Drawable: 13, Texture: 3, Palette: 0 } },
@@ -879,6 +933,7 @@ export const FDFCloakroom: WardrobeConfig = {
                 [5]: { Drawable: 44, Texture: 0, Palette: 0 },
                 [6]: { Drawable: 111, Texture: 2, Palette: 0 },
                 [8]: { Drawable: 15, Texture: 0, Palette: 0 },
+                [10]: { Drawable: 0, Texture: 0, Palette: 0 },
                 [11]: { Drawable: 50, Texture: 3, Palette: 0 },
             },
             Props: { [0]: { Drawable: 13, Texture: 3, Palette: 0 } },
@@ -890,6 +945,7 @@ export const FDFCloakroom: WardrobeConfig = {
                 [5]: { Drawable: 82, Texture: 0, Palette: 0 },
                 [6]: { Drawable: 51, Texture: 3, Palette: 0 },
                 [8]: { Drawable: 15, Texture: 0, Palette: 0 },
+                [10]: { Drawable: 0, Texture: 0, Palette: 0 },
                 [11]: { Drawable: 325, Texture: 11, Palette: 0 },
             },
             Props: { [0]: { Drawable: 13, Texture: 1, Palette: 0 } },
@@ -901,6 +957,7 @@ export const FDFCloakroom: WardrobeConfig = {
                 [5]: { Drawable: 44, Texture: 0, Palette: 0 },
                 [6]: { Drawable: 111, Texture: 6, Palette: 0 },
                 [8]: { Drawable: 15, Texture: 0, Palette: 0 },
+                [10]: { Drawable: 0, Texture: 0, Palette: 0 },
                 [11]: { Drawable: 50, Texture: 4, Palette: 0 },
             },
             Props: { [0]: { Drawable: 13, Texture: 1, Palette: 0 } },
@@ -912,9 +969,36 @@ export const FDFCloakroom: WardrobeConfig = {
                 [5]: { Drawable: 82, Texture: 0, Palette: 0 },
                 [6]: { Drawable: 51, Texture: 3, Palette: 0 },
                 [8]: { Drawable: 15, Texture: 0, Palette: 0 },
+                [10]: { Drawable: 0, Texture: 0, Palette: 0 },
                 [11]: { Drawable: 56, Texture: 0, Palette: 0 },
             },
             Props: { [0]: { Drawable: 13, Texture: 1, Palette: 0 } },
+        },
+        ['Tenue été']: {
+            Components: {
+                [3]: { Drawable: 5, Texture: 0, Palette: 0 },
+                [4]: { Drawable: 89, Texture: 18, Palette: 0 },
+                [5]: { Drawable: 44, Texture: 0, Palette: 0 },
+                [6]: { Drawable: 59, Texture: 23, Palette: 0 },
+                [8]: { Drawable: 15, Texture: 0, Palette: 0 },
+                [10]: { Drawable: 0, Texture: 0, Palette: 0 },
+                [11]: { Drawable: 237, Texture: 1, Palette: 0 },
+            },
+            Props: { [0]: { Drawable: 13, Texture: 1, Palette: 0 } },
+            GlovesID: 56039,
+        },
+        ['Livraison']: {
+            Components: {
+                [3]: { Drawable: 33, Texture: 0, Palette: 0 },
+                [4]: { Drawable: 4, Texture: 0, Palette: 0 },
+                [5]: { Drawable: 81, Texture: 0, Palette: 0 },
+                [6]: { Drawable: 114, Texture: 20, Palette: 0 },
+                [7]: { Drawable: 112, Texture: 2, Palette: 0 },
+                [8]: { Drawable: 75, Texture: 3, Palette: 0 },
+                [10]: { Drawable: 0, Texture: 0, Palette: 0 },
+                [11]: { Drawable: 23, Texture: 0, Palette: 0 },
+            },
+            Props: {},
         },
     },
     [joaat('mp_f_freemode_01')]: {
@@ -925,6 +1009,7 @@ export const FDFCloakroom: WardrobeConfig = {
                 [5]: { Drawable: 81, Texture: 0, Palette: 0 },
                 [6]: { Drawable: 66, Texture: 4, Palette: 0 },
                 [8]: { Drawable: 14, Texture: 0, Palette: 0 },
+                [10]: { Drawable: 0, Texture: 0, Palette: 0 },
                 [11]: { Drawable: 224, Texture: 18, Palette: 0 },
             },
             Props: { [0]: { Drawable: 20, Texture: 1, Palette: 0 } },
@@ -936,9 +1021,10 @@ export const FDFCloakroom: WardrobeConfig = {
                 [5]: { Drawable: 44, Texture: 0, Palette: 0 },
                 [6]: { Drawable: 115, Texture: 2, Palette: 0 },
                 [8]: { Drawable: 14, Texture: 0, Palette: 0 },
+                [10]: { Drawable: 0, Texture: 0, Palette: 0 },
                 [11]: { Drawable: 43, Texture: 3, Palette: 0 },
             },
-            Props: { [0]: { Drawable: 20, Texture: 1, Palette: 0 } },
+            Props: {},
         },
         ['Paysan']: {
             Components: {
@@ -947,6 +1033,7 @@ export const FDFCloakroom: WardrobeConfig = {
                 [5]: { Drawable: 81, Texture: 0, Palette: 0 },
                 [6]: { Drawable: 52, Texture: 3, Palette: 0 },
                 [8]: { Drawable: 14, Texture: 0, Palette: 0 },
+                [10]: { Drawable: 0, Texture: 0, Palette: 0 },
                 [11]: { Drawable: 224, Texture: 19, Palette: 0 },
             },
             Props: {
@@ -960,6 +1047,7 @@ export const FDFCloakroom: WardrobeConfig = {
                 [5]: { Drawable: 44, Texture: 0, Palette: 0 },
                 [6]: { Drawable: 115, Texture: 6, Palette: 0 },
                 [8]: { Drawable: 14, Texture: 0, Palette: 0 },
+                [10]: { Drawable: 0, Texture: 0, Palette: 0 },
                 [11]: { Drawable: 43, Texture: 4, Palette: 0 },
             },
             Props: {
@@ -973,11 +1061,40 @@ export const FDFCloakroom: WardrobeConfig = {
                 [5]: { Drawable: 81, Texture: 0, Palette: 0 },
                 [6]: { Drawable: 52, Texture: 3, Palette: 0 },
                 [8]: { Drawable: 14, Texture: 0, Palette: 0 },
+                [10]: { Drawable: 0, Texture: 0, Palette: 0 },
                 [11]: { Drawable: 73, Texture: 0, Palette: 0 },
             },
             Props: {
                 [0]: { Drawable: 20, Texture: 0, Palette: 0 },
             },
+        },
+        ['Tenue été']: {
+            Components: {
+                [3]: { Drawable: 4, Texture: 0, Palette: 0 },
+                [4]: { Drawable: 92, Texture: 18, Palette: 0 },
+                [5]: { Drawable: 44, Texture: 0, Palette: 0 },
+                [6]: { Drawable: 62, Texture: 23, Palette: 0 },
+                [8]: { Drawable: 14, Texture: 0, Palette: 0 },
+                [10]: { Drawable: 0, Texture: 0, Palette: 0 },
+                [11]: { Drawable: 247, Texture: 18, Palette: 0 },
+            },
+            Props: {
+                [0]: { Drawable: 20, Texture: 1, Palette: 0 },
+            },
+            GlovesID: 55039,
+        },
+        ['Livraison']: {
+            Components: {
+                [3]: { Drawable: 33, Texture: 0, Palette: 0 },
+                [4]: { Drawable: 54, Texture: 2, Palette: 0 },
+                [5]: { Drawable: 81, Texture: 0, Palette: 0 },
+                [6]: { Drawable: 118, Texture: 20, Palette: 0 },
+                [7]: { Drawable: 83, Texture: 2, Palette: 0 },
+                [8]: { Drawable: 13, Texture: 0, Palette: 0 },
+                [10]: { Drawable: 0, Texture: 0, Palette: 0 },
+                [11]: { Drawable: 24, Texture: 11, Palette: 0 },
+            },
+            Props: {},
         },
     },
 };

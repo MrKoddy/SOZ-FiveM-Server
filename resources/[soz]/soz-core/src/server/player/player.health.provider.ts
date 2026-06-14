@@ -1,18 +1,21 @@
+import { OnEvent } from '@public/core/decorators/event';
+import { Inject } from '@public/core/decorators/injectable';
+import { Provider } from '@public/core/decorators/provider';
 import { PriceService } from '@public/server/bank/price.service';
+import { FeatureProvider } from '@public/server/feature/feature.provider';
 import { PlayerZombieProvider } from '@public/server/player/player.zombie.provider';
-import { TaxType } from '@public/shared/bank';
+import { VampireGameStateProvider } from '@public/server/story/vampire.game.state.provider';
+import { UpwPollution } from '@public/shared/job/upw';
 import { BoxZone } from '@public/shared/polyzone/box.zone';
 import { Vector3 } from '@public/shared/polyzone/vector';
+import { TaxType } from '@public/shared/tax';
 
-import { OnEvent } from '../../core/decorators/event';
-import { Inject } from '../../core/decorators/injectable';
-import { Provider } from '../../core/decorators/provider';
 import { ServerEvent } from '../../shared/event';
-import { Feature, isFeatureEnabled } from '../../shared/features';
+import { Feature } from '../../shared/features';
 import { PlayerMetadata, PlayerServerStateExercise } from '../../shared/player';
-import { PollutionLevel } from '../../shared/pollution';
+import { UpwPollutionProvider } from '../job/upw/upw.pollution.provider';
 import { Notifier } from '../notifier';
-import { Pollution } from '../pollution';
+import { PlayerHealthService } from './player.health.service';
 import { PlayerMoneyService } from './player.money.service';
 import { PlayerService } from './player.service';
 import { PlayerStateService } from './player.state.service';
@@ -48,9 +51,6 @@ export class PlayerHealthProvider {
     @Inject(PlayerStateService)
     private playerStateService: PlayerStateService;
 
-    @Inject(Pollution)
-    private pollution: Pollution;
-
     @Inject(Notifier)
     private notifier: Notifier;
 
@@ -63,6 +63,18 @@ export class PlayerHealthProvider {
     @Inject(PriceService)
     private priceService: PriceService;
 
+    @Inject(PlayerHealthService)
+    private playerHealthService: PlayerHealthService;
+
+    @Inject(FeatureProvider)
+    private featureProvider: FeatureProvider;
+
+    @Inject(VampireGameStateProvider)
+    private vampireGameStateProvider: VampireGameStateProvider;
+
+    @Inject(UpwPollutionProvider)
+    private upwPollutionProvider: UpwPollutionProvider;
+
     private yogaAndNaturalMultiplier: (source: number) => number = () => 1;
 
     @OnEvent(ServerEvent.PLAYER_NUTRITION_LOOP)
@@ -73,16 +85,27 @@ export class PlayerHealthProvider {
             return;
         }
 
+        if (this.vampireGameStateProvider.isGameStarted()) {
+            return;
+        }
+
         if (this.playerZombieProvider.isZombiePlayer(source)) {
             return;
         }
 
-        const playerState = this.playerStateService.getServerStateByCitizenId(player.citizenid);
+        const playerState = this.playerStateService.getServerStateByCitizenId(
+            player.citizenid,
+            player.metadata.gym_state
+        );
 
         let hungerDiff = HUNGER_RATE;
         let thirstDiff = THIRST_RATE;
 
-        if (this.pollution.getPollutionLevel() == PollutionLevel.High) {
+        if (this.featureProvider.isFeatureEnabled(Feature.SummerHeat)) {
+            thirstDiff *= 1.2;
+        }
+
+        if (this.upwPollutionProvider.getPollutionLevel() == UpwPollution.High) {
             hungerDiff *= 1.2;
             thirstDiff *= 1.2;
         }
@@ -101,17 +124,20 @@ export class PlayerHealthProvider {
         datas.alcohol = this.playerService.getIncrementedMetadata(player, 'alcohol', ALCOHOL_RATE, 0, 200);
         datas.drug = this.playerService.getIncrementedMetadata(player, 'drug', DRUG_RATE, 0, 110);
 
-        if (isFeatureEnabled(Feature.MyBodySummer)) {
+        if (
+            this.featureProvider.isFeatureEnabled(Feature.MyBodySummer) &&
+            !this.featureProvider.isFeatureEnabled(Feature.WhatIfSecondEpisode)
+        ) {
             const now = new Date().getTime();
 
-            const strengthTimeDiff = now - playerState.lastStrengthUpdate.getTime();
+            const strengthTimeDiff = now - playerState.lastStrengthUpdate;
 
             if (
                 strengthTimeDiff > 30 * 60 * 1000 &&
                 playerState.lostStrength < 4 &&
                 playerState.exercise.completed < 4
             ) {
-                playerState.lastStrengthUpdate = new Date();
+                playerState.lastStrengthUpdate = new Date().getTime();
 
                 datas.strength = this.playerService.getIncrementedMetadata(
                     player,
@@ -126,10 +152,10 @@ export class PlayerHealthProvider {
                 this.notifier.notify(source, 'Vous vous sentez ~r~moins puissant~s~.', 'error');
             }
 
-            const staminaTimeDiff = now - playerState.lastMaxStaminaUpdate.getTime();
+            const staminaTimeDiff = now - playerState.lastMaxStaminaUpdate;
 
             if (staminaTimeDiff > 60 * 60 * 1000 && playerState.lostStamina < 3 && playerState.runTime < 60 * 8) {
-                playerState.lastMaxStaminaUpdate = new Date();
+                playerState.lastMaxStaminaUpdate = new Date().getTime();
                 datas.max_stamina = this.playerService.getIncrementedMetadata(
                     player,
                     'max_stamina',
@@ -143,10 +169,10 @@ export class PlayerHealthProvider {
                 this.notifier.notify(source, 'Vous vous sentez ~r~moins athlétique~s~.', 'error');
             }
 
-            const stressTimeDiff = now - playerState.lastStressLevelUpdate.getTime();
+            const stressTimeDiff = now - playerState.lastStressLevelUpdate;
 
             if (stressTimeDiff > 30 * 60 * 1000) {
-                playerState.lastStressLevelUpdate = new Date();
+                playerState.lastStressLevelUpdate = new Date().getTime();
                 const ped = GetPlayerPed(source);
                 const coords = GetEntityCoords(ped) as Vector3;
                 const psyCoef = psyZone.isPointInside(coords) ? 2 : 1;
@@ -161,6 +187,8 @@ export class PlayerHealthProvider {
 
                 this.notifier.notify(source, 'Vous vous sentez moins ~g~angoissé~s~.', 'success');
             }
+
+            this.playerService.setPlayerMetadata(source, 'gym_state', playerState);
         }
 
         this.playerService.setPlayerMetaDatas(source, datas);
@@ -174,7 +202,10 @@ export class PlayerHealthProvider {
             return;
         }
 
-        const playerState = this.playerStateService.getServerStateByCitizenId(player.citizenid);
+        const playerState = this.playerStateService.getServerStateByCitizenId(
+            player.citizenid,
+            player.metadata.gym_state
+        );
 
         if (playerState.exercise[exercise]) {
             return;
@@ -185,13 +216,11 @@ export class PlayerHealthProvider {
 
         this.playerService.incrementMetadata(source, 'strength', 2, STRENGTH_MIN, STRENGTH_MAX);
         this.playerService.updatePlayerMaxWeight(source);
+        this.playerService.setPlayerMetadata(source, 'gym_state', playerState);
     }
 
-    @OnEvent(ServerEvent.PLAYER_INCREASE_STRESS)
     public async increaseStress(source: number, stress: number): Promise<void> {
-        const playerState = this.playerStateService.getServerState(source);
-        playerState.lastStressLevelUpdate = new Date();
-        this.playerService.incrementMetadata(source, 'stress_level', stress, STRESS_MIN, STRESS_MAX);
+        this.playerHealthService.increaseStress(source, stress);
     }
 
     @OnEvent(ServerEvent.PLAYER_INCREASE_RUN_TIME)
@@ -202,7 +231,10 @@ export class PlayerHealthProvider {
             return;
         }
 
-        const playerState = this.playerStateService.getServerStateByCitizenId(player.citizenid);
+        const playerState = this.playerStateService.getServerStateByCitizenId(
+            player.citizenid,
+            player.metadata.gym_state
+        );
 
         playerState.runTime += 1;
 
@@ -215,6 +247,7 @@ export class PlayerHealthProvider {
 
             if (playerState.runTime % 120 == 0) {
                 this.playerService.incrementMetadata(source, 'max_stamina', 1, MAX_STAMINA_MIN, MAX_STAMINA_MAX);
+                this.playerService.setPlayerMetadata(source, 'gym_state', playerState);
             }
 
             if (minutes < 8) {
@@ -243,7 +276,10 @@ export class PlayerHealthProvider {
             return;
         }
 
-        const playerState = this.playerStateService.getServerStateByCitizenId(player.citizenid);
+        const playerState = this.playerStateService.getServerStateByCitizenId(
+            player.citizenid,
+            player.metadata.gym_state
+        );
 
         if (playerState.yoga) {
             return;
@@ -254,6 +290,7 @@ export class PlayerHealthProvider {
         this.notifier.notify(source, 'Vous vous sentez moins ~g~angoissé~s~.', 'success');
 
         await this.increaseStress(source, this.yogaAndNaturalMultiplier(source) * -8);
+        this.playerService.setPlayerMetadata(source, 'gym_state', playerState);
     }
 
     @OnEvent(ServerEvent.PLAYER_HEALTH_GYM_SUBSCRIBE)

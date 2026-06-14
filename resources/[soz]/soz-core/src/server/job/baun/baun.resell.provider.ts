@@ -1,18 +1,22 @@
+import { InventoryFactory } from '@public/server/inventory/inventory.factory';
+import { ItemService } from '@public/server/item/item.service';
+
 import { OnEvent } from '../../../core/decorators/event';
 import { Inject } from '../../../core/decorators/injectable';
 import { Provider } from '../../../core/decorators/provider';
 import { ServerEvent } from '../../../shared/event';
+import { isInventoryItemExpired } from '../../../shared/inventory';
 import { BaunConfig } from '../../../shared/job/baun';
 import { toVector3Object, Vector3 } from '../../../shared/polyzone/vector';
-import { InventoryManager } from '../../inventory/inventory.manager';
+import { BankService } from '../../bank/bank.service';
 import { Monitor } from '../../monitor/monitor';
 import { Notifier } from '../../notifier';
 import { ProgressService } from '../../player/progress.service';
 
 @Provider()
 export class BaunResellProvider {
-    @Inject(InventoryManager)
-    private inventoryManager: InventoryManager;
+    @Inject(InventoryFactory)
+    private inventoryFactory: InventoryFactory;
 
     @Inject(Notifier)
     private notifier: Notifier;
@@ -23,9 +27,16 @@ export class BaunResellProvider {
     @Inject(Monitor)
     private monitor: Monitor;
 
+    @Inject(BankService)
+    private bankService: BankService;
+
+    @Inject(ItemService)
+    private itemService: ItemService;
+
     @OnEvent(ServerEvent.BAUN_RESELL)
     public async onResell(source: number) {
-        const item = this.inventoryManager.getFirstItemInventory(source, 'cocktail_box');
+        const inventory = await this.inventoryFactory.getPlayerInventory(source);
+        const item = inventory.findItem(item => item.name == 'cocktail_box' && !isInventoryItemExpired(item));
 
         if (!item) {
             return;
@@ -48,23 +59,17 @@ export class BaunResellProvider {
             return;
         }
 
-        this.inventoryManager.removeItemFromInventory(source, 'cocktail_box', item.amount);
+        inventory.removeAtSlot(item.slot, item.amount);
 
         const totalAmount = item.amount * BaunConfig.Resell.reward;
-        TriggerEvent(ServerEvent.BANKING_TRANSFER_MONEY, 'farm_baun', 'safe_baun', totalAmount);
+        await this.bankService.transferFarmMoney(source, 'farm_baun', 'safe_baun', totalAmount);
 
-        this.monitor.publish(
-            'job_baun_resell',
-            {
-                item_id: item.metadata.id,
-                player_source: source,
-            },
-            {
-                item_label: item.label,
-                quantity: item.amount,
-                position: toVector3Object(GetEntityCoords(GetPlayerPed(source)) as Vector3),
-            }
-        );
+        this.monitor.traceEvent('job_baun_resell', {
+            item_id: item.name,
+            player_source: source,
+            amount: item.amount,
+            position: toVector3Object(GetEntityCoords(GetPlayerPed(source)) as Vector3),
+        });
 
         this.notifier.notify(source, 'Vous avez ~r~terminé~s~ de revendre.', 'success');
     }

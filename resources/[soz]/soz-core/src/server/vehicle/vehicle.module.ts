@@ -10,14 +10,17 @@ import { VehicleGarageProvider } from './vehicle.garage.provider';
 import { VehicleKeysProvider } from './vehicle.keys.provider';
 import { VehicleLockProvider } from './vehicle.lock.provider';
 import { VehicleMigrationProvider } from './vehicle.migration.provider';
+import { VehicleOffroadProvider } from './vehicle.offroad.provider';
+import { VehicleOrderProvider } from './vehicle.order.provider';
 import { VehiclePitStopProvider } from './vehicle.pitstop.provider';
 import { VehicleProvider } from './vehicle.provider';
+import { VehiclePushProvider } from './vehicle.push.provider';
 import { VehicleRadarProvider } from './vehicle.radar.provider';
 import { VehicleService } from './vehicle.service';
 import { VehicleSpawner } from './vehicle.spawner';
 import { VehicleStateProvider } from './vehicle.state.provider';
 import { VehicleTowProvider } from './vehicle.tow.provider';
-import { VehicleOffroadProvider } from './vehicule.offroad.provider';
+import { VehicleTyreProvider } from './vehicle.tyre.provider';
 
 @Module({
     providers: [
@@ -40,6 +43,9 @@ import { VehicleOffroadProvider } from './vehicule.offroad.provider';
         VehiclePitStopProvider,
         VehicleTowProvider,
         VehicleOffroadProvider,
+        VehicleOrderProvider,
+        VehiclePushProvider,
+        VehicleTyreProvider,
     ],
 })
 export class VehicleModule {}

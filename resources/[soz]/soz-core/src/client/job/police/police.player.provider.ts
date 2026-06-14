@@ -30,7 +30,7 @@ import { PoliceAnimationProvider } from './police.animation.provider';
 
 const jobsCanFine = [JobType.LSPD, JobType.BCSO, JobType.SASP, JobType.FBI, JobType.LSCS];
 const jobsCanFouille = [JobType.LSPD, JobType.BCSO, JobType.CashTransfer, JobType.SASP, JobType.LSCS];
-const jobsCanEscort = [
+export const jobsCanEscort = [
     JobType.LSPD,
     JobType.BCSO,
     JobType.CashTransfer,
@@ -94,14 +94,11 @@ export class PolicePlayerProvider {
             this.targetFactory.createForAllPlayer([
                 {
                     label: 'Amender',
-                    color: job,
-                    icon: 'c:police/amender.png',
+                    icon: 'police/amender',
                     job: job,
                     blackoutJob: job,
                     blackoutGlobal: true,
-                    canInteract: () => {
-                        return this.playerService.isOnDuty();
-                    },
+                    category: 'society',
                     action: entity => {
                         const target = GetPlayerServerId(NetworkGetPlayerIndexFromPed(entity));
                         this.nuiMenu.openMenu(MenuType.PoliceJobFines, {
@@ -112,12 +109,9 @@ export class PolicePlayerProvider {
                 },
                 {
                     label: 'Permis',
-                    color: job,
-                    icon: 'c:police/permis.png',
+                    icon: 'police/permis',
                     job: job,
-                    canInteract: () => {
-                        return this.playerService.isOnDuty();
-                    },
+                    category: 'society',
                     action: async entity => {
                         const target = GetPlayerServerId(NetworkGetPlayerIndexFromPed(entity));
                         const licences = await emitRpc<Partial<Record<PlayerLicenceType, number>>>(
@@ -134,13 +128,12 @@ export class PolicePlayerProvider {
                 },
                 {
                     label: 'Menotter',
-                    color: job,
-                    icon: 'c:police/menotter.png',
+                    icon: 'police/menotter',
                     item: 'handcuffs',
                     job: job,
+                    category: 'society',
                     canInteract: entity => {
                         return (
-                            this.playerService.isOnDuty() &&
                             !IsEntityPlayingAnim(entity, 'mp_arresting', 'idle', 3) &&
                             !IsPedInAnyVehicle(entity, true) &&
                             !IsPedInAnyVehicle(PlayerPedId(), true)
@@ -155,13 +148,6 @@ export class PolicePlayerProvider {
                             ) {
                                 const playerId = GetPlayerServerId(player);
                                 TriggerServerEvent(ServerEvent.CUFF_PLAYER, playerId, false);
-                                TriggerServerEvent(
-                                    ServerEvent.MONITOR_ADD_EVENT,
-                                    'job_police_cuff_player',
-                                    {},
-                                    { target_source: playerId, position: GetEntityCoords(GetPlayerPed(player)) },
-                                    true
-                                );
                             } else {
                                 this.notifier.error('Vous ne pouvez pas menotter une personne dans un véhicule');
                             }
@@ -172,13 +158,12 @@ export class PolicePlayerProvider {
                 },
                 {
                     label: 'Démenotter',
-                    color: job,
-                    icon: 'c:police/demenotter.png',
+                    icon: 'police/demenotter',
                     item: 'handcuffs_key',
                     job: job,
+                    category: 'society',
                     canInteract: async entity => {
                         if (
-                            !this.playerService.isOnDuty() ||
                             !IsEntityPlayingAnim(entity, 'mp_arresting', 'idle', 3) ||
                             IsPedInAnyVehicle(entity, true) ||
                             IsPedInAnyVehicle(PlayerPedId(), true)
@@ -198,13 +183,6 @@ export class PolicePlayerProvider {
                             ) {
                                 const playerId = GetPlayerServerId(player);
                                 TriggerServerEvent(ServerEvent.UNCUFF_PLAYER, playerId);
-                                TriggerServerEvent(
-                                    ServerEvent.MONITOR_ADD_EVENT,
-                                    'job_police_uncuff_player',
-                                    {},
-                                    { target_source: playerId, position: GetEntityCoords(GetPlayerPed(player)) },
-                                    true
-                                );
                                 await wait(500);
                             } else {
                                 this.notifier.error('Vous ne pouvez pas démenotter une personne dans un véhicule');
@@ -216,13 +194,10 @@ export class PolicePlayerProvider {
                 },
                 {
                     label: "Récolte d'empreinte",
-                    color: job,
-                    icon: 'c:police/fouiller.png',
+                    icon: 'police/fouiller',
                     job: job,
                     item: 'fingerprint_collector',
-                    canInteract: () => {
-                        return this.playerService.isOnDuty();
-                    },
+                    category: 'society',
                     action: async entity => {
                         const target = GetPlayerServerId(NetworkGetPlayerIndexFromPed(entity));
                         const { completed } = await this.progressService.progress(
@@ -252,12 +227,9 @@ export class PolicePlayerProvider {
                 },
                 {
                     label: 'Rechercher des traces de poudre',
-                    color: job,
-                    icon: 'c:police/fouiller.png',
+                    icon: 'police/fouiller',
                     job: job,
-                    canInteract: () => {
-                        return this.playerService.isOnDuty();
-                    },
+                    category: 'society',
                     action: async entity => {
                         const target = GetPlayerServerId(NetworkGetPlayerIndexFromPed(entity));
                         const { completed } = await this.progressService.progress(
@@ -292,9 +264,9 @@ export class PolicePlayerProvider {
                 [
                     {
                         label: 'Fouiller',
-                        color: job,
-                        icon: 'c:police/fouiller.png',
+                        icon: 'police/fouiller',
                         job: job,
+                        category: 'society',
                         canInteract: entity => {
                             if (
                                 this.playerService.getPlayer().job.id === JobType.CashTransfer &&
@@ -303,13 +275,12 @@ export class PolicePlayerProvider {
                                 return false;
                             }
                             return (
-                                this.playerService.isOnDuty() &&
-                                (IsEntityPlayingAnim(entity, 'missminuteman_1ig_2', 'handsup_base', 3) ||
-                                    IsEntityPlayingAnim(entity, 'mp_arresting', 'idle', 3))
+                                IsEntityPlayingAnim(entity, 'missminuteman_1ig_2', 'handsup_base', 3) ||
+                                IsEntityPlayingAnim(entity, 'mp_arresting', 'idle', 3)
                             );
                         },
                         action: async entity => {
-                            await this.jobInteractionService.searchPlayer(entity);
+                            await this.jobInteractionService.searchPlayer(entity, false);
                         },
                     },
                 ],
@@ -320,9 +291,9 @@ export class PolicePlayerProvider {
             this.targetFactory.createForAllPlayer([
                 {
                     label: 'Escorter',
-                    color: job,
-                    icon: 'c:police/escorter.png',
+                    icon: 'police/escorter',
                     job: job,
+                    category: 'society',
                     canInteract: async entity => {
                         if (
                             this.playerService.getPlayer().job.id === JobType.CashTransfer &&
@@ -330,11 +301,7 @@ export class PolicePlayerProvider {
                         ) {
                             return false;
                         }
-                        if (
-                            !this.playerService.isOnDuty() ||
-                            IsPedInAnyVehicle(entity, true) ||
-                            IsPedInAnyVehicle(PlayerPedId(), true)
-                        ) {
+                        if (IsPedInAnyVehicle(entity, true) || IsPedInAnyVehicle(PlayerPedId(), true)) {
                             return false;
                         }
 
@@ -352,13 +319,10 @@ export class PolicePlayerProvider {
                 [
                     {
                         label: 'Alcootest',
-                        color: job,
-                        icon: 'c:police/alcootest.png',
+                        icon: 'police/alcootest',
                         job: job,
                         item: 'breathanalyzer',
-                        canInteract: () => {
-                            return this.playerService.isOnDuty();
-                        },
+                        category: 'society',
                         action: async entity => {
                             const target = GetPlayerServerId(NetworkGetPlayerIndexFromPed(entity));
 
@@ -368,13 +332,10 @@ export class PolicePlayerProvider {
                     },
                     {
                         label: 'Dépistage de drogue',
-                        color: job,
-                        icon: 'c:police/screening.png',
+                        icon: 'police/screening',
                         job: job,
                         item: 'screening_test',
-                        canInteract: () => {
-                            return this.playerService.isOnDuty();
-                        },
+                        category: 'society',
                         action: async entity => {
                             const target = GetPlayerServerId(NetworkGetPlayerIndexFromPed(entity));
 
@@ -579,13 +540,6 @@ export class PolicePlayerProvider {
             (this.escortingAnimation.crimi && !IsEntityPlayingAnim(ped, 'anim@gangops@hostage@', 'perp_idle', 3))
         ) {
             TriggerServerEvent(ServerEvent.REMOVE_ESCORT_PLAYER, this.escortingAnimation.target);
-            TriggerServerEvent(
-                ServerEvent.MONITOR_ADD_EVENT,
-                'job_police_deescort_player',
-                {},
-                { targetSource: player.source, position: GetEntityCoords(GetPlayerPed(player.source)) },
-                true
-            );
             if (this.escortingAnimation.animation) {
                 this.escortingAnimation.animation.cancel();
             }

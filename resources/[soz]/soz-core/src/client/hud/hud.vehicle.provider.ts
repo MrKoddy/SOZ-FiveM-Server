@@ -1,8 +1,11 @@
+import { POLICE_MINESWEEPER_ROBOT_CAR_MODEL } from '@private/shared/police';
+
 import { Inject } from '../../core/decorators/injectable';
 import { Provider } from '../../core/decorators/provider';
 import { Tick } from '../../core/decorators/tick';
 import {
     getDefaultVehicleCondition,
+    getVehicleMaxFuelStorage,
     isVehicleModelElectric,
     VehicleClass,
     VehicleLightState,
@@ -32,20 +35,25 @@ export class HudVehicleProvider {
     @Inject(VehicleConditionProvider)
     private readonly vehicleConditionProvider: VehicleConditionProvider;
 
+    private nosLevel = 1.0;
+
     @Tick(0)
     async updateVehicleHudSpeed() {
         const vehicle = GetVehiclePedIsIn(PlayerPedId(), false);
-
         if (!vehicle) {
             return;
         }
 
+        const isHeli = IsThisModelAHeli(GetEntityModel(vehicle));
+
         const speed = GetEntitySpeed(vehicle) * 3.6;
-        const rpm = GetVehicleCurrentRpm(vehicle);
+        const rpm = GetVehicleDashboardRpm();
+        const gear = isHeli ? 1 : GetVehicleCurrentGear(vehicle);
 
         this.nuiDispatch.dispatch('hud', 'UpdateVehicleSpeed', {
             speed,
             rpm,
+            gear,
         });
     }
 
@@ -60,7 +68,7 @@ export class HudVehicleProvider {
         const vehicle = GetVehiclePedIsIn(PlayerPedId(), false);
         let seat = null;
 
-        if (!vehicle) {
+        if (!vehicle || GetEntityModel(vehicle) === GetHashKey(POLICE_MINESWEEPER_ROBOT_CAR_MODEL)) {
             this.nuiDispatch.dispatch('hud', 'UpdateVehicle', {
                 seat,
             });
@@ -92,9 +100,12 @@ export class HudVehicleProvider {
             return;
         }
 
-        const condition = NetworkGetEntityIsNetworked(vehicle)
-            ? this.vehicleConditionProvider.getVehicleCondition(NetworkGetNetworkIdFromEntity(vehicle))
-            : getDefaultVehicleCondition();
+        const model = GetEntityModel(vehicle);
+        const vehDef = this.vehicleRepository.getByModelHash(model);
+        const netId = NetworkGetEntityIsNetworked(vehicle) ? NetworkGetNetworkIdFromEntity(vehicle) : 0;
+        const condition = netId
+            ? this.vehicleConditionProvider.getVehicleCondition(netId)
+            : getDefaultVehicleCondition(vehDef);
 
         if (null === condition) {
             this.nuiDispatch.dispatch('hud', 'UpdateVehicle', {
@@ -108,8 +119,6 @@ export class HudVehicleProvider {
             return;
         }
 
-        const model = GetEntityModel(vehicle);
-        const vehDef = this.vehicleRepository.getByModelHash(model);
         const useRpm = !IsThisModelAHeli(model) && !IsThisModelAPlane(model);
         const [hasLight, lightOn, hasHighBeam] = GetVehicleLightsState(vehicle);
         const hash = GetEntityModel(vehicle);
@@ -127,15 +136,21 @@ export class HudVehicleProvider {
                     : null,
             oilLevel: condition.oilLevel,
             lockStatus: GetVehicleDoorLockStatus(vehicle) as VehicleLockStatus,
-            vehCategory: vehDef?.requiredLicence,
+            maxFuel: getVehicleMaxFuelStorage(vehDef),
             useRpm,
             lightState: hasLight
                 ? hasHighBeam
                     ? VehicleLightState.HighBeam
                     : lightOn
-                    ? VehicleLightState.LowBeam
-                    : VehicleLightState.Off
+                      ? VehicleLightState.LowBeam
+                      : VehicleLightState.Off
                 : VehicleLightState.Off,
+            nosLevel: this.nosLevel,
+            nosCount: condition.nitro,
         });
+    }
+
+    public setNosLevel(value: number) {
+        this.nosLevel = value;
     }
 }

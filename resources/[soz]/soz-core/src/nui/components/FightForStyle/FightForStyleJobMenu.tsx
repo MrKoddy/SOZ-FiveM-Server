@@ -1,8 +1,9 @@
-import { useItems } from '@public/nui/hook/data';
+import { useItems, usePlayer } from '@public/nui/hook/data';
 import { CraftCategory, CraftRecipe } from '@public/shared/craft/craft';
 import { FunctionComponent, useEffect, useState } from 'react';
 
 import { NuiEvent } from '../../../shared/event';
+import { JobLabel } from '../../../shared/job';
 import { MenuType } from '../../../shared/nui/menu';
 import { fetchNui } from '../../fetch';
 import { CraftInputs } from '../Shared/CraftInputs';
@@ -25,15 +26,14 @@ type FightForStyleStateProps = {
         state: {
             ffs_cotton_bale: boolean;
         };
-        onDuty: boolean;
     };
 };
 
 export const FightForStyleJobMenu: FunctionComponent<FightForStyleStateProps> = ({ data }) => {
-    const banner = 'https://nui-img/soz/menu_job_ffs';
     const [blips, setBlips] = useState(null);
     const [currentRecipe, setCurrentRecipe] = useState<CraftRecipe>();
     const items = useItems();
+    const player = usePlayer();
 
     useEffect(() => {
         if (data && data.state) {
@@ -52,11 +52,11 @@ export const FightForStyleJobMenu: FunctionComponent<FightForStyleStateProps> = 
         await fetchNui(NuiEvent.FfsDisplayBlip, { blip, value });
     };
 
-    if (!data.onDuty) {
+    if (!player.job.onduty) {
         return (
             <Menu type={MenuType.FightForStyleJobMenu}>
                 <MainMenu>
-                    <MenuTitle banner={banner}></MenuTitle>
+                    <MenuTitle title={JobLabel.ffs} />
                     <MenuContent>
                         <MenuItemText>Vous n'êtes pas en service.</MenuItemText>
                     </MenuContent>
@@ -68,7 +68,7 @@ export const FightForStyleJobMenu: FunctionComponent<FightForStyleStateProps> = 
     return (
         <Menu type={MenuType.FightForStyleJobMenu}>
             <MainMenu>
-                <MenuTitle banner={banner}></MenuTitle>
+                <MenuTitle title={JobLabel.ffs} />
                 <MenuContent>
                     {Object.keys(data.recipes).map(category => (
                         <MenuItemSubMenuLink
@@ -86,8 +86,8 @@ export const FightForStyleJobMenu: FunctionComponent<FightForStyleStateProps> = 
             </MainMenu>
             {Object.entries(data.recipes).map(([name, category]) => (
                 <SubMenu id={`recipe_${name}`}>
-                    <MenuTitle banner={banner}>{`Livre de recettes ${data.recipes[name].icon} ${name}`}</MenuTitle>
-                    <MenuContent>
+                    <MenuTitle title={JobLabel.ffs} />
+                    <MenuContent subtitle={`Livre de recettes ${data.recipes[name].icon} ${name}`}>
                         <MenuItemSelect title="" titleWidth={0}>
                             {Object.entries(category.recipes).map(([output, recipe]) => (
                                 <MenuItemSelectOption

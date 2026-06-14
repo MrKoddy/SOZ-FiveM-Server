@@ -1,14 +1,31 @@
-import { Once, OnceStep } from '@core/decorators/event';
+import { Once, OnceStep, OnEvent, OnNuiEvent } from '@core/decorators/event';
 import { Inject } from '@core/decorators/injectable';
 import { Provider } from '@core/decorators/provider';
+import { Tick } from '@core/decorators/tick';
+import { uuidv4 } from '@core/utils';
+import { FeatureProvider } from '@public/client/feature/feature.provider';
+import { NuiDispatch } from '@public/client/nui/nui.dispatch';
 import { Qbcore } from '@public/client/qbcore';
+import { ClientEvent } from '@public/shared/event/client';
+import { NuiEvent } from '@public/shared/event/nui';
+import { Feature } from '@public/shared/features';
+import { Vector3 } from '@public/shared/polyzone/vector';
+import { WhatIfRadiationZone } from '@public/shared/whatif';
 
-import { Blip } from '../shared/blip';
+import { Blip, BlipType } from '../shared/blip';
 
 type GameBlip = {
     blip: Blip;
     id: string;
     gameId: number;
+    actions?: BlipAction<any>[];
+};
+
+export type BlipAction<T = undefined> = {
+    id: string;
+    label: string;
+    action: (blip: Blip, data: T) => void | Promise<void>;
+    data?: T;
 };
 
 @Provider()
@@ -16,12 +33,73 @@ export class BlipFactory {
     @Inject(Qbcore)
     private qbcore: Qbcore;
 
+    @Inject(NuiDispatch)
+    private nuiDispatch: NuiDispatch;
+
+    @Inject(FeatureProvider)
+    public featureProvider: FeatureProvider;
+
     private blips = new Map<string, GameBlip>();
 
-    public create(id: string, blipCreated: Blip, show = true): number {
+    public getAll(): Map<string, GameBlip> {
+        return this.blips;
+    }
+
+    @Tick()
+    public checkBlipSelected(): void {
+        const blipId = GetNewSelectedMissionCreatorBlip();
+
+        if (!blipId) {
+            return;
+        }
+
+        let blip = null;
+
+        for (const item of this.blips.values()) {
+            if (item.gameId === blipId) {
+                blip = item;
+                break;
+            }
+        }
+
+        if (!blip || !blip.actions) {
+            return;
+        }
+
+        const nuiActions = blip.actions.map(action => {
+            return {
+                id: action.id,
+                blipId: blip.id,
+                label: action.label,
+            };
+        });
+
+        this.nuiDispatch.dispatch('blip', 'SetActions', nuiActions);
+    }
+
+    @OnNuiEvent(NuiEvent.BlipAction)
+    public async onBlipAction({ blipId, id }: { blipId: string; id: string }) {
+        const blip = this.blips.get(blipId);
+
+        if (!blip) {
+            return;
+        }
+
+        const action = blip.actions.find(action => action.id === id);
+
+        if (!action) {
+            return;
+        }
+
+        await action.action(blip.blip, action.data);
+    }
+
+    @OnEvent(ClientEvent.BLIP_CREATE)
+    public create<T = undefined>(id: string, blipCreated: Blip, actions?: Omit<BlipAction<T>, 'id'>[]): number {
         const blip = {
             range: true,
             scale: 0.8,
+            type: BlipType.Coord,
             ...blipCreated,
         };
 
@@ -29,38 +107,29 @@ export class BlipFactory {
             blip.position = [blip.coords.x, blip.coords.y, blip.coords.z];
         }
 
-        const gameId = AddBlipForCoord(blip.position[0], blip.position[1], blip.position[2]);
-
-        if (!gameId) {
-            throw new Error(`Failed to create blip ${id}`);
+        if (
+            this.featureProvider.isFeatureEnabled(Feature.WhatIfFirstEpisode) &&
+            WhatIfRadiationZone.some(zone => zone.isPointInside(blip.position as Vector3))
+        ) {
+            return -1;
         }
 
-        this.updateGameBlip(id, gameId, blip);
-        this.blips.set(id, { blip, id, gameId });
-
-        if (!show) {
-            this.hide(id, true);
+        if (this.featureProvider.isFeatureEnabled(Feature.WhatIfSecondEpisode) && blip.group !== 'admin') {
+            return -1;
         }
 
-        return gameId;
-    }
-
-    public createAreaBlip(id: string, blipCreated: Blip, colour?: number, sprite?: number, show = true) {
-        const blip = {
-            radius: 5,
-            ...blipCreated,
-        };
-
-        if (blip.coords) {
-            blip.position = [blip.coords.x, blip.coords.y, blip.coords.z];
+        if (actions) {
+            blip.mission = true;
         }
 
-        const gameId = AddBlipForRadius(blip.position[0], blip.position[1], blip.position[2], blip.radius);
-        if (colour) {
-            SetBlipColour(gameId, colour);
-        }
-        if (sprite) {
-            SetBlipSprite(gameId, sprite);
+        let gameId = null;
+        switch (blip.type) {
+            case BlipType.Coord:
+                gameId = AddBlipForCoord(blip.position[0], blip.position[1], blip.position[2]);
+                break;
+            case BlipType.Radius:
+                gameId = AddBlipForRadius(blip.position[0], blip.position[1], blip.position[2], blip.radius);
+                break;
         }
 
         if (!gameId) {
@@ -68,9 +137,19 @@ export class BlipFactory {
         }
 
         this.updateGameBlip(id, gameId, blip);
-        this.blips.set(id, { blip, id, gameId });
+        this.blips.set(id, {
+            blip,
+            id,
+            gameId,
+            actions: actions?.map(action => {
+                return {
+                    ...action,
+                    id: uuidv4(),
+                };
+            }),
+        });
 
-        if (!show) {
+        if (blip.hidden) {
             this.hide(id, true);
         }
 
@@ -84,19 +163,39 @@ export class BlipFactory {
             return;
         }
 
+        gameBlip.blip.hidden = value;
         if (value) {
             SetBlipAlpha(gameBlip.gameId, 0);
             SetBlipHiddenOnLegend(gameBlip.gameId, true);
         } else {
-            SetBlipAlpha(gameBlip.gameId, 255);
+            SetBlipAlpha(gameBlip.gameId, gameBlip.blip.alpha || 255);
             SetBlipHiddenOnLegend(gameBlip.gameId, false);
         }
+    }
+
+    public hideGroup(group: string, value: boolean): void {
+        for (const [id, gameBlip] of this.blips) {
+            if (gameBlip.blip.group === group) {
+                this.hide(id, value);
+            }
+        }
+    }
+
+    public isHidden(id: string) {
+        const gameBlip = this.blips.get(id);
+
+        if (!gameBlip) {
+            return;
+        }
+
+        return gameBlip.blip.hidden;
     }
 
     public qbHide(id: string, value: boolean): void {
         this.qbcore.HideBlip(id, value);
     }
 
+    @OnEvent(ClientEvent.BLIP_DELETE)
     public remove(id: string): void {
         const gameBlip = this.blips.get(id);
 
@@ -135,8 +234,12 @@ export class BlipFactory {
         gameBlip.blip = { ...gameBlip.blip, ...blip };
     }
 
+    public getBlipsByGroup(group: string): GameBlip[] {
+        return Array.from(this.blips.values()).filter(blip => blip.blip.group === group);
+    }
+
     private updateGameBlip(id: string, gameId: number, blip: Partial<Blip>) {
-        if (blip.position !== undefined) {
+        if (blip.position !== undefined && blip.type !== BlipType.Radius) {
             SetBlipCoords(gameId, blip.position[0], blip.position[1], blip.position[2]);
         }
 
@@ -200,12 +303,20 @@ export class BlipFactory {
             SetBlipRouteColour(gameId, blip.routeColor);
         }
 
-        if (blip.scale !== undefined) {
+        if (blip.scale !== undefined && blip.type != BlipType.Radius) {
             SetBlipScale(gameId, blip.scale);
         }
 
         if (blip.category !== undefined) {
             SetBlipCategory(gameId, blip.category);
+        }
+
+        if (blip.flash !== undefined) {
+            SetBlipFlashes(gameId, blip.flash);
+        }
+
+        if (blip.rotation !== undefined) {
+            SetBlipRotation(gameId, blip.rotation);
         }
 
         if (blip.name !== undefined) {

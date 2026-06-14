@@ -1,5 +1,8 @@
 import { Story } from '../story';
 
+export const Halloween2022Scenario4EnterFinal = 'Halloween2022Scenario4EnterFinal';
+export const Halloween2022Scenario4ExitFinal = 'Halloween2022Scenario4ExitFinal';
+
 export const Halloween2022Scenario4: Story = {
     name: 'Halloween 2022 Scenario 4',
     dialog: {
@@ -92,7 +95,7 @@ export const Halloween2022Scenario4: Story = {
             name: 'scenario4_door_chiliad',
             part: 5,
             label: 'Inspecter',
-            icon: 'fas fa-search',
+            icon: 'global/search',
             center: [-263.67, 4729.01, 137.92],
             length: 0.4,
             width: 1.45,
@@ -104,7 +107,7 @@ export const Halloween2022Scenario4: Story = {
             name: 'aliens',
             part: 6,
             label: 'Inspecter',
-            icon: 'fas fa-search',
+            icon: 'global/search',
             center: [2328.64, 2571.04, 46.71],
             length: 5.6,
             width: 3.0,

@@ -1,7 +1,9 @@
 import { Inject, Injectable } from '@core/decorators/injectable';
 import { ClientEvent } from '@public/shared/event';
+import { GyroModel, VehicleWithSirens } from '@public/shared/job/police';
 import { Vector4 } from '@public/shared/polyzone/vector';
 import { getDefaultVehicleConfiguration, VehicleConfiguration } from '@public/shared/vehicle/modification';
+import { getDefaultRadioState, Radio } from '@public/shared/voip';
 
 import {
     getDefaultVehicleCondition,
@@ -11,6 +13,8 @@ import {
     VehicleSyncStrategy,
     VehicleVolatileState,
 } from '../../shared/vehicle/vehicle';
+import { VehicleRepository } from '../repository/vehicle.repository';
+import { VehicleSirenRepository } from '../repository/vehicle.siren.repository';
 import { VehicleTowProvider } from './vehicle.tow.provider';
 
 type VehicleState = {
@@ -35,12 +39,20 @@ const VehicleConditionSyncStrategy: Record<keyof VehicleCondition, VehicleSyncSt
     tireBurstCompletely: VehicleSyncStrategy.None,
     tireTemporaryRepairDistance: VehicleSyncStrategy.None,
     mileage: VehicleSyncStrategy.None,
+    nitro: VehicleSyncStrategy.Copilot,
+    nitroRemaining: VehicleSyncStrategy.None,
 };
 
 @Injectable()
 export class VehicleStateService {
     @Inject(VehicleTowProvider)
     private vehicleTowProvider: VehicleTowProvider;
+
+    @Inject(VehicleSirenRepository)
+    private vehicleSirenRepository: VehicleSirenRepository;
+
+    @Inject(VehicleRepository)
+    private vehicleRepository: VehicleRepository;
 
     private state: Map<number, VehicleState> = new Map<number, VehicleState>();
 
@@ -54,6 +66,8 @@ export class VehicleStateService {
 
     private vehicleDrugTrace: Map<string, string[]> = new Map<string, string[]>();
 
+    private vehicleRadio: Map<string, Radio> = new Map<string, Radio>();
+
     public getVehicleState(vehicleNetworkId: number): Readonly<VehicleState> {
         if (this.state.has(vehicleNetworkId)) {
             return this.state.get(vehicleNetworkId);
@@ -61,7 +75,7 @@ export class VehicleStateService {
 
         return {
             volatile: getDefaultVehicleVolatileState(),
-            condition: getDefaultVehicleCondition(),
+            condition: getDefaultVehicleCondition(null),
             configuration: getDefaultVehicleConfiguration(),
             owner: null,
             position: null,
@@ -89,6 +103,10 @@ export class VehicleStateService {
         }
     }
 
+    public getVehicleRadio(plate: string): Radio {
+        return this.vehicleRadio.get(plate) || getDefaultRadioState();
+    }
+
     public getStates(): Readonly<Map<number, VehicleState>> {
         return this.state;
     }
@@ -109,6 +127,16 @@ export class VehicleStateService {
 
         const state = this.state.get(vehicleNetworkId);
         state.configuration = configuration;
+
+        const owner = NetworkGetEntityOwner(NetworkGetEntityFromNetworkId(vehicleNetworkId));
+        TriggerClientEvent(
+            ClientEvent.VEHICLE_CONDITION_REGISTER,
+            owner,
+            vehicleNetworkId,
+            state.condition,
+            state.configuration,
+            false
+        );
     }
 
     public updateVehicleVolatileState(
@@ -128,7 +156,7 @@ export class VehicleStateService {
             previousState.volatile.plate = GetVehicleNumberPlateText(entityId).trim();
         }
 
-        const newState = {
+        const newState: VehicleState = {
             volatile: {
                 ...previousState.volatile,
                 ...state,
@@ -147,6 +175,25 @@ export class VehicleStateService {
 
         if (newState.volatile.lastDrugTrace) {
             this.vehicleDrugTrace.set(newState.volatile.plate, newState.volatile.lastDrugTrace);
+        }
+
+        if (newState.volatile.primaryRadio || newState.volatile.secondaryRadio) {
+            this.vehicleRadio.set(newState.volatile.plate, {
+                enabled: newState.volatile.radioEnabled,
+                primary: newState.volatile.primaryRadio,
+                secondary: newState.volatile.secondaryRadio,
+            });
+        }
+
+        this.vehicleSirenRepository.set(
+            vehicleNetworkId,
+            VehicleWithSirens[GetEntityModel(entityId)]
+                ? !newState.volatile.isSirenMuted
+                : !newState.volatile.isSirenMuted && !!newState.volatile.gyro
+        );
+        if (newState.volatile.gyro) {
+            const entity = NetworkGetEntityFromNetworkId(newState.volatile.gyro);
+            SetEntityOrphanMode(entity, 2);
         }
 
         const owner = NetworkGetEntityOwner(entityId);
@@ -188,7 +235,7 @@ export class VehicleStateService {
     ): VehicleCondition {
         const previousState = this.getVehicleState(vehicleNetworkId);
 
-        const newState = {
+        const newState: VehicleState = {
             volatile: previousState.volatile,
             condition: {
                 ...previousState.condition,
@@ -272,6 +319,7 @@ export class VehicleStateService {
             position,
         });
 
+        SetEntityOrphanMode(NetworkGetEntityFromNetworkId(netId), 2);
         TriggerClientEvent(ClientEvent.VEHICLE_CONDITION_REGISTER, owner, netId, condition, configuration, false);
     }
 
@@ -304,7 +352,6 @@ export class VehicleStateService {
     }
 
     public unregister(netId: number) {
-        this.state.delete(netId);
         TriggerClientEvent(ClientEvent.VEHICLE_DELETE_STATE, -1, netId);
         TriggerClientEvent(ClientEvent.VEHICLE_CONDITION_UNREGISTER, -1, netId);
 
@@ -313,7 +360,10 @@ export class VehicleStateService {
             TriggerClientEvent(ClientEvent.VEHICLE_SET_OPEN_LIST, -1, [...this.vehicleOpened]);
         }
 
+        this.deleteGyro(netId);
+
         this.vehicleTowProvider.unregister(netId);
+        this.state.delete(netId);
     }
 
     public hasVehicleKey(vehiclePlate: string, citizenId: string): boolean {
@@ -379,5 +429,23 @@ export class VehicleStateService {
 
     public getDrugTrace(plate: string) {
         return this.vehicleDrugTrace.get(plate) || [];
+    }
+
+    public deleteGyro(netId: number) {
+        this.vehicleSirenRepository.delete(netId);
+        const state = this.getVehicleState(netId);
+        if (!state) {
+            return;
+        }
+
+        const gyro = state.volatile.gyro;
+        if (gyro) {
+            const entity = NetworkGetEntityFromNetworkId(state.volatile.gyro);
+            if (GetEntityModel(entity) !== GetHashKey(GyroModel)) {
+                return;
+            }
+
+            DeleteEntity(entity);
+        }
     }
 }

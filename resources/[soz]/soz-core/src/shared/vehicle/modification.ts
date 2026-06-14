@@ -1,4 +1,7 @@
+import { VehicleBusinessUpgradeCoefs } from '@private/shared/business.vehicle';
+
 import { RGBColor } from '../color';
+import { LSCustomMode } from './vehicle';
 
 export enum VehiclePaintType {
     Normal,
@@ -7,6 +10,7 @@ export enum VehiclePaintType {
     Matte,
     Metal,
     Chrome,
+    Cameleon,
 }
 
 export enum VehicleColor {
@@ -168,6 +172,89 @@ export enum VehicleColor {
     EpsilonBlue,
     PureGold,
     BrushedGold,
+    SecretGold,
+    ANOD_RED,
+    ANOD_WINE,
+    ANOD_PURPLE,
+    ANOD_BLUE,
+    ANOD_GREEN,
+    ANOD_LIME,
+    ANOD_COPPER,
+    ANOD_BRONZE,
+    ANOD_CHAMPAGNE,
+    ANOD_GOLD,
+    GREEN_BLUE_FLIP,
+    GREEN_RED_FLIP,
+    GREEN_BROW_FLIP,
+    GREEN_TURQ_FLIP,
+    GREEN_PURP_FLIP,
+    TEAL_PURP_FLIP,
+    TURQ_RED_FLIP,
+    TURQ_PURP_FLIP,
+    CYAN_PURP_FLIP,
+    BLUE_PINK_FLIP,
+    BLUE_GREEN_FLIP,
+    PURP_RED_FLIP,
+    PURP_GREEN_FLIP,
+    MAGEN_GREE_FLIP,
+    MAGEN_YELL_FLIP,
+    BURG_GREEN_FLIP,
+    MAGEN_CYAN_FLIP,
+    COPPE_PURP_FLIP,
+    MAGEN_ORAN_FLIP,
+    RED_ORANGE_FLIP,
+    ORANG_PURP_FLIP,
+    ORANG_BLUE_FLIP,
+    WHITE_PURP_FLIP,
+    RED_RAINBO_FLIP,
+    BLU_RAINBO_FLIP,
+    DARKGREENPEARL,
+    DARKTEALPEARL,
+    DARKBLUEPEARL,
+    DARKPURPLEPEARL,
+    OIL_SLICK_PEARL,
+    LIT_GREEN_PEARL,
+    LIT_BLUE_PEARL,
+    LIT_PURP_PEARL,
+    LIT_PINK_PEARL,
+    OFFWHITE_PRISMA,
+    PINK_PEARL,
+    YELLOW_PEARL,
+    GREEN_PEARL,
+    BLUE_PEARL,
+    CREAM_PEARL,
+    WHITE_PRISMA,
+    GRAPHITE_PRISMA,
+    DARKBLUEPRISMA,
+    DARKPURPPRISMA,
+    HOT_PINK_PRISMA,
+    RED_PRISMA,
+    GREEN_PRISMA,
+    BLACK_PRISMA,
+    OIL_SLIC_PRISMA,
+    RAINBOW_PRISMA,
+    BLACK_HOLO,
+    WHITE_HOLO,
+    YKTA_MONOCHROME,
+    YKTA_NITE_DAY,
+    YKTA_VERLIERER2,
+    YKTA_SPRUNK_EX,
+    YKTA_VICE_CITY,
+    YKTA_SYNTHWAVE,
+    YKTA_FOUR_SEASO,
+    YKTA_M9_THROWBA,
+    YKTA_BUBBLEGUM,
+    YKTA_FULL_RBOW,
+    YKTA_SUNSETS,
+    YKTA_THE_SEVEN,
+    YKTA_KAMENRIDER,
+    YKTA_CHROMABERA,
+    YKTA_CHRISTMAS,
+    YKTA_TEMPERATUR,
+    YKTA_HSW,
+    YKTA_ELECTRO,
+    YKTA_MONIKA,
+    YKTA_FUBUKI,
 }
 
 export enum VehicleXenonColor {
@@ -241,8 +328,11 @@ export enum VehicleWheelType {
     Tuner,
     BikeWheels,
     HighEnd,
-    BennysOriginals,
+    BennysOriginal,
     BennysBespoke,
+    OpenWheel,
+    Street,
+    Track,
 }
 
 export type VehicleNeon = {
@@ -298,6 +388,196 @@ export type VehicleModification = {
     windowsSecondary?: number;
 };
 
+export enum VehicleHandlingType {
+    fInitialDriveForce = 'fInitialDriveForce',
+    fDriveInertia = 'fDriveInertia',
+    fInitialDriveMaxFlatVel = 'fInitialDriveMaxFlatVel',
+    fClutchChangeRateScaleUpShift = 'fClutchChangeRateScaleUpShift',
+    fClutchChangeRateScaleDownShift = 'fClutchChangeRateScaleDownShift',
+    fBrakeForce = 'fBrakeForce',
+    fBrakeBiasFront = 'fBrakeBiasFront',
+    fHandBrakeForce = 'fHandBrakeForce',
+    fTractionCurveMax = 'fTractionCurveMax',
+    fTractionCurveMin = 'fTractionCurveMin',
+    fTractionCurveLateral = 'fTractionCurveLateral',
+    fTractionBiasFront = 'fTractionBiasFront',
+    fTractionLossMult = 'fTractionLossMult',
+    fLowSpeedTractionLossMult = 'fLowSpeedTractionLossMult',
+    fSteeringLock = 'fSteeringLock',
+    fSuspensionForce = 'fSuspensionForce',
+    fSuspensionCompDamp = 'fSuspensionCompDamp',
+    fSuspensionReboundDamp = 'fSuspensionReboundDamp',
+    fSuspensionUpperLimit = 'fSuspensionUpperLimit',
+    fSuspensionLowerLimit = 'fSuspensionLowerLimit',
+    fSuspensionRaise = 'fSuspensionRaise',
+    fSuspensionBiasFront = 'fSuspensionBiasFront',
+}
+
+export const modificationTabs = [
+    {
+        id: 'brakes',
+        title: 'Freinage',
+        description: 'Réglage des paramètres liés au freinage du véhicle.',
+        handlings: [
+            {
+                type: VehicleHandlingType.fBrakeBiasFront,
+                label: 'Répartition du freinage',
+                description:
+                    "Une valeur comprise entre 0,01 et 0,49 signifie que l'essieu arrière recevra plus d'effort de freinage que l'avant et une valeur comprise entre 0,051 et 0,99 signifie que les essieux avant recevront plus de force de freinage que l'arrière.",
+            },
+            {
+                type: VehicleHandlingType.fBrakeForce,
+                label: 'Force de freinage',
+                description: 'Multiplie le calcul de la décélération du jeu. Nombre plus grand - freinage plus dur',
+            },
+            {
+                type: VehicleHandlingType.fHandBrakeForce,
+                label: 'Frein à main',
+                description: "Permet d'augmenter ou de diminuer la puissance du frein à main.",
+            },
+        ],
+    },
+    {
+        id: 'clutch',
+        title: 'Embrayage',
+        description: "Réglage des paramètres de l'embryage",
+        handlings: [
+            {
+                type: VehicleHandlingType.fClutchChangeRateScaleDownShift,
+                label: 'Réactivité du passage de vitesse inférieur',
+                description:
+                    'Réglage du coefficient de réactivité du passage au rapport inférieur, plus le coefficient est élevé, plus les rapports passeront rapidement.',
+            },
+            {
+                type: VehicleHandlingType.fClutchChangeRateScaleUpShift,
+                label: 'Réactivité du passage de vitesse supérieur',
+                description:
+                    'Réglage du coefficient de réactivité du passage au rapport supérieur, plus le coefficient est élevé, plus les rapports passeront rapidement.',
+            },
+        ],
+    },
+    {
+        id: 'engine',
+        title: 'Moteur',
+        description: 'Réglage des paramètres liés au compartiment moteur',
+        handlings: [
+            {
+                type: VehicleHandlingType.fInitialDriveForce,
+                label: 'Couple',
+                description:
+                    'Réglage du coefficient de couple du véhicule. Plus la valeur est haute, plus la puissance transmise aux roues est élevée.',
+            },
+            {
+                type: VehicleHandlingType.fDriveInertia,
+                label: 'Rupteur',
+                description: 'Réglage du coefficient concernant le réglage du rupteur et des tours par minute maximum.',
+            },
+            {
+                type: VehicleHandlingType.fInitialDriveMaxFlatVel,
+                label: 'VMAX',
+                description: 'Réglage de la vitesse maximale théorique autorisée par le système du véhicule.',
+            },
+        ],
+    },
+    {
+        id: 'grip',
+        title: 'Adhérence',
+        description: "Réglage des paramètres d'adhérence",
+        handlings: [
+            {
+                type: VehicleHandlingType.fTractionCurveMin,
+                label: "Coefficient d'adhérence minimal",
+                description:
+                    "Coefficient d'adhérence en glissement pour le virage et l'accélération. Cela décrit l'état d'adhérence après une perte de traction, par exemple, des pneus qui patinent, du survirage ou du sous-virage.",
+            },
+            {
+                type: VehicleHandlingType.fTractionCurveMax,
+                label: "Coefficient d'adhérence maximal",
+                description:
+                    "Coefficient maximal d'adhérence en virage et en accélération. Cela représente l'état d'adhérence maximale avant le début de toute perte de traction.",
+            },
+            {
+                type: VehicleHandlingType.fTractionCurveLateral,
+                label: "Coefficient d'adhérence latéral",
+                description:
+                    "Abaisser cette valeur rend la réaction de l'adhérence du véhicule plus immédiate, toutefois elle sera moins tolérante en cas de perte de traction. À l'inverse, augmenter cette valeur rend l'adhérence moins prompte, mais permet une meilleure tolérance face à la perte de traction. Ce phénomène est aussi appelé 'angle de glissement'.",
+            },
+            {
+                type: VehicleHandlingType.fTractionBiasFront,
+                label: 'Répartition de traction',
+                description:
+                    "De 0,01 à 0,99. Un réglage à 0,01 signifie que seule l'adhérence sur l'essieu arrière est active, tandis qu'un réglage à 0,99 indique que l'adhérence est principalement sur l'essieu avant. Il est possible d'ajuster ce paramètre pour modifier la répartition de l'adhérence, par exemple, à 0,25 pour 25% sur l'essieu arrière et 0,75 pour 75% sur l'essieu avant.",
+            },
+            {
+                type: VehicleHandlingType.fTractionLossMult,
+                label: "Coefficient de perte d'adhérence tout terrain",
+                description: 'Force du freinage',
+            },
+        ],
+    },
+    {
+        id: 'steering',
+        title: 'Direction',
+        description: 'Réglage de direction',
+        handlings: [
+            {
+                type: VehicleHandlingType.fSteeringLock,
+                label: 'Angle de braquage maximal',
+                description: '',
+            },
+        ],
+    },
+    {
+        id: 'suspensions',
+        title: 'Suspensions',
+        description: 'Réglage des suspensions',
+        handlings: [
+            {
+                type: VehicleHandlingType.fSuspensionBiasFront,
+                label: "Répartition d'amortissement",
+                description:
+                    "Ce paramètre permet de choisir quelle suspension, avant ou arrière, sera la plus rigide. Si la valeur est au-dessus de 0,50, cela signifie que la suspension avant est réglée pour être plus dure. Si elle est en dessous, c'est la suspension arrière qui est rendue plus rigide.",
+            },
+            {
+                type: VehicleHandlingType.fSuspensionCompDamp,
+                label: 'Compression',
+                description:
+                    'Amortissement lors de la compression du ressort. Plus la valeur est élevée, plus le ressort est rigide.',
+            },
+            {
+                type: VehicleHandlingType.fSuspensionForce,
+                label: 'Rigidité',
+                description:
+                    'Influe sur la rigidité de la suspension. Peut être utile si la voiture a tendance à se renverser facilement lors des virages.',
+            },
+            {
+                type: VehicleHandlingType.fSuspensionLowerLimit,
+                label: 'Expansion maximale',
+                description: 'Expansion maximale des suspensions',
+            },
+            {
+                type: VehicleHandlingType.fSuspensionUpperLimit,
+                label: 'Compression maximale',
+                description: 'Compression maximale des suspensions',
+            },
+            {
+                type: VehicleHandlingType.fSuspensionReboundDamp,
+                label: 'Rebond',
+                description:
+                    'Amortissement lors du rebond du ressort. Plus la valeur est grande, plus le ressort est rigide',
+            },
+            {
+                type: VehicleHandlingType.fSuspensionRaise,
+                label: 'Hauteur de voie',
+                description:
+                    "La hauteur à laquelle la suspension soulève la carrosserie au-dessus des roues. Il est recommandé d'ajuster au deuxième chiffre après la virgule, sauf si le véhicule dispose d'espace pour bouger.",
+            },
+        ],
+    },
+];
+
+export type VehicleHandling = Partial<Record<VehicleHandlingType, number>>;
+
 export type VehicleConfiguration = {
     color?: VehicleBodyColor;
     dashboardColor?: VehicleColor;
@@ -310,11 +590,13 @@ export type VehicleConfiguration = {
     windowTint?: VehicleWindowTint;
     xenonColor?: VehicleXenonColor;
     livery?: number;
-    // extras: Record<number, boolean>; // Temporary disables
     customWheelFront?: boolean;
     customWheelRear?: boolean;
     modification: VehicleModification;
     extra?: Record<number, boolean>;
+    manualGearbox?: boolean;
+    handling?: VehicleHandling;
+    extraStorage?: boolean;
 };
 
 export enum VehicleModType {
@@ -382,8 +664,13 @@ export type VehicleLsCustomCategory = {
 
 export type VehicleLsCustom = Partial<Record<keyof VehicleConfiguration, VehicleLsCustomCategory>>;
 
-type VehicleLsCustomBaseConfigItem = {
+export type VehicleLsCustomBaseConfigItem = {
     priceByLevels: number[];
+    type: 'list' | 'toggle';
+};
+
+export type VehicleLsCustomBaseCrimiConfigItem = {
+    priceByLevels: string[];
     type: 'list' | 'toggle';
 };
 
@@ -398,6 +685,7 @@ export enum VehicleColorCategory {
     Pearly = 'pearly',
     Matte = 'matte',
     Metal = 'metal',
+    Cameleon = 'cameleon',
 }
 
 export type VehicleColorChoiceItem = {
@@ -1221,6 +1509,421 @@ export const VehicleColorChoices: Record<VehicleColor, VehicleColorChoiceItem> =
         color: [127, 106, 72],
         category: VehicleColorCategory.Metal,
     },
+    [VehicleColor.SecretGold]: {
+        label: 'Secret Gold',
+        color: [127, 106, 72],
+        category: VehicleColorCategory.Metal,
+    },
+    [VehicleColor.ANOD_RED]: {
+        label: 'Anodisé Rouge',
+        color: [255, 0, 0],
+        category: VehicleColorCategory.Cameleon,
+    },
+    [VehicleColor.ANOD_WINE]: {
+        label: 'Anodisé Vin',
+        color: [153, 0, 51],
+        category: VehicleColorCategory.Cameleon,
+    },
+    [VehicleColor.ANOD_PURPLE]: {
+        label: 'Anodisé Violet',
+        color: [153, 0, 204],
+        category: VehicleColorCategory.Cameleon,
+    },
+    [VehicleColor.ANOD_BLUE]: {
+        label: 'Anodisé Bleu',
+        color: [51, 51, 255],
+        category: VehicleColorCategory.Cameleon,
+    },
+    [VehicleColor.ANOD_GREEN]: {
+        label: 'Anodisé Vert',
+        color: [77, 255, 77],
+        category: VehicleColorCategory.Cameleon,
+    },
+    [VehicleColor.ANOD_LIME]: {
+        label: 'Anodisé Vert Citron',
+        color: [102, 255, 179],
+        category: VehicleColorCategory.Cameleon,
+    },
+    [VehicleColor.ANOD_COPPER]: {
+        label: 'Anodisé Cuivre',
+        color: [102, 51, 0],
+        category: VehicleColorCategory.Cameleon,
+    },
+    [VehicleColor.ANOD_BRONZE]: {
+        label: 'Anodisé Bronze',
+        color: [153, 51, 0],
+        category: VehicleColorCategory.Cameleon,
+    },
+    [VehicleColor.ANOD_CHAMPAGNE]: {
+        label: 'Anodisé Champagne',
+        color: [153, 153, 102],
+        category: VehicleColorCategory.Cameleon,
+    },
+    [VehicleColor.ANOD_GOLD]: {
+        label: 'Anodisé Or',
+        color: [204, 153, 0],
+        category: VehicleColorCategory.Cameleon,
+    },
+    [VehicleColor.GREEN_BLUE_FLIP]: {
+        label: 'Inversé Vert/Bleu',
+        color: [51, 204, 204],
+        category: VehicleColorCategory.Cameleon,
+    },
+    [VehicleColor.GREEN_RED_FLIP]: {
+        label: 'Inversé Vert/Rouge',
+        color: [0, 153, 0],
+        category: VehicleColorCategory.Cameleon,
+    },
+    [VehicleColor.GREEN_BROW_FLIP]: {
+        label: 'Inversé Vert/Marron',
+        color: [0, 153, 0],
+        category: VehicleColorCategory.Cameleon,
+    },
+    [VehicleColor.GREEN_TURQ_FLIP]: {
+        label: 'Inversé Vert/Turquoise',
+        color: [0, 153, 0],
+        category: VehicleColorCategory.Cameleon,
+    },
+    [VehicleColor.GREEN_PURP_FLIP]: {
+        label: 'Inversé Vert/Violet',
+        color: [0, 153, 0],
+        category: VehicleColorCategory.Cameleon,
+    },
+    [VehicleColor.TEAL_PURP_FLIP]: {
+        label: 'Inversé Sarcelle/Violet',
+        color: [0, 153, 153],
+        category: VehicleColorCategory.Cameleon,
+    },
+    [VehicleColor.TURQ_RED_FLIP]: {
+        label: 'Inversé Turquoise/Rouge',
+        color: [255, 0, 102],
+        category: VehicleColorCategory.Cameleon,
+    },
+    [VehicleColor.TURQ_PURP_FLIP]: {
+        label: 'Inversé Turquoise/Violet',
+        color: [204, 51, 153],
+        category: VehicleColorCategory.Cameleon,
+    },
+    [VehicleColor.CYAN_PURP_FLIP]: {
+        label: 'Inversé Cyan/Violet',
+        color: [153, 51, 255],
+        category: VehicleColorCategory.Cameleon,
+    },
+    [VehicleColor.BLUE_PINK_FLIP]: {
+        label: 'Inversé Bleu/Rose',
+        color: [204, 153, 255],
+        category: VehicleColorCategory.Cameleon,
+    },
+    [VehicleColor.BLUE_GREEN_FLIP]: {
+        label: 'Inversé Bleu/Vert',
+        color: [0, 153, 153],
+        category: VehicleColorCategory.Cameleon,
+    },
+    [VehicleColor.PURP_RED_FLIP]: {
+        label: 'Inversé Violet/Rouge',
+        color: [204, 0, 102],
+        category: VehicleColorCategory.Cameleon,
+    },
+    [VehicleColor.PURP_GREEN_FLIP]: {
+        label: 'Inversé Violet/Vert',
+        color: [255, 102, 255],
+        category: VehicleColorCategory.Cameleon,
+    },
+    [VehicleColor.MAGEN_GREE_FLIP]: {
+        label: 'Inversé Magenta/Vert',
+        color: [204, 0, 102],
+        category: VehicleColorCategory.Cameleon,
+    },
+    [VehicleColor.MAGEN_YELL_FLIP]: {
+        label: 'Inversé Magenta/Jaune',
+        color: [255, 102, 102],
+        category: VehicleColorCategory.Cameleon,
+    },
+    [VehicleColor.BURG_GREEN_FLIP]: {
+        label: 'Inversé Bordeaux/Vert',
+        color: [128, 0, 0],
+        category: VehicleColorCategory.Cameleon,
+    },
+    [VehicleColor.MAGEN_CYAN_FLIP]: {
+        label: 'Inversé Bordeaux/Cyan',
+        color: [102, 0, 51],
+        category: VehicleColorCategory.Cameleon,
+    },
+    [VehicleColor.COPPE_PURP_FLIP]: {
+        label: 'Inversé Cuivre/Violet',
+        color: [102, 51, 0],
+        category: VehicleColorCategory.Cameleon,
+    },
+    [VehicleColor.MAGEN_ORAN_FLIP]: {
+        label: 'Inversé Magenta/Orange',
+        color: [255, 153, 0],
+        category: VehicleColorCategory.Cameleon,
+    },
+    [VehicleColor.RED_ORANGE_FLIP]: {
+        label: 'Inversé Rouge/Orange',
+        color: [255, 153, 51],
+        category: VehicleColorCategory.Cameleon,
+    },
+    [VehicleColor.ORANG_PURP_FLIP]: {
+        label: 'Inversé Orange/Violet',
+        color: [0, 0, 0],
+        category: VehicleColorCategory.Cameleon,
+    },
+    [VehicleColor.ORANG_BLUE_FLIP]: {
+        label: 'Inversé Orange/Bleu',
+        color: [255, 102, 0],
+        category: VehicleColorCategory.Cameleon,
+    },
+    [VehicleColor.WHITE_PURP_FLIP]: {
+        label: 'Inversé Blanc/Violet',
+        color: [255, 0, 255],
+        category: VehicleColorCategory.Cameleon,
+    },
+    [VehicleColor.RED_RAINBO_FLIP]: {
+        label: 'Inversé Rouge/Arc-en-ciel',
+        color: [255, 0, 0],
+        category: VehicleColorCategory.Cameleon,
+    },
+    [VehicleColor.BLU_RAINBO_FLIP]: {
+        label: 'Inversé Bleu/Arc-en-ciel',
+        color: [0, 0, 204],
+        category: VehicleColorCategory.Cameleon,
+    },
+    [VehicleColor.DARKGREENPEARL]: {
+        label: 'Perlé Vert Sombre',
+        color: [0, 51, 0],
+        category: VehicleColorCategory.Cameleon,
+    },
+    [VehicleColor.DARKTEALPEARL]: {
+        label: 'Perlé Sarcelle Sombre',
+        color: [0, 102, 102],
+        category: VehicleColorCategory.Cameleon,
+    },
+    [VehicleColor.DARKBLUEPEARL]: {
+        label: 'Perlé Bleu Sombre',
+        color: [0, 51, 153],
+        category: VehicleColorCategory.Cameleon,
+    },
+    [VehicleColor.DARKPURPLEPEARL]: {
+        label: 'Perlé Violet Sombre',
+        color: [102, 0, 102],
+        category: VehicleColorCategory.Cameleon,
+    },
+    [VehicleColor.OIL_SLICK_PEARL]: {
+        label: 'Perlé Huile',
+        color: [102, 153, 153],
+        category: VehicleColorCategory.Cameleon,
+    },
+    [VehicleColor.LIT_GREEN_PEARL]: {
+        label: 'Perlé Vert Clair',
+        color: [0, 255, 153],
+        category: VehicleColorCategory.Cameleon,
+    },
+    [VehicleColor.LIT_BLUE_PEARL]: {
+        label: 'Perlé Bleu Clair',
+        color: [51, 204, 255],
+        category: VehicleColorCategory.Cameleon,
+    },
+    [VehicleColor.LIT_PURP_PEARL]: {
+        label: 'Perlé Violet Clair',
+        color: [204, 102, 153],
+        category: VehicleColorCategory.Cameleon,
+    },
+    [VehicleColor.LIT_PINK_PEARL]: {
+        label: 'Perlé Rose Clair',
+        color: [255, 102, 255],
+        category: VehicleColorCategory.Cameleon,
+    },
+    [VehicleColor.OFFWHITE_PRISMA]: {
+        label: 'Prisma. Blanc Pâle',
+        color: [255, 255, 204],
+        category: VehicleColorCategory.Cameleon,
+    },
+    [VehicleColor.PINK_PEARL]: {
+        label: 'Perlé Rose',
+        color: [255, 102, 255],
+        category: VehicleColorCategory.Cameleon,
+    },
+    [VehicleColor.YELLOW_PEARL]: {
+        label: 'Perlé Jaune',
+        color: [255, 255, 102],
+        category: VehicleColorCategory.Cameleon,
+    },
+    [VehicleColor.GREEN_PEARL]: {
+        label: 'Perlé Vert',
+        color: [0, 204, 0],
+        category: VehicleColorCategory.Cameleon,
+    },
+    [VehicleColor.BLUE_PEARL]: {
+        label: 'Perlé Bleu',
+        color: [0, 102, 204],
+        category: VehicleColorCategory.Cameleon,
+    },
+    [VehicleColor.CREAM_PEARL]: {
+        label: 'Perlé Crème',
+        color: [255, 255, 204],
+        category: VehicleColorCategory.Cameleon,
+    },
+    [VehicleColor.WHITE_PRISMA]: {
+        label: 'Prisma. Blanc',
+        color: [255, 255, 255],
+        category: VehicleColorCategory.Cameleon,
+    },
+    [VehicleColor.GRAPHITE_PRISMA]: {
+        label: 'Prisma. Graphite',
+        color: [153, 153, 102],
+        category: VehicleColorCategory.Cameleon,
+    },
+    [VehicleColor.DARKBLUEPRISMA]: {
+        label: 'Prisma. Bleu Foncé',
+        color: [0, 0, 153],
+        category: VehicleColorCategory.Cameleon,
+    },
+    [VehicleColor.DARKPURPPRISMA]: {
+        label: 'Prisma. Violet Foncé',
+        color: [102, 0, 204],
+        category: VehicleColorCategory.Cameleon,
+    },
+    [VehicleColor.HOT_PINK_PRISMA]: {
+        label: 'Prisma. Rose Eclatant',
+        color: [255, 153, 255],
+        category: VehicleColorCategory.Cameleon,
+    },
+    [VehicleColor.RED_PRISMA]: {
+        label: 'Prisma. Rouge',
+        color: [255, 0, 0],
+        category: VehicleColorCategory.Cameleon,
+    },
+    [VehicleColor.GREEN_PRISMA]: {
+        label: 'Prisma. Vert',
+        color: [51, 204, 51],
+        category: VehicleColorCategory.Cameleon,
+    },
+    [VehicleColor.BLACK_PRISMA]: {
+        label: 'Prisma. Noir',
+        color: [0, 0, 0],
+        category: VehicleColorCategory.Cameleon,
+    },
+    [VehicleColor.OIL_SLIC_PRISMA]: {
+        label: 'Prisma. Huile',
+        color: [153, 153, 102],
+        category: VehicleColorCategory.Cameleon,
+    },
+    [VehicleColor.RAINBOW_PRISMA]: {
+        label: 'Prisma. Arc-en-Ciel',
+        color: [255, 255, 255],
+        category: VehicleColorCategory.Cameleon,
+    },
+    [VehicleColor.BLACK_HOLO]: {
+        label: 'Holo. Noir',
+        color: [0, 0, 0],
+        category: VehicleColorCategory.Cameleon,
+    },
+    [VehicleColor.WHITE_HOLO]: {
+        label: 'Holo. Blanc',
+        color: [255, 255, 255],
+        category: VehicleColorCategory.Cameleon,
+    },
+    [VehicleColor.YKTA_MONOCHROME]: {
+        label: 'YKTA MonoChrome',
+        color: [102, 102, 153],
+        category: VehicleColorCategory.Cameleon,
+    },
+    [VehicleColor.YKTA_NITE_DAY]: {
+        label: 'YKTA Nuit/Jour',
+        color: [102, 0, 255],
+        category: VehicleColorCategory.Cameleon,
+    },
+    [VehicleColor.YKTA_VERLIERER2]: {
+        label: 'YKTA Verlierer',
+        color: [51, 51, 153],
+        category: VehicleColorCategory.Cameleon,
+    },
+    [VehicleColor.YKTA_SPRUNK_EX]: {
+        label: 'YKTA Sprunk',
+        color: [0, 204, 102],
+        category: VehicleColorCategory.Cameleon,
+    },
+    [VehicleColor.YKTA_VICE_CITY]: {
+        label: 'YKTA Vice City',
+        color: [255, 153, 255],
+        category: VehicleColorCategory.Cameleon,
+    },
+    [VehicleColor.YKTA_SYNTHWAVE]: {
+        label: 'YKTA Synth Wave',
+        color: [255, 102, 153],
+        category: VehicleColorCategory.Cameleon,
+    },
+    [VehicleColor.YKTA_FOUR_SEASO]: {
+        label: 'YKTA 4 Saisons',
+        color: [255, 255, 153],
+        category: VehicleColorCategory.Cameleon,
+    },
+    [VehicleColor.YKTA_M9_THROWBA]: {
+        label: 'YKTA M9',
+        color: [255, 0, 255],
+        category: VehicleColorCategory.Cameleon,
+    },
+    [VehicleColor.YKTA_BUBBLEGUM]: {
+        label: 'YKTA BubbleGum',
+        color: [255, 153, 255],
+        category: VehicleColorCategory.Cameleon,
+    },
+    [VehicleColor.YKTA_FULL_RBOW]: {
+        label: 'YKTA Arc-en-Ciel',
+        color: [0, 255, 204],
+        category: VehicleColorCategory.Cameleon,
+    },
+    [VehicleColor.YKTA_SUNSETS]: {
+        label: 'YKTA Sunset',
+        color: [153, 0, 255],
+        category: VehicleColorCategory.Cameleon,
+    },
+    [VehicleColor.YKTA_THE_SEVEN]: {
+        label: 'YKTA Les 7',
+        color: [255, 255, 204],
+        category: VehicleColorCategory.Cameleon,
+    },
+    [VehicleColor.YKTA_KAMENRIDER]: {
+        label: 'YKTA KamenRider',
+        color: [204, 51, 255],
+        category: VehicleColorCategory.Cameleon,
+    },
+    [VehicleColor.YKTA_CHROMABERA]: {
+        label: 'YKTA Chromatique',
+        color: [0, 255, 255],
+        category: VehicleColorCategory.Cameleon,
+    },
+    [VehicleColor.YKTA_CHRISTMAS]: {
+        label: 'YKTA Noel',
+        color: [255, 51, 0],
+        category: VehicleColorCategory.Cameleon,
+    },
+    [VehicleColor.YKTA_TEMPERATUR]: {
+        label: 'YKTA Temperature',
+        color: [255, 0, 102],
+        category: VehicleColorCategory.Cameleon,
+    },
+    [VehicleColor.YKTA_HSW]: {
+        label: 'YKTA HSW',
+        color: [255, 255, 0],
+        category: VehicleColorCategory.Cameleon,
+    },
+    [VehicleColor.YKTA_ELECTRO]: {
+        label: 'YKTA Electro.',
+        color: [255, 204, 255],
+        category: VehicleColorCategory.Cameleon,
+    },
+    [VehicleColor.YKTA_MONIKA]: {
+        label: 'YKTA Monika',
+        color: [0, 255, 0],
+        category: VehicleColorCategory.Cameleon,
+    },
+    [VehicleColor.YKTA_FUBUKI]: {
+        label: 'YKTA Fubuki',
+        color: [204, 255, 255],
+        category: VehicleColorCategory.Cameleon,
+    },
 };
 
 export const VehicleXenonColorChoices: Record<VehicleXenonColor, VehicleColorChoiceItem> = {
@@ -1282,32 +1985,39 @@ export const VehicleXenonColorChoices: Record<VehicleXenonColor, VehicleColorCho
     },
 };
 
-export const VehicleModificationPricing: Partial<Record<keyof VehicleModification, VehicleLsCustomBaseConfigItem>> = {
+export const VehicleModificationPricing: Partial<
+    Record<keyof VehicleModification | 'manualGearBox', VehicleLsCustomBaseConfigItem>
+> = {
     engine: {
-        priceByLevels: [0.04, 0.05, 0.07, 0.1, 0.12],
+        priceByLevels: [0.04, 0.06, 0.08, 0.1, 0.12],
         type: 'list',
     },
     brakes: {
-        priceByLevels: [0.05, 0.06, 0.07, 0.08, 0.09],
+        priceByLevels: [0.03, 0.04, 0.06, 0.08, 0.1],
         type: 'list',
     },
     transmission: {
-        priceByLevels: [0.05, 0.06, 0.08, 0.09, 0.1],
+        priceByLevels: [0.03, 0.04, 0.06, 0.08, 0.1],
         type: 'list',
     },
     suspension: {
-        priceByLevels: [0.05, 0.06, 0.07, 0.09, 0.1],
+        priceByLevels: [0.02, 0.03, 0.04, 0.06, 0.1],
         type: 'list',
     },
     armor: {
-        priceByLevels: [0.04, 0.08, 0.1, 0.12, 0.16],
+        priceByLevels: [0.04, 0.06, 0.08, 0.1, 0.12],
         type: 'list',
     },
     turbo: {
-        priceByLevels: [0, 0.1],
+        priceByLevels: [0, 0.08],
+        type: 'toggle',
+    },
+    manualGearBox: {
+        priceByLevels: [0.01, 0.01],
         type: 'toggle',
     },
 };
+export const VehicleDefaultPricing = 50;
 
 export const getDefaultVehicleConfiguration = (): VehicleConfiguration => ({
     color: {
@@ -1328,39 +2038,206 @@ export const getVehicleCustomPrice = (
 ): number => {
     let price = 0;
 
-    for (const key of Object.keys(VehicleModificationPricing)) {
-        const category = VehicleModificationPricing[key];
+    for (const key of Object.keys(newModification.modification)) {
+        const category = VehicleModificationPricing[key as keyof VehicleModification];
+        if (category) {
+            if (category.type === 'list') {
+                const currentLevel = (currentModification.modification[key] as number) ?? -1;
+                const newLevel = (newModification.modification[key] as number) ?? -1;
 
-        if (category.type === 'list') {
-            const currentLevel = (currentModification.modification[key] as number) ?? -1;
-            const newLevel = (newModification.modification[key] as number) ?? -1;
+                if (currentLevel !== newLevel) {
+                    for (let subLevel = currentLevel + 1; subLevel < newLevel + 1; subLevel++) {
+                        const level = category.priceByLevels[subLevel];
 
-            if (currentLevel !== newLevel) {
-                for (let subLevel = currentLevel + 1; subLevel < newLevel + 1; subLevel++) {
-                    const level = category.priceByLevels[subLevel];
-
-                    if (level) {
-                        price = price + vehiclePrice * level;
+                        if (level) {
+                            price = price + vehiclePrice * level;
+                        }
                     }
                 }
             }
-        }
 
-        if (category.type === 'toggle') {
-            const hasCurrent = Boolean(currentModification.modification[key]);
-            const hasNew = Boolean(newModification.modification[key]);
+            if (category.type === 'toggle') {
+                const hasCurrent = Boolean(currentModification.modification[key]);
+                const hasNew = Boolean(newModification.modification[key]);
+
+                if (hasCurrent !== hasNew) {
+                    price = price + vehiclePrice * category.priceByLevels[hasNew ? 1 : 0];
+                }
+            }
+        } else {
+            const hasCurrent = currentModification.modification[key];
+            const hasNew = newModification.modification[key];
 
             if (hasCurrent !== hasNew) {
-                if (hasNew) {
-                    price = price + vehiclePrice * category.priceByLevels[1];
-                } else {
-                    price = price + vehiclePrice * category.priceByLevels[0];
+                price += VehicleDefaultPricing;
+            }
+        }
+    }
+
+    const hasCurrentManual = Boolean(currentModification.manualGearbox);
+    const hasNewManual = Boolean(newModification.manualGearbox);
+    if (hasCurrentManual !== hasNewManual) {
+        price = price + vehiclePrice * VehicleModificationPricing['manualGearBox'].priceByLevels[hasNewManual ? 1 : 0];
+    }
+
+    for (const key of Object.keys(newModification)) {
+        if (key == 'modification' || key == 'manualGearbox') {
+            continue;
+        }
+        const hasCurrent = JSON.stringify(currentModification[key]);
+        const hasNew = JSON.stringify(newModification[key]);
+
+        if (hasCurrent !== hasNew) {
+            price += VehicleDefaultPricing;
+        }
+    }
+
+    return Math.round(price);
+};
+
+export const VehicleModificationCrimiPricing: Partial<
+    Record<keyof VehicleModification | 'manualGearBox', VehicleLsCustomBaseCrimiConfigItem>
+> = {
+    engine: {
+        priceByLevels: [
+            'veh_upgrade_race_kit',
+            'veh_upgrade_pro_kit',
+            'veh_upgrade_superpro_kit',
+            'veh_upgrade_ultima_kit',
+            'veh_upgrade_nfs_kit',
+        ],
+        type: 'list',
+    },
+    brakes: {
+        priceByLevels: [
+            'veh_upgrade_race_kit',
+            'veh_upgrade_pro_kit',
+            'veh_upgrade_superpro_kit',
+            'veh_upgrade_ultima_kit',
+            'veh_upgrade_nfs_kit',
+        ],
+        type: 'list',
+    },
+    transmission: {
+        priceByLevels: [
+            'veh_upgrade_race_kit',
+            'veh_upgrade_pro_kit',
+            'veh_upgrade_superpro_kit',
+            'veh_upgrade_ultima_kit',
+            'veh_upgrade_nfs_kit',
+        ],
+        type: 'list',
+    },
+    suspension: {
+        priceByLevels: [
+            'veh_upgrade_race_kit',
+            'veh_upgrade_pro_kit',
+            'veh_upgrade_superpro_kit',
+            'veh_upgrade_ultima_kit',
+            'veh_upgrade_nfs_kit',
+        ],
+        type: 'list',
+    },
+    armor: {
+        priceByLevels: [
+            'veh_upgrade_race_kit',
+            'veh_upgrade_pro_kit',
+            'veh_upgrade_superpro_kit',
+            'veh_upgrade_ultima_kit',
+            'veh_upgrade_nfs_kit',
+        ],
+        type: 'list',
+    },
+    turbo: {
+        priceByLevels: [null, 'veh_upgrade_pro_kit'],
+        type: 'toggle',
+    },
+    manualGearBox: {
+        priceByLevels: ['veh_upgrade_race_kit', 'veh_upgrade_race_kit'],
+        type: 'toggle',
+    },
+};
+
+export const getVehicleCrimiCustomPrice = (
+    vehiclePrice: number,
+    options: VehicleUpgradeOptions,
+    currentModification: VehicleConfiguration,
+    newModification: VehicleConfiguration,
+    whatIf: boolean
+): Record<string, number> => {
+    const ret: Record<string, number> = {};
+
+    for (const key of Object.keys(newModification.modification)) {
+        const category = VehicleModificationCrimiPricing[key as keyof VehicleModification];
+        if (category) {
+            if (category.type === 'list') {
+                const currentLevel = (currentModification.modification[key] as number) ?? -1;
+                const newLevel = (newModification.modification[key] as number) ?? -1;
+
+                if (currentLevel !== newLevel) {
+                    for (let subLevel = currentLevel + 1; subLevel < newLevel + 1; subLevel++) {
+                        const item = category.priceByLevels[subLevel];
+
+                        if (item) {
+                            if (!ret[item]) {
+                                ret[item] = 0;
+                            }
+                            ret[item] = ret[item] + 1;
+                        }
+                    }
+                }
+            }
+
+            if (category.type === 'toggle') {
+                const hasCurrent = Boolean(currentModification.modification[key]);
+                const hasNew = Boolean(newModification.modification[key]);
+
+                if (hasCurrent !== hasNew) {
+                    const item = category.priceByLevels[hasNew ? 1 : 0];
+                    if (item) {
+                        if (!ret[item]) {
+                            ret[item] = 0;
+                        }
+                        ret[item] = ret[item] + 1;
+                    }
                 }
             }
         }
     }
 
-    return price;
+    const hasCurrentManual = Boolean(currentModification.manualGearbox);
+    const hasNewManual = Boolean(newModification.manualGearbox);
+    if (hasCurrentManual !== hasNewManual) {
+        const item = VehicleModificationCrimiPricing['manualGearBox'].priceByLevels[hasNewManual ? 1 : 0];
+        if (item) {
+            if (ret[item]) {
+                ret[item] = ret[item] + 1;
+            } else {
+                ret[item] = 1;
+            }
+        }
+    }
+
+    let coef = 1;
+    for (const upgradeCoef of VehicleBusinessUpgradeCoefs) {
+        if (vehiclePrice > upgradeCoef.min && upgradeCoef.coef > coef) {
+            coef = upgradeCoef.coef;
+        }
+    }
+
+    for (const [item, value] of Object.entries(ret)) {
+        ret[item] = value * coef;
+    }
+
+    if (whatIf) {
+        if (Object.values(ret).length > 0) {
+            return {
+                veh_strip_piece_std: 1,
+            };
+        }
+    }
+
+    return ret;
 };
 
 export type VehicleCustomMenuData = {
@@ -1369,7 +2246,16 @@ export type VehicleCustomMenuData = {
     options: VehicleUpgradeOptions;
     originalConfiguration: VehicleConfiguration;
     currentConfiguration: VehicleConfiguration;
-    admin: boolean;
+    mode: LSCustomMode;
+    advenced: boolean;
+};
+
+export type VehicleCustomInput = {
+    vehicleEntityId: number;
+    vehicleConfiguration: VehicleConfiguration;
+    originalConfiguration: VehicleConfiguration;
+    mode: LSCustomMode;
+    onlyPerformance: boolean;
 };
 
 export const HornLabelList: Record<number, { name: string; label: string }> = {

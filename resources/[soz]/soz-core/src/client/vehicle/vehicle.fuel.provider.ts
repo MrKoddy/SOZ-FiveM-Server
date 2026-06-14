@@ -1,4 +1,7 @@
+import { POLICE_MINESWEEPER_ROBOT_CAR_MODEL } from '@private/shared/police';
 import { OilTankerProvider } from '@public/client/job/oil/oil.tanker.provider';
+import { PlayerUpdate } from '@public/core/decorators/player';
+import { PlayerData } from '@public/shared/player';
 
 import { Once, OnceStep, OnEvent } from '../../core/decorators/event';
 import { Inject } from '../../core/decorators/injectable';
@@ -13,9 +16,9 @@ import { JobType } from '../../shared/job';
 import { Vector3 } from '../../shared/polyzone/vector';
 import { RpcServerEvent } from '../../shared/rpc';
 import {
+    getVehicleMaxFuelStorage,
     isVehicleModelElectric,
     VehicleClass,
-    VehicleClassFuelStorageMultiplier,
     VehicleCondition,
     VehicleSeat,
 } from '../../shared/vehicle/vehicle';
@@ -40,7 +43,8 @@ type CurrentStationPistol = {
     filling: boolean;
 };
 
-const MAX_LENGTH_ROPE = 15.0;
+const MAX_LENGTH_ROPE_CAR = 5.5;
+const MAX_LENGTH_ROPE = 15;
 
 const VehicleClassFuelMultiplier: Partial<Record<VehicleClass, number>> = {
     [VehicleClass.Helicopters]: 6.33,
@@ -93,7 +97,7 @@ export class VehicleFuelProvider {
     @Inject(VehicleRepository)
     private vehicleRepository: VehicleRepository;
 
-    private currentStationPistol: CurrentStationPistol | null = null;
+    public currentStationPistol: CurrentStationPistol | null = null;
 
     private publicOilStationPrice = 0;
     private publicKeroseneStationPrice = 0;
@@ -139,8 +143,9 @@ export class VehicleFuelProvider {
         this.targetFactory.createForModel(this.fuelStationRepository.getModels(), [
             {
                 label: "Remplir la station d'essence",
-                color: JobType.Oil,
-                icon: 'c:fuel/pistolet.png',
+                icon: 'fuel/pistolet',
+                job: JobType.Oil,
+                category: 'society',
                 action: entity => {
                     const station = this.fuelStationRepository.getStationForEntity(entity);
 
@@ -151,13 +156,7 @@ export class VehicleFuelProvider {
                     TriggerEvent(ClientEvent.OIL_REFILL_ESSENCE_STATION, entity, station.id);
                 },
                 canInteract: (entity: number) => {
-                    const player = this.playerService.getPlayer();
-
-                    if (!player) {
-                        return false;
-                    }
-
-                    if (!this.oilTankerProvider.currentTankerAttached || !player.job.onduty) {
+                    if (!this.oilTankerProvider.currentTankerAttached) {
                         return false;
                     }
 
@@ -169,14 +168,13 @@ export class VehicleFuelProvider {
 
                     return station.fuel === FuelType.Essence;
                 },
-                job: JobType.Oil,
                 blackoutGlobal: true,
                 blackoutJob: JobType.Oil,
             },
             {
                 label: 'Remplir la station de kérosène',
-                color: JobType.Oil,
-                icon: 'c:fuel/pistolet.png',
+                icon: 'fuel/pistolet',
+                category: 'society',
                 action: entity => {
                     const station = this.fuelStationRepository.getStationForEntity(entity);
 
@@ -187,16 +185,6 @@ export class VehicleFuelProvider {
                     TriggerEvent(ClientEvent.OIL_REFILL_KEROSENE_STATION, entity, station.id);
                 },
                 canInteract: (entity: number) => {
-                    const player = this.playerService.getPlayer();
-
-                    if (!player) {
-                        return false;
-                    }
-
-                    if (!player.job.onduty) {
-                        return false;
-                    }
-
                     const station = this.fuelStationRepository.getStationForEntity(entity);
 
                     if (!station) {
@@ -212,10 +200,11 @@ export class VehicleFuelProvider {
             },
             {
                 label: 'État de la station',
-                icon: 'c:fuel/pistolet.png',
-                event: 'fuel:client:GetFuelLevel',
+                icon: 'fuel/check',
+                category: 'society',
                 action: (entity: number) => {
                     this.getStationFuelLevel(entity);
+                    TriggerEvent('fuel:client:GetFuelLevel');
                 },
                 canInteract: (entity: number) => {
                     const player = this.playerService.getPlayer();
@@ -243,8 +232,9 @@ export class VehicleFuelProvider {
                 blackoutGlobal: true,
             },
             {
-                icon: 'c:fuel/pistolet.png',
+                icon: 'fuel/pistolet',
                 label: 'Prendre le pistolet',
+                category: 'citizen',
                 action: (entity: number) => {
                     this.toggleStationPistol(entity);
                 },
@@ -254,13 +244,11 @@ export class VehicleFuelProvider {
                     }
 
                     const player = this.playerService.getPlayer();
-
                     if (!player) {
                         return false;
                     }
 
                     const station = this.fuelStationRepository.getStationForEntity(entity);
-
                     if (!station) {
                         return false;
                     }
@@ -274,8 +262,10 @@ export class VehicleFuelProvider {
                 blackoutGlobal: true,
             },
             {
-                icon: 'c:fuel/pistolet.png',
-                label: 'Prendre le pistolet ' + '($' + this.publicOilStationPrice.toFixed(2) + '/L)',
+                icon: 'fuel/pistolet',
+                label: 'Prendre le pistolet',
+                subLabel: `$${this.publicOilStationPrice.toFixed(2)}/L`,
+                category: 'citizen',
                 action: (entity: number) => {
                     this.toggleStationPistol(entity);
                 },
@@ -285,13 +275,11 @@ export class VehicleFuelProvider {
                     }
 
                     const player = this.playerService.getPlayer();
-
                     if (!player) {
                         return false;
                     }
 
                     const station = this.fuelStationRepository.getStationForEntity(entity);
-
                     if (!station) {
                         return false;
                     }
@@ -305,8 +293,10 @@ export class VehicleFuelProvider {
                 blackoutGlobal: true,
             },
             {
-                icon: 'c:fuel/pistolet.png',
-                label: 'Prendre le pistolet ' + '($' + this.publicKeroseneStationPrice.toFixed(2) + '/L)',
+                icon: 'fuel/pistolet',
+                label: 'Prendre le pistolet',
+                subLabel: `$${this.publicKeroseneStationPrice.toFixed(2)}/L`,
+                category: 'citizen',
                 action: (entity: number) => {
                     this.toggleStationPistol(entity);
                 },
@@ -316,13 +306,11 @@ export class VehicleFuelProvider {
                     }
 
                     const player = this.playerService.getPlayer();
-
                     if (!player) {
                         return false;
                     }
 
                     const station = this.fuelStationRepository.getStationForEntity(entity);
-
                     if (!station) {
                         return false;
                     }
@@ -336,8 +324,9 @@ export class VehicleFuelProvider {
                 blackoutGlobal: true,
             },
             {
-                icon: 'c:fuel/pistolet.png',
+                icon: 'fuel/pistolet',
                 label: 'Reposer le pistolet',
+                category: 'citizen',
                 action: (entity: number) => {
                     this.toggleStationPistol(entity);
                 },
@@ -375,7 +364,8 @@ export class VehicleFuelProvider {
         this.targetFactory.createForAllVehicle([
             {
                 label: 'Remplir le véhicule',
-                icon: 'c:fuel/remplir.png',
+                icon: 'fuel/remplir',
+                category: 'citizen',
                 blackoutGlobal: true,
                 canInteract: (entity: number) => {
                     if (GetEntityHealth(entity) <= 0) {
@@ -484,10 +474,9 @@ export class VehicleFuelProvider {
         }
 
         const vehDef = this.vehicleRepository.getByModelHash(GetEntityModel(vehicle));
-        const storageMultiplier = VehicleClassFuelStorageMultiplier[vehDef?.requiredLicence] || 1.0;
         const condition = await this.vehicleStateService.getVehicleCondition(vehicle);
 
-        if (condition.fuelLevel > 99.0 * storageMultiplier) {
+        if (condition.fuelLevel > 0.99 * getVehicleMaxFuelStorage(vehDef)) {
             this.notifier.notify('Le véhicule est déjà plein.', 'error');
             await this.disableStationPistol();
 
@@ -500,36 +489,22 @@ export class VehicleFuelProvider {
         TriggerServerEvent(ServerEvent.VEHICLE_FUEL_START, vehicleNetworkId, station.id);
     }
 
-    @OnEvent(ClientEvent.VEHICLE_FUEL_START)
-    private async onVehicleFuelStart(duration: number, amount: number, price: number) {
-        const maxPrice = amount * price;
-
-        this.nuiDispatch.dispatch('progress', 'Start', {
-            label: 'Remplissage du véhicule',
-            duration,
-            units: [
-                {
-                    unit: 'L',
-                    start: 0,
-                    end: amount,
-                },
-                {
-                    unit: '$',
-                    start: 0,
-                    end: maxPrice,
-                },
-            ],
-        });
-    }
-
     @OnEvent(ClientEvent.VEHICLE_FUEL_STOP)
     private async onVehicleFuelStop() {
-        this.nuiDispatch.dispatch('progress', 'Stop');
-
         if (this.currentStationPistol) {
             this.currentStationPistol.filling = false;
 
             await this.disableStationPistol();
+        }
+    }
+
+    @PlayerUpdate()
+    public async onPlayerUpdate(player: PlayerData) {
+        if (player.metadata.isdead || player.metadata.ishandcuffed) {
+            if (this.currentStationPistol) {
+                this.currentStationPistol.filling = false;
+                await this.disableStationPistol();
+            }
         }
     }
 
@@ -590,7 +565,7 @@ export class VehicleFuelProvider {
             ropePosition,
             entity,
             1,
-            MAX_LENGTH_ROPE,
+            station.fuel == FuelType.Kerosene ? MAX_LENGTH_ROPE : MAX_LENGTH_ROPE_CAR,
             'prop_cs_fuel_nozle'
         );
         if (!nozle) {
@@ -661,6 +636,13 @@ export class VehicleFuelProvider {
 
         if (IsThisModelABicycle(model)) {
             return {};
+        }
+
+        if (model === GetHashKey(POLICE_MINESWEEPER_ROBOT_CAR_MODEL)) {
+            return {
+                fuelLevel: vehicleCondition.fuelLevel,
+                oilLevel: vehicleCondition.oilLevel,
+            };
         }
 
         const fuelLevel = vehicleCondition.fuelLevel;

@@ -19,8 +19,16 @@ export class VoiceProximityProvider {
     private voiceListeningService: VoiceListeningService;
 
     private megaPhonePlayers = new Set<number>();
+    private robotPlayers = new Set<number>();
 
     private currentProximityPlayers = new Set<number>();
+    private knownPlayers = new Map<
+        number,
+        {
+            ped: number;
+            serverId: number;
+        }
+    >();
 
     @Once(OnceStep.PlayerLoaded)
     public async onPlayerLoaded() {
@@ -28,6 +36,17 @@ export class VoiceProximityProvider {
 
         for (const player of megaphonePlayers) {
             this.megaPhonePlayers.add(player);
+        }
+
+        const robotPlayers = await emitRpc<number[]>(RpcServerEvent.VOIP_GET_ROBOT_PLAYERS);
+
+        for (const player of robotPlayers) {
+            this.robotPlayers.add(player);
+
+            this.voiceListeningService.addPlayerAudioContext(player, 'eodrobot', {
+                type: 'eodrobot',
+                priority: 5,
+            });
         }
     }
 
@@ -45,33 +64,58 @@ export class VoiceProximityProvider {
         }
     }
 
-    @Tick()
-    public checkProximityPlayers() {
+    @OnEvent(ClientEvent.VOIP_SET_ROBOT)
+    public onSetRobot(player: number, state: boolean) {
+        if (state) {
+            this.robotPlayers.add(player);
+            this.voiceListeningService.addPlayerAudioContext(player, 'eodrobot', {
+                type: 'eodrobot',
+                priority: 5,
+            });
+        } else {
+            this.robotPlayers.delete(player);
+            this.voiceListeningService.removePlayerAudioContext(player, 'eodrobot');
+        }
+    }
+
+    @Tick(5000)
+    public listProximityPlayers() {
+        this.knownPlayers.clear();
         const players = GetActivePlayers();
-        const currentPosition = GetEntityCoords(PlayerPedId(), false) as Vector3;
-        const selfPlayerId = GetPlayerServerId(PlayerId());
-        const newProximityPlayers = new Set<number>();
+        const selfPlayerId = PlayerId();
 
         for (const player of players) {
+            if (player === selfPlayerId) {
+                continue;
+            }
             const serverId = GetPlayerServerId(player);
 
             if (!serverId) {
                 continue;
             }
 
-            if (serverId === selfPlayerId) {
-                continue;
-            }
-
             const playerPed = GetPlayerPed(player);
-            const playerPosition = GetEntityCoords(playerPed, false) as Vector3;
+            this.knownPlayers.set(player, {
+                ped: playerPed,
+                serverId,
+            });
+        }
+    }
+
+    @Tick()
+    public checkProximityPlayers() {
+        const currentPosition = GetEntityCoords(PlayerPedId(), false) as Vector3;
+        const newProximityPlayers = new Set<number>();
+
+        for (const player of this.knownPlayers.values()) {
+            const playerPosition = GetEntityCoords(player.ped, false) as Vector3;
             const distance = getDistance(currentPosition, playerPosition);
 
             if (distance > 50) {
                 continue;
             }
 
-            newProximityPlayers.add(serverId);
+            newProximityPlayers.add(player.serverId);
         }
 
         // get diff
@@ -92,7 +136,7 @@ export class VoiceProximityProvider {
         for (const player of newPlayers) {
             this.voiceListeningService.addPlayerAudioContext(player, 'proximity', {
                 type: 'proximity',
-                priority: 5,
+                priority: 6,
             });
             this.voiceTargetService.addPlayer(player, 'proximity');
 

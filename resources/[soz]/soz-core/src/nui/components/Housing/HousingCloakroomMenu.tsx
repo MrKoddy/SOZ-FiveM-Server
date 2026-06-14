@@ -17,6 +17,7 @@ import {
 type HousingCloakroomMenuProps = {
     data?: {
         items: PlayerCloakroomItem[];
+        gang: boolean;
     };
 };
 
@@ -28,7 +29,7 @@ export const HousingCloakroomMenu: FunctionComponent<HousingCloakroomMenuProps> 
     return (
         <Menu type={MenuType.HousingCloakroomMenu}>
             <MainMenu>
-                <MenuTitle banner="https://nui-img/soz/menu_habitation"></MenuTitle>
+                <MenuTitle title={data.gang ? 'Hub criminel' : 'Habitation'} />
                 <MenuContent>
                     <MenuItemButton
                         onConfirm={() => {

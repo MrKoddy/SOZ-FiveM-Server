@@ -1,25 +1,80 @@
-import { PropCollection, PropCollectionData, PropServerData } from '../object';
+import { Vector3, Vector4 } from '@public/shared/polyzone/vector';
 
-export type PropPlacementMenuData = {
-    props: PlacementPropList;
-    serverData: PropServerData;
-    collections: PropCollectionData[];
-};
+import { HousingDebugProp, PropCollection, PropCollectionData, PropServerData } from '../object';
 
 export type NuiPlacementPropMethodMap = {
     SetCollectionList: PropCollectionData[];
     SetCollection: PropCollection;
     SetDatas: { serverData: PropServerData };
-    EnterEditorMode: void;
+    EnterEditorMode: boolean;
     SetCurrentSearch: string;
+};
+
+export type NuiHousingPlacementPropMethodMap = {
+    SetFourniture: { fournitures: HousingProp[]; max: number; shellEnable: boolean };
+};
+
+export type NuiObjectEditorMethodMap = {
+    setEntityPosition: { matrix: number[] };
+    setCameraPosition: { position: Vector3; rotation: Vector3 };
+    validateCurrentObject: never;
+    deleteCurrentObject: never;
+    duplicateCurrentObject: never;
+};
+
+export type NuiGizmoMethodMap = {
+    SyncDebug: { debug: HousingDebugProp };
+    setGizmoEntity: { debug: HousingDebugProp };
+    setCameraPosition: { position: Vector3; rotation: Vector3 };
+    handlePlaceObject: never;
+    handleDeleteObject: never;
+    handleSnap: never;
+    handleToggleSpaceMode: never;
+    handleToggleEditorMode: never;
+    ToggleFocus: never;
 };
 
 export type PlacementProp = {
     model: string;
     label?: string;
+    heading?: number;
+    matrix?: number[];
+    nocollision?: boolean;
+};
+
+export type HousingPlacementProp = {
+    entity: number | null;
+    fourniture: HousingProp;
+    targetLabel: string[] | null;
+    roomId: number | null;
+};
+
+export type HousingProp = {
+    id: number;
+    model: string;
+    label?: string;
+    position?: Vector4;
+    matrix?: number[];
+    storageType?: string;
+    updated: number;
+};
+
+export type HousingPropPlacementMenuData = {
+    fournitures: HousingProp[];
+    shellEnable: boolean;
+    max: number;
+    isPlayerStaff: boolean;
 };
 
 export type PlacementPropList = Record<string, PlacementProp[]>;
+
+export type PlacementHousingPropList = Record<string, HousingProp[]>;
+
+export const NOT_ALLOWED_PLACEMENT_PROPS: string[] = [
+    'soz_zevent_plaque',
+    'soz_event_plaque_jmadison',
+    'soz_zevent_zplace',
+];
 
 export const PLACEMENT_PROP_LIST: PlacementPropList = {
     ['Distributeur & Arcade']: [
@@ -6780,4 +6835,28 @@ export const PLACEMENT_PROP_LIST: PlacementPropList = {
             label: 'Mur de pneus (virage)',
         },
     ],
+    ['Concert']: [
+        {
+            model: 'soz_spot_01',
+            label: 'Spot 1 - Large',
+        },
+        {
+            model: 'soz_spot_02',
+            label: 'Spot 2 - Moyen',
+        },
+        {
+            model: 'soz_spot_03',
+            label: 'Spot 3 - Petit',
+        },
+    ],
 };
+
+export const PLACEMENT_PROP_LABELS: Record<string, string> = Object.values(PLACEMENT_PROP_LIST)
+    .reduce((acc, elements) => {
+        return acc.concat(elements);
+    }, [])
+    .reduce((acc, element) => {
+        acc[element.model] = element.label;
+
+        return acc;
+    }, {});

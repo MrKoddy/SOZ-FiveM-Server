@@ -29,6 +29,11 @@ const surgery = new MultiZone([
         minZ: 33.28,
         maxZ: 35.28,
     }),
+    new BoxZone([313.42, -1406.46, 32.51], 20.0, 27.0, {
+        heading: 51.14,
+        minZ: 31.51,
+        maxZ: 33.51,
+    }),
 ]);
 
 @Provider()
@@ -60,16 +65,12 @@ export class LSMCSurgeryProvider {
         this.targetFactory.createForAllPlayer([
             {
                 label: 'Enlever un Poumon',
-                color: JobType.LSMC,
-                icon: 'c:ems/remove_poumon.png',
+                icon: 'ems/remove_poumon',
                 job: JobType.LSMC,
                 blackoutGlobal: true,
                 blackoutJob: JobType.LSMC,
+                category: 'society',
                 canInteract: async entity => {
-                    if (!this.playerService.isOnDuty()) {
-                        return false;
-                    }
-
                     if (!IsEntityPlayingAnim(entity, 'anim@gangops@morgue@table@', 'body_search', 3)) {
                         return false;
                     }
@@ -108,16 +109,12 @@ export class LSMCSurgeryProvider {
             },
             {
                 label: 'Enlever un Rein',
-                color: JobType.LSMC,
-                icon: 'c:ems/remove_rein.png',
+                icon: 'ems/remove_rein',
                 job: JobType.LSMC,
                 blackoutGlobal: true,
                 blackoutJob: JobType.LSMC,
+                category: 'society',
                 canInteract: async entity => {
-                    if (!this.playerService.isOnDuty()) {
-                        return false;
-                    }
-
                     if (!IsEntityPlayingAnim(entity, 'anim@gangops@morgue@table@', 'body_search', 3)) {
                         return false;
                     }
@@ -156,16 +153,12 @@ export class LSMCSurgeryProvider {
             },
             {
                 label: 'Enlever le Foie',
-                color: JobType.LSMC,
-                icon: 'c:ems/remove_foie.png',
+                icon: 'ems/remove_foie',
                 job: JobType.LSMC,
                 blackoutGlobal: true,
                 blackoutJob: JobType.LSMC,
+                category: 'society',
                 canInteract: async entity => {
-                    if (!this.playerService.isOnDuty()) {
-                        return false;
-                    }
-
                     if (!IsEntityPlayingAnim(entity, 'anim@gangops@morgue@table@', 'body_search', 3)) {
                         return false;
                     }
@@ -204,18 +197,17 @@ export class LSMCSurgeryProvider {
             },
             {
                 label: 'greffer',
-                color: JobType.LSMC,
-                icon: 'c:ems/greffer.png',
+                icon: 'ems/greffer',
                 job: JobType.LSMC,
                 blackoutGlobal: true,
-                blackoutJob: 'lsmc',
+                blackoutJob: JobType.LSMC,
+                category: 'society',
                 canInteract: entity => {
                     return (
-                        this.playerService.isOnDuty() &&
                         IsEntityPlayingAnim(entity, 'anim@gangops@morgue@table@', 'body_search', 3) &&
                         surgery.isPointInside(GetEntityCoords(entity) as Vector3) &&
                         !!organ &&
-                        this.inventoryManager.hasEnoughItem(organ)
+                        this.inventoryManager.hasEnoughItem(organ, 1, true)
                     );
                 },
                 action: async entity => {

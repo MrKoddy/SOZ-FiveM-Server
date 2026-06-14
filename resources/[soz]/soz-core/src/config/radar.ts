@@ -24,6 +24,7 @@ export const RadarAllowedVehicle: number[] = [
     GetHashKey('lspd41'),
     GetHashKey('lspd50'),
     GetHashKey('lspd51'),
+    GetHashKey('lspd60'),
     // BCSO
     GetHashKey('sheriff'),
     GetHashKey('sheriff2'),
@@ -40,20 +41,35 @@ export const RadarAllowedVehicle: number[] = [
     GetHashKey('bcso41'),
     GetHashKey('bcso50'),
     GetHashKey('bcso51'),
+    GetHashKey('bcso60'),
     // LSPD / BCSO
     GetHashKey('pbus'),
     //SASP
     GetHashKey('sasp1'),
+    GetHashKey('sasp20'),
+    GetHashKey('sasp70'),
+    GetHashKey('sasp71'),
     // FBI
     GetHashKey('fbi'),
     GetHashKey('fbi2'),
     GetHashKey('cogfbi'),
     GetHashKey('paragonfbi'),
+    GetHashKey('paragonsfbi'),
     GetHashKey('dodgebana'),
     GetHashKey('polgauntlet'),
     // Gouv
     GetHashKey('xls2'),
     GetHashKey('schafter6'),
+    // policeold
+    GetHashKey('policeold1'),
+    GetHashKey('policeold2'),
+    // policenew
+    GetHashKey('polimpaler6'),
+    GetHashKey('poldominator10'),
+    GetHashKey('polimpaler5'),
+    GetHashKey('polgreenwood'),
+    GetHashKey('poldorado'),
+    GetHashKey('polterminus'),
 ];
 
 export const RadarInformedVehicle: number[] = [
@@ -73,6 +89,7 @@ export const RadarInformedVehicle: number[] = [
     GetHashKey('lspd41'),
     GetHashKey('lspd50'),
     GetHashKey('lspd51'),
+    GetHashKey('lspd60'),
     // BCSO
     GetHashKey('sheriff'),
     GetHashKey('sheriff2'),
@@ -89,8 +106,21 @@ export const RadarInformedVehicle: number[] = [
     GetHashKey('bcso41'),
     GetHashKey('bcso50'),
     GetHashKey('bcso51'),
+    GetHashKey('bcso60'),
     // Both
     GetHashKey('predator'),
     //SASP
     GetHashKey('sasp1'),
+    GetHashKey('sasp20'),
+    GetHashKey('sasp70'),
+    GetHashKey('sasp71'),
+    // policeold
+    GetHashKey('policeold1'),
+    GetHashKey('policeold2'),
+    // policenew
+    GetHashKey('polimpaler6'),
+    GetHashKey('poldominator10'),
+    GetHashKey('polimpaler5'),
+    GetHashKey('polgreenwood'),
+    GetHashKey('poldorado'),
 ];

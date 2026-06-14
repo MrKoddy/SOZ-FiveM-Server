@@ -3,10 +3,12 @@ import { Inject } from '@core/decorators/injectable';
 import { Provider } from '@core/decorators/provider';
 import { ClientEvent } from '@public/shared/event';
 
-import { Feature, isFeatureEnabled } from '../../shared/features';
-import { CocktailItem, DrinkItem, FoodItem, InventoryItem, Item, LiquorItem } from '../../shared/item';
+import { Feature } from '../../shared/features';
+import { InventoryItem, isInventoryItemExpired } from '../../shared/inventory';
+import { CocktailItem, DrinkItem, FoodItem, Item, LiquorItem } from '../../shared/item';
 import { PlayerMetadata } from '../../shared/player';
-import { InventoryManager } from '../inventory/inventory.manager';
+import { FeatureProvider } from '../feature/feature.provider';
+import { Inventory } from '../inventory/inventory';
 import { Notifier } from '../notifier';
 import { PlayerService } from '../player/player.service';
 import { ProgressService } from '../player/progress.service';
@@ -20,9 +22,6 @@ export class ItemNutritionProvider {
     @Inject(ItemService)
     private item: ItemService;
 
-    @Inject(InventoryManager)
-    private inventoryManager: InventoryManager;
-
     @Inject(ProgressService)
     private progressService: ProgressService;
 
@@ -32,22 +31,18 @@ export class ItemNutritionProvider {
     @Inject(Notifier)
     private notifier: Notifier;
 
+    @Inject(FeatureProvider)
+    private featureProvider: FeatureProvider;
+
     private lastItemEatByPlayer: Record<string, string> = {};
 
     private async useFoodOrDrink(
         source: number,
         item: FoodItem | DrinkItem | CocktailItem | LiquorItem,
-        inventoryItem: InventoryItem
+        inventoryItem: InventoryItem,
+        inventory: Inventory
     ): Promise<void> {
-        if (
-            !this.inventoryManager.removeItemFromInventory(
-                source,
-                item.name,
-                1,
-                inventoryItem.metadata,
-                inventoryItem.slot
-            )
-        ) {
+        if (!inventory.removeAtSlot(inventoryItem.slot, 1)) {
             return;
         }
 
@@ -55,7 +50,7 @@ export class ItemNutritionProvider {
         const prop =
             item.prop ||
             (item.type === 'food'
-                ? item.name === 'zevent2022_popcorn'
+                ? ['zevent2022_popcorn', 'zevent2024_popcorn'].includes(item.name)
                     ? {
                           model: 'xs_prop_trinket_cup_01a',
                           bone: 60309,
@@ -91,6 +86,10 @@ export class ItemNutritionProvider {
             allowExistingAnimation: true,
         });
 
+        if (!completed && progress === 0) {
+            return;
+        }
+
         if (completed) {
             TriggerClientEvent(ClientEvent.ITEM_USE, source, item.name, item);
         }
@@ -103,7 +102,7 @@ export class ItemNutritionProvider {
 
         let dyspepsiaLuck = 0.5;
 
-        if (isFeatureEnabled(Feature.MyBodySummer)) {
+        if (this.featureProvider.isFeatureEnabled(Feature.MyBodySummer)) {
             if (this.lastItemEatByPlayer[player.citizenid] === item.name && item.type === 'food') {
                 dyspepsiaLuck = 25.0;
             }
@@ -115,7 +114,7 @@ export class ItemNutritionProvider {
             }
         }
 
-        let intoxicated = this.item.isItemExpired(inventoryItem) && Math.random() * 100 <= 75;
+        let intoxicated = isInventoryItemExpired(inventoryItem) && Math.random() * 100 <= 75;
         const dyspepsia = item.type === 'food' && Math.random() * 100 <= dyspepsiaLuck;
 
         if (intoxicated) {
@@ -139,7 +138,7 @@ export class ItemNutritionProvider {
             datas.drug = this.playerService.getIncrementedMetadata(player, 'drug', item.nutrition.drug, 0, 110);
         }
 
-        if (isFeatureEnabled(Feature.MyBodySummer)) {
+        if (this.featureProvider.isFeatureEnabled(Feature.MyBodySummer)) {
             const fiber = dyspepsia || intoxicated ? DYSPEPSIA_NUTRITION_MALUS : item.nutrition.fiber * progress;
             const sugar = dyspepsia || intoxicated ? DYSPEPSIA_NUTRITION_MALUS : item.nutrition.sugar * progress;
             const protein = dyspepsia || intoxicated ? DYSPEPSIA_NUTRITION_MALUS : item.nutrition.protein * progress;
@@ -181,12 +180,37 @@ export class ItemNutritionProvider {
         this.lastItemEatByPlayer[player.citizenid] = item.name;
     }
 
-    private useLunchbox(source: number, item: Item, itemInv: InventoryItem) {
-        this.inventoryManager.removeItemFromInventory(source, item.name, 1, itemInv.metadata, itemInv.slot);
-        itemInv.metadata.crateElements.map(meal => {
-            this.inventoryManager.addItemToInventory(source, meal.name, meal.amount, { ...meal.metadata });
+    private async useLunchbox(source: number, item: Item, itemInv: InventoryItem, inventory: Inventory) {
+        const canSwap = inventory.canSwapItems(
+            [
+                {
+                    name: item.name,
+                    amount: 1,
+                    metadata: itemInv.metadata,
+                },
+            ],
+            itemInv.metadata.crateElements.map(meal => ({
+                name: meal.name,
+                amount: meal.amount,
+                metadata: meal.metadata,
+            }))
+        );
+
+        if (!canSwap) {
+            this.notifier.error(source, "L'inventaire n'a plus de place !");
+            return;
+        }
+
+        if (!inventory.removeAtSlot(itemInv.slot, 1)) {
+            return;
+        }
+
+        itemInv.metadata.crateElements.forEach(meal => {
+            inventory.add(meal.name, meal.amount, { ...meal.metadata });
         });
+
         let notificationLunchboxLabel = item.label;
+
         if (itemInv.metadata.label) {
             notificationLunchboxLabel = item.label + ' "' + itemInv.metadata.label + '"';
         }
@@ -219,6 +243,8 @@ export class ItemNutritionProvider {
         for (const liquorId of Object.keys(liquors)) {
             this.item.setItemUseCallback<LiquorItem>(liquorId, this.useFoodOrDrink.bind(this));
         }
+
+        this.item.setItemUseCallback<Item>('mushroom', this.useFoodOrDrink.bind(this));
 
         this.item.setItemUseCallback('lunchbox', this.useLunchbox.bind(this));
     }

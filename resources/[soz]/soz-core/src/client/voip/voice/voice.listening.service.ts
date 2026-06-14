@@ -124,7 +124,7 @@ export class VoiceListeningService {
     }
 
     private handlePlayerVoice(player: PlayerVoice) {
-        if (player.contexts.phone) {
+        if (player.contexts.phone || player.contexts.phone_speaker) {
             return this.handlePlayerVoicePhone(player);
         }
 
@@ -138,6 +138,10 @@ export class VoiceListeningService {
 
         if (player.contexts.megaphone) {
             return this.handlePlayerVoiceMegaphone(player);
+        }
+
+        if (player.contexts.eodrobot) {
+            return this.handlePlayerVoiceEodRobot(player);
         }
 
         if (player.contexts.proximity) {
@@ -179,6 +183,14 @@ export class VoiceListeningService {
 
         // Apply filter
         this.setSubmix(player.serverId, SubmixType.MEGAPHONE);
+    }
+
+    private handlePlayerVoiceEodRobot(player: PlayerVoice) {
+        // Use default proximity
+        MumbleSetVolumeOverrideByServerId(player.serverId, -1.0);
+
+        // Apply filter
+        this.setSubmix(player.serverId, SubmixType.RADIO);
     }
 
     private handlePlayerVoiceProximity(player: PlayerVoice) {

@@ -12,7 +12,7 @@ const WHISPER_RANGE = 2.0;
 const NORMAL_RANGE = 4.5;
 const SHOUT_RANGE = 8.0;
 const MEGAPHONE_RANGE = 38.0;
-const MICROPHONE_RANGE = 38.0;
+const MICROPHONE_RANGE = 70.0;
 
 type VoiceModeRange = VoiceMode.Shouting | VoiceMode.Normal | VoiceMode.Whisper;
 
@@ -37,6 +37,8 @@ export class VoipService {
     private isMuted = false;
 
     private ready = false;
+
+    private radioJammed = false;
 
     public getVoiceClickVolume(radioType: RadioType, channelType: RadioChannelType) {
         return this.voiceRadioProvider.getVoiceClickVolume(radioType, channelType);
@@ -170,5 +172,20 @@ export class VoipService {
 
     public setReady(value: boolean) {
         this.ready = value;
+    }
+
+    public setRadioJammed(value: boolean) {
+        if (value == this.radioJammed) {
+            return;
+        }
+        this.radioJammed = value;
+        for (const frequency of this.voiceRadioProvider.frequencyTransmission.keys()) {
+            if (value) {
+                this.disconnectRadio(frequency);
+            } else {
+                this.connectRadio(frequency);
+            }
+        }
+        this.voiceRadioProvider.setJammed(this.radioJammed);
     }
 }

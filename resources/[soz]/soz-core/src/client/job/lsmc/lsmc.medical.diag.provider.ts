@@ -8,10 +8,11 @@ import { Once, OnEvent, OnNuiEvent } from '@public/core/decorators/event';
 import { Inject } from '@public/core/decorators/injectable';
 import { Provider } from '@public/core/decorators/provider';
 import { ClientEvent, NuiEvent, ServerEvent } from '@public/shared/event';
-import { MedicalMetadata } from '@public/shared/item';
 import { JobType } from '@public/shared/job';
 import { LSMCConfig } from '@public/shared/job/lsmc';
 import { Vector3 } from '@public/shared/polyzone/vector';
+
+import { MedicalMetadata } from '../../../shared/inventory';
 
 @Provider()
 export class LSMCMedicalDiagProvider {
@@ -51,15 +52,11 @@ export class LSMCMedicalDiagProvider {
             {
                 label: 'Lancer un scan',
                 blackoutJob: JobType.LSMC,
-                color: JobType.LSMC,
                 job: JobType.LSMC,
                 blackoutGlobal: true,
-                icon: 'c:ems/irm.png',
+                icon: 'ems/irm',
+                category: 'society',
                 canInteract: () => {
-                    if (!this.playerService.isOnDuty()) {
-                        return false;
-                    }
-
                     const playerPed = PlayerPedId();
                     const coord = GetEntityCoords(playerPed) as Vector3;
                     const players = this.playerService.getPlayersAround(coord, 3.0, true, player => {

@@ -1,11 +1,12 @@
 import { AnimationService } from '@public/client/animation/animation.service';
+import { PhoneAppSocietyProvider } from '@public/client/phone/apps/phone.app.society.provider';
 import { PlayerService } from '@public/client/player/player.service';
 import { ProgressService } from '@public/client/progress.service';
 import { OnEvent } from '@public/core/decorators/event';
 import { Inject } from '@public/core/decorators/injectable';
 import { Provider } from '@public/core/decorators/provider';
 import { Tick, TickInterval } from '@public/core/decorators/tick';
-import { uuidv4, wait } from '@public/core/utils';
+import { wait } from '@public/core/utils';
 import { ClientEvent } from '@public/shared/event';
 
 @Provider()
@@ -18,6 +19,9 @@ export class PoliceAnimationProvider {
 
     @Inject(ProgressService)
     private progressService: ProgressService;
+
+    @Inject(PhoneAppSocietyProvider)
+    private readonly phoneSocietyProvider: PhoneAppSocietyProvider;
 
     @OnEvent(ClientEvent.POLICE_HANDCUFF_ANIMATION)
     public async onHandcuffAnimation() {
@@ -114,25 +118,31 @@ export class PoliceAnimationProvider {
         await animation;
     }
 
-    @OnEvent(ClientEvent.POLICE_RED_CALL)
-    public async redCall(societyNumber: string, msg: string, htmlMsg: string) {
-        const { completed } = await this.progressService.progress('police:red-call', 'Code rouge en cours...', 5000, {
-            dictionary: 'oddjobs@assassinate@guard',
-            name: 'unarmed_earpiece_a',
-            options: {
-                onlyUpperBody: true,
-                enablePlayerControl: true,
-            },
-        });
-        if (!completed) {
-            return;
+    public async redCall(societyNumber: string, msg: string, htmlMsg: string, injector: boolean = false) {
+        if (!injector) {
+            const { completed } = await this.progressService.progress(
+                'police:red-call',
+                'Code rouge en cours...',
+                5000,
+                {
+                    dictionary: 'oddjobs@assassinate@guard',
+                    name: 'unarmed_earpiece_a',
+                    options: {
+                        onlyUpperBody: true,
+                        enablePlayerControl: true,
+                    },
+                }
+            );
+            if (!completed) {
+                return;
+            }
         }
-        TriggerServerEvent('phone:sendSocietyMessage', 'phone:sendSocietyMessage:' + uuidv4(), {
-            anonymous: false,
+        await this.phoneSocietyProvider.sendMessage({
+            anonymous: true,
             number: societyNumber,
             message: msg,
             htmlMessage: htmlMsg,
-            info: { type: 'red-alert' },
+            type: 'red-alert',
             position: true,
         });
     }

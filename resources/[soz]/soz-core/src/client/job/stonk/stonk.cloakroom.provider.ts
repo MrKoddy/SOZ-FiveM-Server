@@ -1,6 +1,5 @@
 import { PlayerWardrobe } from '@public/client/player/player.wardrobe';
 import { OnEvent } from '@public/core/decorators/event';
-import { Exportable } from '@public/core/decorators/exports';
 import { Inject } from '@public/core/decorators/injectable';
 import { Provider } from '@public/core/decorators/provider';
 import { Component } from '@public/shared/cloth';
@@ -23,25 +22,38 @@ export class StonkCloakRoomProvider {
         }
     }
 
-    @Exportable('WearVIPClothes')
     public wearVIPClothes() {
         const ped = PlayerPedId();
 
-        for (const [id, component] of Object.entries(StonkCloakroom[GetEntityModel(ped)]['Tenue VIP'].Components)) {
-            const numberId = Number(id);
-            const drawable = GetPedDrawableVariation(ped, Number(numberId));
+        for (const vip of ['Tenue VIP', "Tenue VIP d'été", DUTY_OUTFIT_NAME, 'Tenue Hiver']) {
+            let match = true;
+            for (const [id, component] of Object.entries(StonkCloakroom[GetEntityModel(ped)][vip].Components)) {
+                const numberId = Number(id);
 
-            // We skip the Torso because it's modified when user wear his own gloves and make this function return false
-            // even if he wear the VIP clothes
-            if (numberId == Component.Torso) {
-                continue;
+                // We skip the Torso because it's modified when user wear his own gloves and make this function return false
+                // even if he wear the VIP clothes
+                if (numberId == Component.Torso) {
+                    continue;
+                }
+
+                const drawable = component.Collection
+                    ? GetPedDrawableVariationCollectionLocalIndex(ped, numberId)
+                    : GetPedDrawableVariation(ped, numberId);
+                const collection = component.Collection
+                    ? GetPedDrawableVariationCollectionName(ped, numberId)
+                    : undefined;
+
+                if (drawable != component.Drawable || collection != component.Collection) {
+                    match = false;
+                    break;
+                }
             }
 
-            if (drawable != component.Drawable) {
-                return false;
+            if (match) {
+                return true;
             }
         }
 
-        return true;
+        return false;
     }
 }

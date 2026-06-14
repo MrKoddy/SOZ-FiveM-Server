@@ -2,7 +2,7 @@ import { OnEvent } from '../../../core/decorators/event';
 import { Inject } from '../../../core/decorators/injectable';
 import { Provider } from '../../../core/decorators/provider';
 import { ServerEvent } from '../../../shared/event';
-import { isErr, isOk } from '../../../shared/result';
+import { isErr } from '../../../shared/result';
 import { VehicleConfiguration } from '../../../shared/vehicle/modification';
 import { BankService } from '../../bank/bank.service';
 import { PrismaService } from '../../database/prisma.service';
@@ -59,6 +59,15 @@ export class BennysResellProvider {
             return;
         }
 
+        if (playerVehicle.crimiImport) {
+            this.notifier.notify(
+                source,
+                `Désolé je reprends pas les véhicules ne venant pas de ~r~concessionnaires agréés~s~.`,
+                'error'
+            );
+            return;
+        }
+
         const result = await this.estimationService.estimateVehicle(source, networkId, configuration);
 
         if (isErr(result)) {
@@ -66,13 +75,24 @@ export class BennysResellProvider {
             return;
         }
 
-        const sellPrice = result.ok / 2;
-        const gainPrice = result.ok * 0.1;
+        const sellPrice = Math.round(result.ok / 2);
+        const gainPrice = Math.ceil(result.ok * 0.1);
 
-        const cashTransferResult = await this.bankService.transferCashMoney('bennys_reseller', source, sellPrice);
-        const bennysGain = await this.bankService.transferBankMoney('bennys_reseller', 'safe_bennys', gainPrice);
+        const cashTransferResult = await this.bankService.transferFarmCashMoney(
+            source,
+            'bennys_reseller',
+            'withdraw',
+            'money',
+            sellPrice
+        );
+        const bennysGain = await this.bankService.transferFarmMoney(
+            source,
+            'bennys_reseller',
+            'safe_bennys',
+            gainPrice
+        );
 
-        if (isOk(cashTransferResult) && isOk(bennysGain)) {
+        if (cashTransferResult && bennysGain) {
             this.notifier.notify(source, `Vous avez vendu ce véhicule pour ~g~$${sellPrice.toLocaleString()}~s~.`);
             DeleteEntity(entity);
             await this.prismaService.playerVehicle.delete({

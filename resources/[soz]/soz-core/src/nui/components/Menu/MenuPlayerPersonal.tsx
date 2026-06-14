@@ -1,8 +1,9 @@
-import { Fragment, FunctionComponent, ReactElement, useState } from 'react';
+import _ from 'lodash';
+import { Fragment, FunctionComponent, JSXElementConstructor, ReactElement, useEffect, useState } from 'react';
+import { useSelector } from 'react-redux';
 
 import { Animations, Moods, Walks } from '../../../config/animation';
-import { AnimationConfigItem, WalkConfigItem } from '../../../shared/animation';
-import { ClothConfig } from '../../../shared/cloth';
+import { AnimationConfigItem, AnimationConfigList, WalkConfigItem } from '../../../shared/animation';
 import { NuiEvent } from '../../../shared/event';
 import { JobPermission } from '../../../shared/job';
 import { MenuType } from '../../../shared/nui/menu';
@@ -11,6 +12,7 @@ import { fetchNui } from '../../fetch';
 import { usePlayer } from '../../hook/data';
 import { useJobGrades } from '../../hook/job';
 import { useNuiEvent } from '../../hook/nui';
+import { RootState } from '../../store';
 import {
     MainMenu,
     Menu,
@@ -19,7 +21,9 @@ import {
     MenuItemCheckbox,
     MenuItemSelect,
     MenuItemSelectOption,
+    MenuItemStringInput,
     MenuItemSubMenuLink,
+    MenuSubTitle,
     MenuTitle,
     SubMenu,
 } from '../Styleguide/Menu';
@@ -30,6 +34,8 @@ type MenuPlayerPersonalProps = {
 
 export const MenuPlayerPersonal: FunctionComponent<MenuPlayerPersonalProps> = ({ data }) => {
     const player = usePlayer();
+    const isHalloween = useSelector((state: RootState) => state.features.Halloween);
+    const isWhatIf2 = useSelector((state: RootState) => state.features.WhatIfSecondEpisode);
 
     if (!player) {
         return null;
@@ -38,10 +44,8 @@ export const MenuPlayerPersonal: FunctionComponent<MenuPlayerPersonalProps> = ({
     return (
         <Menu type={MenuType.PlayerPersonal}>
             <MainMenu>
-                <MenuTitle banner="https://nui-img/soz/menu_personal">
-                    {player.charinfo.firstname} {player.charinfo.lastname}
-                </MenuTitle>
-                <MenuContent>
+                <MenuTitle title="Personnel" />
+                <MenuContent subtitle={`${player.charinfo.firstname} ${player.charinfo.lastname}`}>
                     {data.deguisement && (
                         <MenuItemButton onConfirm={() => fetchNui(NuiEvent.PlayerMenuRemoveDeguisement)}>
                             Enlever le déguisement
@@ -52,17 +56,12 @@ export const MenuPlayerPersonal: FunctionComponent<MenuPlayerPersonalProps> = ({
                             Se rhabiller
                         </MenuItemButton>
                     )}
-                    {!data.naked && !data.deguisement && (
-                        <MenuItemSubMenuLink id="clothing">Gestion de la tenue</MenuItemSubMenuLink>
-                    )}
 
                     <MenuItemSubMenuLink id="animations">Animations</MenuItemSubMenuLink>
                     <MenuItemSubMenuLink id="hud">HUD</MenuItemSubMenuLink>
                     {data.job.enabled && <MenuItemSubMenuLink id="job">Gestion de votre métier</MenuItemSubMenuLink>}
-                    <MenuItemButton onConfirm={() => fetchNui(NuiEvent.PlayerMenuVoipReset)}>
-                        Redémarrer la voip
-                    </MenuItemButton>
-                    {data.halloween && (
+                    <MenuItemSubMenuLink id="voip">Voip & Vidéo</MenuItemSubMenuLink>
+                    {isHalloween && (
                         <MenuItemCheckbox
                             checked={data.arachnophobe}
                             onChange={value => fetchNui(NuiEvent.PlayerMenuHudSetArachnophobe, value)}
@@ -70,13 +69,28 @@ export const MenuPlayerPersonal: FunctionComponent<MenuPlayerPersonalProps> = ({
                             Mode arachnophobe
                         </MenuItemCheckbox>
                     )}
+                    {isWhatIf2 && player.metadata.hazmat && (
+                        <MenuItemButton
+                            description="⚠️ Enlève aussi les gilets par balles si équipé"
+                            onConfirm={() => fetchNui(NuiEvent.PlayerMenuWhatIfRemoveHazmat)}
+                        >
+                            Retirer tenue Hazmat
+                        </MenuItemButton>
+                    )}
+                    {isWhatIf2 && (
+                        <MenuItemButton
+                            description="⚠️Vous perdrez tout ce que vous avez pu récupérer excepter votre marteau"
+                            onConfirm={() => fetchNui(NuiEvent.PlayerMenuWhatIf2Retrieval)}
+                        >
+                            Demander un Rapatriement
+                        </MenuItemButton>
+                    )}
                 </MenuContent>
             </MainMenu>
-            <MenuClothing />
-            <MenuAnimation shortcuts={data.shortcuts} />
+            <MenuAnimation shortcuts={data.shortcuts} favorites={data.favorites} combatMode={data.combatMode} />
             <SubMenu id="hud">
-                <MenuTitle banner="https://nui-img/soz/menu_personal">HUD</MenuTitle>
-                <MenuContent>
+                <MenuTitle title="Personnel" />
+                <MenuContent subtitle="Gestion du HUD">
                     <MenuItemCheckbox
                         checked={data.isHudVisible}
                         description="Active/Désactive le HUD"
@@ -105,144 +119,121 @@ export const MenuPlayerPersonal: FunctionComponent<MenuPlayerPersonalProps> = ({
                     >
                         Scaling NUI
                     </MenuItemCheckbox>
+
+                    <MenuItemCheckbox
+                        checked={data.isGlassmorphismActive}
+                        description="Active/Désactive le glassmorphisme du HUD (fond d'arrière-plan flou)"
+                        onChange={value => fetchNui(NuiEvent.PlayerMenuHudSetGlassmorphism, { value })}
+                    >
+                        Glassmorphisme
+                    </MenuItemCheckbox>
+
+                    <MenuItemSelect
+                        title="Glassmorphisme FPS Limit"
+                        value={data.glassmorphismFpsLimit}
+                        description="Limite de FPS pour le glassmorphisme du HUD"
+                        onConfirm={async (_, value) => {
+                            await fetchNui(NuiEvent.PlayerMenuHudSetGlassmorphismFpsLimit, { value });
+                        }}
+                    >
+                        {[30, 60, 90, 120, 144, 165, 240, 300].map(fps => (
+                            <MenuItemSelectOption key={fps} value={fps}>
+                                {fps} FPS
+                            </MenuItemSelectOption>
+                        ))}
+                    </MenuItemSelect>
                 </MenuContent>
             </SubMenu>
             <MenuJob data={data.job} />
+            <SubMenu id="voip">
+                <MenuTitle title="Personnel" />
+                <MenuContent subtitle="Gestion de la voip">
+                    <MenuItemButton onConfirm={() => fetchNui(NuiEvent.PlayerMenuVoipReset)}>
+                        Redémarrer la voip
+                    </MenuItemButton>
+                    <MenuItemSelect
+                        title="Filtre voip"
+                        description="Permet de changer les filtre sur la voip"
+                        value={data.voipIntent}
+                        onChange={async (_, value) => {
+                            await fetchNui(NuiEvent.PlayerMenuVoipSetIntent, { value });
+                        }}
+                    >
+                        <MenuItemSelectOption value="speech">Voix</MenuItemSelectOption>
+                        <MenuItemSelectOption value="music">Musique</MenuItemSelectOption>
+                    </MenuItemSelect>
+                    <MenuItemSelect
+                        title="Volume vidéo des écran"
+                        value={data.videoVolume}
+                        description="Permet de changer le volume des vidéos sur les écrans"
+                        onChange={async (_, value) => {
+                            await fetchNui(NuiEvent.PlayerMenuSetVideoVolume, { value });
+                        }}
+                    >
+                        {[0, 5, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100].map(volume => (
+                            <MenuItemSelectOption value={volume}>{volume}%</MenuItemSelectOption>
+                        ))}
+                    </MenuItemSelect>
+                </MenuContent>
+            </SubMenu>
         </Menu>
-    );
-};
-
-const MenuClothing: FunctionComponent = () => {
-    const player = usePlayer();
-
-    const createUpdateClothConfig = (key: keyof ClothConfig['Config'], inverted = false) => {
-        return value => {
-            if (!inverted) {
-                value = !value;
-            }
-
-            fetchNui(NuiEvent.PlayerMenuClothConfigUpdate, { key, value });
-        };
-    };
-
-    return (
-        <SubMenu id="clothing">
-            <MenuTitle banner="https://nui-img/soz/menu_personal">Gestion de la tenue</MenuTitle>
-            <MenuContent>
-                <MenuItemCheckbox
-                    onChange={createUpdateClothConfig('ShowHelmet', true)}
-                    checked={player.cloth_config.Config['ShowHelmet']}
-                >
-                    Casque
-                </MenuItemCheckbox>
-                <MenuItemCheckbox
-                    onChange={createUpdateClothConfig('HideHead')}
-                    checked={!player.cloth_config.Config['HideHead']}
-                >
-                    Chapeau
-                </MenuItemCheckbox>
-                <MenuItemCheckbox
-                    onChange={createUpdateClothConfig('HideMask')}
-                    checked={!player.cloth_config.Config['HideMask']}
-                >
-                    Masque
-                </MenuItemCheckbox>
-                <MenuItemCheckbox
-                    onChange={createUpdateClothConfig('HideGlasses')}
-                    checked={!player.cloth_config.Config['HideGlasses']}
-                >
-                    Lunettes
-                </MenuItemCheckbox>
-                <MenuItemCheckbox
-                    onChange={createUpdateClothConfig('HideEar')}
-                    checked={!player.cloth_config.Config['HideEar']}
-                >
-                    Boucles
-                </MenuItemCheckbox>
-                <MenuItemCheckbox
-                    onChange={createUpdateClothConfig('HideChain')}
-                    checked={!player.cloth_config.Config['HideChain']}
-                >
-                    Collier
-                </MenuItemCheckbox>
-                <MenuItemCheckbox
-                    onChange={createUpdateClothConfig('HideBulletproof')}
-                    checked={!player.cloth_config.Config['HideBulletproof']}
-                >
-                    Gilet
-                </MenuItemCheckbox>
-                <MenuItemCheckbox
-                    onChange={createUpdateClothConfig('HideTop')}
-                    checked={!player.cloth_config.Config['HideTop']}
-                >
-                    Haut
-                </MenuItemCheckbox>
-                <MenuItemCheckbox
-                    onChange={createUpdateClothConfig('HideLeftHand')}
-                    checked={!player.cloth_config.Config['HideLeftHand']}
-                >
-                    Montre
-                </MenuItemCheckbox>
-                <MenuItemCheckbox
-                    onChange={createUpdateClothConfig('HideRightHand')}
-                    checked={!player.cloth_config.Config['HideRightHand']}
-                >
-                    Bracelet
-                </MenuItemCheckbox>
-                <MenuItemCheckbox
-                    onChange={createUpdateClothConfig('HideGloves')}
-                    checked={!player.cloth_config.Config['HideGloves']}
-                >
-                    Gants
-                </MenuItemCheckbox>
-                <MenuItemCheckbox
-                    onChange={createUpdateClothConfig('HideBag')}
-                    checked={!player.cloth_config.Config['HideBag']}
-                >
-                    Sac
-                </MenuItemCheckbox>
-                <MenuItemCheckbox
-                    onChange={createUpdateClothConfig('HidePants')}
-                    checked={!player.cloth_config.Config['HidePants']}
-                >
-                    Pantalon
-                </MenuItemCheckbox>
-                <MenuItemCheckbox
-                    onChange={createUpdateClothConfig('HideShoes')}
-                    checked={!player.cloth_config.Config['HideShoes']}
-                >
-                    Chaussures
-                </MenuItemCheckbox>
-            </MenuContent>
-        </SubMenu>
     );
 };
 
 type MenuAnimationProps = {
     shortcuts: Record<string, Shortcut>;
+    favorites: Record<string, Shortcut>;
+    combatMode: boolean;
 };
 
-const MenuAnimation: FunctionComponent<MenuAnimationProps> = ({ shortcuts: intialShortcuts }) => {
+const MenuAnimation: FunctionComponent<MenuAnimationProps> = ({
+    shortcuts: intialShortcuts,
+    favorites: intialFavorites,
+    combatMode: initialCombatMode,
+}) => {
     const [shortcuts, setShortcuts] = useState(intialShortcuts);
+    const [favorites, setFavorites] = useState(intialFavorites);
+    const [removeCombatMode, setRemoveCombatMode] = useState(initialCombatMode);
 
     useNuiEvent('player', 'UpdateAnimationShortcuts', shortcuts => {
         setShortcuts(shortcuts);
     });
 
+    useNuiEvent('player', 'UpdateAnimationFavorites', shortcuts => {
+        setFavorites(shortcuts);
+    });
+
+    useNuiEvent('player', 'UpdateCombatMode', combatMode => {
+        setRemoveCombatMode(combatMode);
+    });
+
     return (
         <>
             <SubMenu id="animations">
-                <MenuTitle banner="https://nui-img/soz/menu_personal">Gestion des animations</MenuTitle>
-                <MenuContent>
+                <MenuTitle title="Personnel" />
+                <MenuContent subtitle="Gestion des animations">
+                    <MenuSubTitle>Animations</MenuSubTitle>
                     <MenuItemSubMenuLink id="animation_list">Animations</MenuItemSubMenuLink>
+                    <MenuItemSubMenuLink id="shortcut_list">Mes raccourcis</MenuItemSubMenuLink>
+                    <MenuItemSubMenuLink id="favorite_list">Mes favoris</MenuItemSubMenuLink>
+
+                    <MenuSubTitle>Postures</MenuSubTitle>
                     <MenuItemSubMenuLink id="walk_list">Démarches</MenuItemSubMenuLink>
                     <MenuItemSubMenuLink id="mood_list">Humeurs</MenuItemSubMenuLink>
-                    <MenuItemSubMenuLink id="favorite_list">Mes animations</MenuItemSubMenuLink>
+                    <MenuItemCheckbox
+                        onChange={value => {
+                            fetchNui(NuiEvent.PlayerAnimationUpdateCombatMode, value);
+                            setRemoveCombatMode(value);
+                        }}
+                        checked={removeCombatMode}
+                    >
+                        Désactiver la posture de combat
+                    </MenuItemCheckbox>
                 </MenuContent>
             </SubMenu>
             <SubMenu id="mood_list">
-                <MenuTitle banner="https://nui-img/soz/menu_personal">Humeurs</MenuTitle>
-                <MenuContent>
+                <MenuTitle title="Personnel" />
+                <MenuContent subtitle="Gestion des humeurs">
                     {Moods.map((mood, i) => (
                         <MenuItemButton
                             onConfirm={() => {
@@ -256,11 +247,9 @@ const MenuAnimation: FunctionComponent<MenuAnimationProps> = ({ shortcuts: intia
                 </MenuContent>
             </SubMenu>
             <SubMenu id="favorite_list">
-                <MenuTitle banner="https://nui-img/soz/menu_personal">Mes raccourcis d'animations</MenuTitle>
-                <MenuContent>
-                    {Object.keys(shortcuts).map(key => {
-                        const shortcut = shortcuts[key];
-
+                <MenuTitle title="Personnel" />
+                <MenuContent subtitle="Mes favoris">
+                    {Object.entries(favorites).map(([key, shortcut]) => {
                         if (!shortcut.animation) {
                             return <MenuItemButton key={key}>{shortcut.name}</MenuItemButton>;
                         }
@@ -272,9 +261,51 @@ const MenuAnimation: FunctionComponent<MenuAnimationProps> = ({ shortcuts: intia
                                     if (value === 'delete') {
                                         fetchNui(NuiEvent.PlayerMenuAnimationFavoriteDelete, { key });
                                     }
+                                    if (value === 'shortcut') {
+                                        fetchNui(NuiEvent.PlayerMenuAnimationShortcut, {
+                                            animationItem: shortcut.animation,
+                                        });
+                                    }
+                                    if (value === 'play') {
+                                        fetchNui(NuiEvent.PlayerMenuAnimationPlay, {
+                                            animationItem: shortcut.animation,
+                                        });
+                                    }
                                 }}
                                 key={key}
                             >
+                                <MenuItemSelectOption value="play">Jouer</MenuItemSelectOption>
+                                <MenuItemSelectOption value="shortcut">Raccourci</MenuItemSelectOption>
+                                <MenuItemSelectOption value="delete">Supprimer</MenuItemSelectOption>
+                            </MenuItemSelect>
+                        );
+                    })}
+                </MenuContent>
+            </SubMenu>
+            <SubMenu id="shortcut_list">
+                <MenuTitle title="Personnel" />
+                <MenuContent subtitle="Mes raccourcis">
+                    {Object.entries(shortcuts).map(([key, shortcut]) => {
+                        if (!shortcut.animation) {
+                            return <MenuItemButton key={key}>{shortcut.name}</MenuItemButton>;
+                        }
+
+                        return (
+                            <MenuItemSelect
+                                title={shortcut.name}
+                                onConfirm={(i, value) => {
+                                    if (value === 'delete') {
+                                        fetchNui(NuiEvent.PlayerMenuAnimationShortcutDelete, { key });
+                                    }
+                                    if (value === 'play') {
+                                        fetchNui(NuiEvent.PlayerMenuAnimationPlay, {
+                                            animationItem: shortcut.animation,
+                                        });
+                                    }
+                                }}
+                                key={key}
+                            >
+                                <MenuItemSelectOption value="play">Jouer</MenuItemSelectOption>
                                 <MenuItemSelectOption value="delete">Supprimer</MenuItemSelectOption>
                             </MenuItemSelect>
                         );
@@ -288,21 +319,88 @@ const MenuAnimation: FunctionComponent<MenuAnimationProps> = ({ shortcuts: intia
 };
 
 const MenuAnimationList: FunctionComponent = () => {
-    const elements = [];
-    const subMenus = [];
+    const [menuConstructor, setMenuConstructor] = useState<{
+        elements: ReactElement<any, string | JSXElementConstructor<any>>[];
+        subMenus: ReactElement<any, string | JSXElementConstructor<any>>[];
+    }>({
+        elements: [],
+        subMenus: [],
+    });
+    const [animations, setAnimations] = useState<AnimationConfigList>([]);
+    const [textFilter, setTextFilter] = useState<string>();
 
-    for (const item of Animations) {
-        const [element, newSubMenus] = createAnimationItemMenu(item, 'animation');
+    const handleFilter = (value: string) => {
+        setTextFilter(value);
+    };
 
-        elements.push(element);
-        subMenus.push(...newSubMenus);
-    }
+    const recursiveFilter = (items: AnimationConfigList, level = 0): AnimationConfigItem[] => {
+        const newItems = [];
+        for (const item of items) {
+            if (['animation', 'event', 'scenario'].includes(item.type)) {
+                if (
+                    !textFilter ||
+                    item.name
+                        .toLocaleLowerCase()
+                        .normalize('NFD')
+                        .replace(/\p{Diacritic}/gu, '')
+                        .includes(textFilter.normalize('NFD').replace(/\p{Diacritic}/gu, ''))
+                ) {
+                    newItems.push(item);
+                }
+            }
+
+            if (item.type === 'category') {
+                if (
+                    level === 0 ||
+                    !textFilter ||
+                    !item.name
+                        .toLocaleLowerCase()
+                        .normalize('NFD')
+                        .replace(/\p{Diacritic}/gu, '')
+                        .includes(textFilter.normalize('NFD').replace(/\p{Diacritic}/gu, ''))
+                ) {
+                    item.items = recursiveFilter(item.items, level + 1);
+                }
+
+                if (item.items.length) {
+                    newItems.push(item);
+                }
+            }
+        }
+
+        return newItems;
+    };
+
+    useEffect(() => {
+        const newAnimations = recursiveFilter(_.cloneDeep(Animations));
+
+        setAnimations(newAnimations);
+    }, [textFilter]);
+
+    useEffect(() => {
+        const elementList = [];
+        const subMenuList = [];
+
+        for (const item of animations) {
+            const [element, newSubMenus] = createAnimationItemMenu(item, 'animation');
+
+            elementList.push(element);
+            subMenuList.push(...newSubMenus);
+        }
+        setMenuConstructor({
+            elements: elementList,
+            subMenus: subMenuList,
+        });
+    }, [animations, setAnimations]);
 
     return (
         <>
             <SubMenu id="animation_list">
-                <MenuTitle banner="https://nui-img/soz/menu_personal">Liste des animations</MenuTitle>
-                <MenuContent>
+                <MenuTitle title="Personnel" />
+                <MenuContent subtitle="Liste des animations">
+                    <MenuItemStringInput onChange={handleFilter} value={textFilter}>
+                        Filtre:
+                    </MenuItemStringInput>
                     <MenuItemButton
                         onConfirm={() => {
                             fetchNui(NuiEvent.PlayerMenuAnimationStop);
@@ -310,12 +408,12 @@ const MenuAnimationList: FunctionComponent = () => {
                     >
                         🛑 Stopper l'animation
                     </MenuItemButton>
-                    {elements.map((element, index) => {
+                    {menuConstructor.elements.map((element, index) => {
                         return <Fragment key={index}>{element}</Fragment>;
                     })}
                 </MenuContent>
             </SubMenu>
-            {subMenus.map((element, index) => {
+            {menuConstructor.subMenus.map((element, index) => {
                 return <Fragment key={index}>{element}</Fragment>;
             })}
         </>
@@ -336,8 +434,8 @@ const MenuWalkList: FunctionComponent = () => {
     return (
         <>
             <SubMenu id="walk_list">
-                <MenuTitle banner="https://nui-img/soz/menu_personal">Liste des démarches</MenuTitle>
-                <MenuContent>
+                <MenuTitle title="Personnel" />
+                <MenuContent subtitle="Liste des démarches">
                     {elements.map((element, index) => {
                         return <Fragment key={index}>{element}</Fragment>;
                     })}
@@ -378,8 +476,8 @@ const createRecursiveSubMenu = <T extends ItemCategory<T>>(
 
         subMenus.push(
             <SubMenu id={`${prefix}${item.name}`}>
-                <MenuTitle banner="https://nui-img/soz/menu_personal">Gestion des animations</MenuTitle>
-                <MenuContent>
+                <MenuTitle title="Personnel" />
+                <MenuContent subtitle={item.name}>
                     {elements.map((element, index) => {
                         return <Fragment key={index}>{element}</Fragment>;
                     })}
@@ -403,6 +501,10 @@ const createAnimationLeafItem = (item: AnimationConfigItem): ReactElement => {
             onConfirm={(i, value) => {
                 if (value === 'play') {
                     fetchNui(NuiEvent.PlayerMenuAnimationPlay, { animationItem: item });
+                } else if (value === 'shortcut') {
+                    fetchNui(NuiEvent.PlayerMenuAnimationShortcut, {
+                        animationItem: item,
+                    });
                 } else if (value === 'favorite') {
                     fetchNui(NuiEvent.PlayerMenuAnimationFavorite, {
                         animationItem: item,
@@ -418,7 +520,8 @@ const createAnimationLeafItem = (item: AnimationConfigItem): ReactElement => {
             titleWidth={60}
         >
             <MenuItemSelectOption value="play">Jouer</MenuItemSelectOption>
-            <MenuItemSelectOption value="favorite">Raccourci</MenuItemSelectOption>
+            <MenuItemSelectOption value="shortcut">Raccourci</MenuItemSelectOption>
+            <MenuItemSelectOption value="favorite">Favori</MenuItemSelectOption>
         </MenuItemSelect>
     );
 };
@@ -437,6 +540,10 @@ const createWalkLeafItem = (item: WalkConfigItem): ReactElement => {
             onConfirm={(i, value) => {
                 if (value === 'play') {
                     fetchNui(NuiEvent.PlayerMenuAnimationSetWalk, { walkItem: item });
+                } else if (value === 'shortcut') {
+                    fetchNui(NuiEvent.PlayerMenuAnimationShortcut, {
+                        animationItem: item,
+                    });
                 } else if (value === 'favorite') {
                     fetchNui(NuiEvent.PlayerMenuAnimationFavorite, {
                         animationItem: item,
@@ -452,7 +559,8 @@ const createWalkLeafItem = (item: WalkConfigItem): ReactElement => {
             titleWidth={60}
         >
             <MenuItemSelectOption value="play">Jouer</MenuItemSelectOption>
-            <MenuItemSelectOption value="favorite">Raccourci</MenuItemSelectOption>
+            <MenuItemSelectOption value="shortcut">Raccourci</MenuItemSelectOption>
+            <MenuItemSelectOption value="favorite">Favori</MenuItemSelectOption>
         </MenuItemSelect>
     );
 };
@@ -477,8 +585,8 @@ const MenuJob: FunctionComponent<MenuJobProps> = ({ data }) => {
     return (
         <>
             <SubMenu id="job">
-                <MenuTitle banner="https://nui-img/soz/menu_personal">Gestion du métier {data.job.label}</MenuTitle>
-                <MenuContent>
+                <MenuTitle title="Personnel" />
+                <MenuContent subtitle={`Gestion du métier ${data.job.label}`}>
                     <MenuItemButton
                         onConfirm={() => {
                             fetchNui(NuiEvent.PlayerMenuJobGradeCreate, {
@@ -505,10 +613,8 @@ const MenuJob: FunctionComponent<MenuJobProps> = ({ data }) => {
                 .map(grade => {
                     return (
                         <SubMenu id={`job_grade_${grade.id}`} key={`job_grade_${grade.id}`}>
-                            <MenuTitle banner="https://nui-img/soz/menu_personal">
-                                Gestion du grade {grade.name}
-                            </MenuTitle>
-                            <MenuContent>
+                            <MenuTitle title="Personnel" />
+                            <MenuContent subtitle={`Gestion du grade ${grade.name}`}>
                                 <MenuItemButton
                                     onConfirm={() => {
                                         fetchNui(NuiEvent.PlayerMenuJobGradeUpdateWeight, {

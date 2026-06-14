@@ -10,22 +10,12 @@ export class StreamProvider {
     private store: Store;
 
     @Command('stream-url', { role: ['staff', 'admin'] })
-    setStreamUrlCommand(source: number, stream: 'bennys' | 'cinema', url = ''): void {
-        if (stream !== 'bennys' && stream !== 'cinema') {
-            console.log(`Stream inconnu: ${stream}`);
-            return;
-        }
-
+    setStreamUrlCommand(source: number, stream: string, url = ''): void {
         this.store.dispatch.global.setStreamUrl({ stream, url });
     }
 
     @Command('stream-stop', { role: ['staff', 'admin'] })
-    stopStreamCommand(source: number, stream: 'bennys' | 'cinema'): void {
-        if (stream !== 'bennys' && stream !== 'cinema') {
-            console.log(`Stream inconnu: ${stream}`);
-            return;
-        }
-
+    stopStreamCommand(source: number, stream: string): void {
         this.store.dispatch.global.setStreamUrl({ stream, url: BLACK_SCREEN_URL });
     }
 }

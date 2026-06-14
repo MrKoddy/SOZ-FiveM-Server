@@ -40,7 +40,7 @@ export class VoiceRadioProvider {
     private store: Store;
 
     public transmittingAnimation: AnimationRunner = null;
-
+    private jammed = false;
     public frequencyTransmission = new Map<number, () => void>();
 
     @Command('radio_lr_primary', {
@@ -182,7 +182,24 @@ export class VoiceRadioProvider {
             return;
         }
 
-        if (player.isDead || player.isInHub || player.carryBox) {
+        if (player.isDead || player.isInHub || player.carryBox || player.isHandcuffed) {
+            return;
+        }
+
+        if (this.jammed) {
+            this.soundService.play('radio/jammed', 1.0);
+            this.transmittingAnimation = this.animationService.playAnimation({
+                base: {
+                    dictionary: 'random@arrests',
+                    name: 'generic_radio_chatter',
+                    options: {
+                        onlyUpperBody: true,
+                        enablePlayerControl: true,
+                    },
+                    duration: 500,
+                },
+            });
+
             return;
         }
 
@@ -213,7 +230,7 @@ export class VoiceRadioProvider {
 
         this.soundService.play(radioType + '/mic_click_on', clickVolume);
 
-        while (isTransmitting) {
+        while (isTransmitting && !this.jammed) {
             SetControlNormal(0, Control.PushToTalk, 1.0);
 
             await wait(0);
@@ -229,7 +246,11 @@ export class VoiceRadioProvider {
 
         await emitRpc(RpcServerEvent.VOIP_VOICE_STOP_TRANSMITTING, frequency);
 
-        this.soundService.play(radioType + '/mic_click_off', clickVolume);
+        if (this.jammed) {
+            this.soundService.play('radio/jammed', 1.0);
+        } else {
+            this.soundService.play(radioType + '/mic_click_off', clickVolume);
+        }
         this.frequencyTransmission.delete(frequency);
     }
 
@@ -382,5 +403,9 @@ export class VoiceRadioProvider {
         }
 
         return parseInt(valueString);
+    }
+
+    public setJammed(value: boolean) {
+        this.jammed = value;
     }
 }

@@ -10,14 +10,14 @@ import { Inject } from '@public/core/decorators/injectable';
 import { Provider } from '@public/core/decorators/provider';
 import { emitRpc } from '@public/core/rpc';
 import { ClientEvent, NuiEvent, ServerEvent } from '@public/shared/event';
-import { Feature, isFeatureEnabled } from '@public/shared/features';
+import { Feature } from '@public/shared/features';
 import { JobType } from '@public/shared/job';
 import { DMC_CRAFT_ZONES, DmcConverterState } from '@public/shared/job/dmc';
 import { MenuType } from '@public/shared/nui/menu';
 import { RpcServerEvent } from '@public/shared/rpc';
 
-import { BoxZone } from '../../../shared/polyzone/box.zone';
 import { PedFactory } from '../../factory/ped.factory';
+import { FeatureProvider } from '../../feature/feature.provider';
 import { PlayerInOutService } from '../../player/player.inout.service';
 import { JobService } from '../job.service';
 
@@ -53,6 +53,9 @@ export class DmcProvider {
     @Inject(PedFactory)
     private pedFactory: PedFactory;
 
+    @Inject(FeatureProvider)
+    private featureProvider: FeatureProvider;
+
     private blipState = {
         'job:dmc:iron_mine': false,
         'job:dmc:aluminium_mine': false,
@@ -60,6 +63,10 @@ export class DmcProvider {
     };
 
     public createBlips() {
+        if (this.featureProvider.isFeatureEnabled(Feature.WhatIfFirstEpisode)) {
+            return;
+        }
+
         this.blipFactory.create('job:dmc:depot', {
             name: 'DeMetal Company',
             sprite: 382,
@@ -92,7 +99,7 @@ export class DmcProvider {
         this.blipFactory.hide('job:dmc:iron_mine', true);
         this.blipFactory.hide('job:dmc:resell', true);
 
-        if (isFeatureEnabled(Feature.Halloween)) {
+        if (this.featureProvider.isFeatureEnabled(Feature.Halloween)) {
             this.blipFactory.create('job:dmc:uranium_mine', {
                 name: "Mine d'uranium",
                 sprite: 382,
@@ -119,7 +126,6 @@ export class DmcProvider {
         }
 
         this.nuiMenu.openMenu(MenuType.DmcJobMenu, {
-            onDuty: this.playerService.isOnDuty(),
             blipState: this.blipState,
         });
     }
@@ -147,12 +153,10 @@ export class DmcProvider {
             },
             [
                 {
-                    icon: 'c:/dmc/allumer.png',
+                    icon: 'dmc/allumer',
                     label: 'Allumer le Convertisseur',
+                    category: 'society',
                     canInteract: async () => {
-                        if (!this.playerService.isOnDuty()) {
-                            return false;
-                        }
                         return !(await this.isConverterEnabled());
                     },
                     job: JobType.DMC,
@@ -163,12 +167,10 @@ export class DmcProvider {
                     blackoutJob: JobType.DMC,
                 },
                 {
-                    icon: 'c:/dmc/allumer.png',
+                    icon: 'dmc/allumer',
                     label: 'Eteindre le Convertisseur',
+                    category: 'society',
                     canInteract: async () => {
-                        if (!this.playerService.isOnDuty()) {
-                            return false;
-                        }
                         return await this.isConverterEnabled();
                     },
                     job: JobType.DMC,
@@ -177,12 +179,10 @@ export class DmcProvider {
                     },
                 },
                 {
-                    icon: 'c:/dmc/temperature.png',
+                    icon: 'dmc/temperature',
                     label: 'Consulter la température',
+                    category: 'society',
                     canInteract: async () => {
-                        if (!this.playerService.isOnDuty()) {
-                            return false;
-                        }
                         return await this.isConverterEnabled();
                     },
                     job: JobType.DMC,
@@ -194,12 +194,10 @@ export class DmcProvider {
                     },
                 },
                 {
-                    icon: 'c:/dmc/temperature-set.png',
+                    icon: 'dmc/temperature-set',
                     label: 'Modifier la température',
+                    category: 'society',
                     canInteract: async () => {
-                        if (!this.playerService.isOnDuty()) {
-                            return false;
-                        }
                         return await this.isConverterEnabled();
                     },
                     job: JobType.DMC,
@@ -225,7 +223,7 @@ export class DmcProvider {
         );
 
         // Craft zones
-        this.craftService.createBtargetZoneCraft(DMC_CRAFT_ZONES, 'c:/dmc/confection.png', 'Forger', JobType.DMC, {
+        this.craftService.createBtargetZoneCraft(DMC_CRAFT_ZONES, 'dmc/confection', 'Forger', JobType.DMC, {
             weapon: 'weapon_hammer',
         });
 
@@ -237,25 +235,15 @@ export class DmcProvider {
             invincible: true,
             blockevents: true,
             scenario: 'WORLD_HUMAN_CLIPBOARD',
+            dropItemCallback: (inventoryId, inventoryItem, amount) => {
+                TriggerServerEvent(
+                    ServerEvent.JOB_RESELL_ITEM,
+                    inventoryId,
+                    inventoryItem,
+                    amount,
+                    'Resell:LSPort:Dmc'
+                );
+            },
         });
-
-        this.playerInOutService.add(
-            'Resell:LSPort:Dmc',
-            new BoxZone([-132.7, -2383.92, 5.0], 3.0, 3.0, {
-                minZ: 4.0,
-                maxZ: 8.0,
-            }),
-            isInside => {
-                if (isInside) {
-                    TriggerEvent('player/setCurrentResellZone', {
-                        ZoneName: 'Resell:LSPort:Dmc',
-                        SourceAccount: 'farm_dmc',
-                        TargetAccount: 'safe_dmc',
-                    });
-                } else {
-                    TriggerEvent('player/setCurrentResellZone', null);
-                }
-            }
-        );
     }
 }

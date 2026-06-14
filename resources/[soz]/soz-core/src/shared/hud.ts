@@ -32,6 +32,18 @@ export type Minimap = {
     left: number;
     right: number;
     top: number;
+    isHidden: boolean;
+};
+
+export type HudDateTime = {
+    hour: number;
+    minute: number;
+    dayOfWeek: number;
+};
+
+export type HudCompass = {
+    degree: number;
+    cardinal: 'N' | 'NE' | 'E' | 'SE' | 'S' | 'SW' | 'W' | 'NW';
 };
 
 export enum VoiceMode {
@@ -43,9 +55,80 @@ export enum VoiceMode {
     Megaphone,
 }
 
+export const AllWatches = [
+    'smartwatchuiwi',
+    'halloween_smartwatch_nocturnal_vein',
+    'casino_smartwatch_gold',
+    'casino_smartwatch_diamond',
+];
+
+export enum HudTheme {
+    Auto = 'auto',
+    Deuteranopie = 'deuteranopie',
+    Trichromatisme = 'trichromatisme',
+    Light = 'light',
+    Dark = 'dark',
+    Green = 'green',
+    Uwu = 'uwu',
+    HalloweenVein = 'halloween-vein',
+    Gold = 'gold',
+    Diamond = 'diamond',
+}
+
+export type AvailableTheme = Record<HudTheme, boolean>;
+export type ThemeConfig = {
+    label: string;
+    item?: string;
+};
+
+export const AllThemesConfig: Record<HudTheme, ThemeConfig> = {
+    [HudTheme.Auto]: { label: 'Auto' },
+    [HudTheme.Deuteranopie]: { label: 'Deutéranopie' },
+    [HudTheme.Trichromatisme]: { label: 'Trichromatisme' },
+    [HudTheme.Light]: { label: 'Light Mode' },
+    [HudTheme.Dark]: { label: 'Dark Mode' },
+    [HudTheme.Green]: { label: 'Green Mode' },
+    [HudTheme.Uwu]: { label: 'UwU Mode' },
+    [HudTheme.HalloweenVein]: { label: 'Halloween', item: 'halloween_smartwatch_nocturnal_vein' },
+    [HudTheme.Gold]: { label: 'Or', item: 'casino_smartwatch_gold' },
+    [HudTheme.Diamond]: { label: 'Diamant', item: 'casino_smartwatch_diamond' },
+};
+
+export type HudSettings = {
+    theme: HudTheme;
+    availableTheme: HudTheme[];
+    zoom: number;
+    inventorySize: number;
+    showDateTime: boolean;
+    showAnimalStats: boolean;
+    showWeather: boolean;
+    showStreetName: boolean;
+    showCompass: boolean;
+    showStress: boolean;
+    showStamina: boolean;
+    showInstructionalOverlay: boolean;
+    switchPlayerStatsPosition: boolean;
+    showInjuryTracker: boolean;
+    zoomInjuryTracker: number;
+    switchInjuryTrackerPosition: boolean;
+};
+
 export type HudState = {
-    minimap: Minimap;
+    hasWatch: boolean;
+    armorPlates: number;
+    settings: HudSettings;
     voiceMode: VoiceMode;
+    streetName: string[];
+    compass: HudCompass;
+    ammo: HudWeaponAmmo;
+    dateTime: HudDateTime & {
+        isNight: boolean;
+    };
+    minimap: Minimap;
+    halloween: {
+        moon: boolean;
+    };
+    useGlassmorphism: boolean;
 };
 
 export enum Font {
@@ -55,3 +138,11 @@ export enum Font {
     ChaletComprimeCologne = 4,
     Pricedown = 7,
 }
+
+export type HudWeaponAmmo = {
+    hasWeapon: boolean;
+    ammo: number;
+    maxAmmo: number;
+};
+
+export type ScreenSelectMode = 'closest' | 'screen' | 'screen_fallback_closest';

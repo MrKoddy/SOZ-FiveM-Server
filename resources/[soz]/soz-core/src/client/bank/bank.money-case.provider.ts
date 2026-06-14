@@ -1,12 +1,17 @@
+import { CasinoService } from '@private/client/casino/casino.service';
+import { GamesProvider } from '@public/client/games/games.provider';
 import { Control } from '@public/shared/input';
+import { SWAT_CASE_ITEM } from '@public/shared/job/police';
 
 import { Inject } from '../../core/decorators/injectable';
 import { Provider } from '../../core/decorators/provider';
 import { Tick, TickInterval } from '../../core/decorators/tick';
 import { StonkConfig } from '../../shared/job/stonk';
 import { InventoryManager } from '../inventory/inventory.manager';
+import { PhoneService } from '../phone/phone.service';
 import { PlayerService } from '../player/player.service';
 import { WeaponHolsterProvider } from '../weapon/weapon.holster.provider';
+import { WeaponService } from '../weapon/weapon.service';
 
 const MONEY_CASE_TRIGGER = 5000;
 const MONEY_CASE_HASH = GetHashKey('WEAPON_BRIEFCASE');
@@ -16,23 +21,46 @@ export class BankMoneyCaseProvider {
     @Inject(PlayerService)
     private playerService: PlayerService;
 
+    @Inject(PhoneService)
+    private phoneService: PhoneService;
+
     @Inject(InventoryManager)
     private inventoryManager: InventoryManager;
 
+    @Inject(WeaponService)
+    private readonly weaponService: WeaponService;
+
     @Inject(WeaponHolsterProvider)
     private weaponHolsterProvider: WeaponHolsterProvider;
+
+    @Inject(GamesProvider)
+    private readonly gamesProvider: GamesProvider;
+
+    @Inject(CasinoService)
+    private readonly casinoService: CasinoService;
 
     private disableAttack = false;
 
     private shouldDisplayMoneyCase(): boolean {
         const player = this.playerService.getPlayer();
 
+        if (
+            this.casinoService.usingMinigame() ||
+            this.gamesProvider.areAnyGameRunning() ||
+            this.playerService.getState().isInGameHub
+        ) {
+            this.disableAttack = false;
+            return false;
+        }
+
         this.disableAttack =
             player !== null &&
             !this.playerService.getState().disableMoneyCase &&
             !this.weaponHolsterProvider.isInAnimation() &&
             !this.playerService.getState().isInShop &&
-            (this.inventoryManager.hasEnoughItem(StonkConfig.delivery.item, 1) ||
+            (this.inventoryManager.hasEnoughItem(StonkConfig.delivery.item) ||
+                this.inventoryManager.hasEnoughItem('crypto_destroyer') ||
+                this.inventoryManager.hasEnoughItem(SWAT_CASE_ITEM) ||
                 Object.values(player.money).reduce((a, b) => a + b) >= MONEY_CASE_TRIGGER);
 
         if (!this.disableAttack) {
@@ -40,13 +68,14 @@ export class BankMoneyCaseProvider {
         }
 
         const playerPed = PlayerPedId();
-        const isPhoneVisible = exports['soz-phone'].isPhoneVisible();
         const isInsideVehicle = IsPedInAnyVehicle(playerPed, true);
 
-        return !(isPhoneVisible || isInsideVehicle);
+        return !(this.phoneService.isPhoneVisible() || isInsideVehicle);
     }
 
     private hasMoneyCase(): boolean {
+        if (this.weaponService.getCurrentWeapon()?.name === 'weapon_briefcase') return;
+
         return GetCurrentPedWeapon(PlayerPedId(), true)[1] == MONEY_CASE_HASH;
     }
 

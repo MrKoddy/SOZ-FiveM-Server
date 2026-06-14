@@ -1,3 +1,6 @@
+import { ApartementTiers, isTrailer } from '@public/shared/housing/housing';
+import { TYPE_LABEL } from '@public/shared/housing/upgrades';
+
 import { OnEvent, OnNuiEvent } from '../../core/decorators/event';
 import { Inject } from '../../core/decorators/injectable';
 import { Provider } from '../../core/decorators/provider';
@@ -48,9 +51,9 @@ export class HousingProvider {
     }
 
     @OnEvent(ClientEvent.HOUSING_REQUEST_ENTER)
-    public async requestEnter(propertyId: number, apartmentId: number, target: number) {
-        const confirmed = await this.notifier.notifyWithConfirm(
-            "Une personne souhaite entrer dans votre appartement.~n~Faites ~g~Y~s~ pour l'accepter ou ~r~N~s~ pour la refuser"
+    public async requestEnter(propertyId: number, apartmentId: number, target: number, label: string) {
+        const [confirmed] = await this.notifier.notifyWithConfirm(
+            `Une personne souhaite entrer dans votre habitation (${label}).~n~Faites ~g~Y~s~ pour l'accepter ou ~r~N~s~ pour la refuser`
         );
 
         if (confirmed) {
@@ -59,84 +62,98 @@ export class HousingProvider {
     }
 
     @OnNuiEvent<{
-        tier: number;
+        apartmentId: number;
+        propertyId: number;
+        apartmentTier: ApartementTiers;
         price: number;
         zkeaPrice: number;
-        enableParking: boolean;
+        isApartmentTrailer: boolean;
         hasParking: number;
         parkingPrice: number;
     }>(NuiEvent.HousingUpgradeApartment)
-    public async upgradeApartment({ tier, price, zkeaPrice, enableParking, hasParking, parkingPrice }) {
-        const player = this.playerService.getPlayer();
-        if (!player.apartment) {
-            this.notifier.notify("Vous n'avez pas d'appartement !", 'error');
+    public async upgradeApartment({
+        apartmentId,
+        propertyId,
+        apartmentTier,
+        price,
+        isApartmentTrailer,
+        hasParking,
+        parkingPrice,
+    }) {
+        const apartment = this.housingRepository.findApartment(propertyId, apartmentId);
+        if (!apartment) {
+            this.notifier.notify("Vous ne possédez pas cette d'habitation !", 'error');
             return;
         }
 
+        const player = this.playerService.getPlayer();
         const {
-            apartment: { tier: currentTier },
             money: { money },
         } = player;
-        if (tier < currentTier) {
-            this.notifier.notify('Vous ne pouvez pas rétrograder de palier !', 'error');
-            return;
+
+        const editedTier: Partial<ApartementTiers> = {};
+        for (const type of Object.keys(TYPE_LABEL)) {
+            if (apartmentTier[type] < apartment[type]) {
+                this.notifier.notify('Vous ne pouvez pas rétrograder de palier !', 'error');
+                return;
+            } else if (apartmentTier[type] > apartment[type]) {
+                editedTier[type] = apartmentTier[type];
+            }
         }
 
-        const requiredMoney = price + enableParking && hasParking ? parkingPrice : 0;
+        const requiredMoney = price + isApartmentTrailer && hasParking ? parkingPrice : 0;
 
         if (money < requiredMoney) {
             this.notifier.notify("Vous n'avez pas assez d'argent !", 'error');
             return;
         }
 
-        if (price > 0 && zkeaPrice > 0) {
-            TriggerServerEvent(ServerEvent.HOUSING_UPGRADE_APARTMENT_TIER, tier, price, zkeaPrice);
+        if (Object.keys(editedTier).length > 0) {
+            TriggerServerEvent(ServerEvent.HOUSING_UPGRADE_APARTMENT_TIER, editedTier, propertyId, apartmentId);
         }
 
-        if (enableParking && hasParking && parkingPrice > 0) {
-            TriggerServerEvent(ServerEvent.HOUSING_ADD_PARKING_PLACE, hasParking, parkingPrice);
+        if (isApartmentTrailer && hasParking && parkingPrice > 0) {
+            TriggerServerEvent(ServerEvent.HOUSING_ADD_PARKING_PLACE, hasParking, propertyId, apartmentId);
         }
 
         this.nuiMenu.closeMenu();
     }
 
+    @OnNuiEvent<{ apartmentId: number; propertyId: number }>(NuiEvent.HousingOpenUpgradeMenu)
     @OnEvent(ClientEvent.HOUSING_OPEN_UPGRADES_MENU)
-    public async openUpgradesMenu() {
+    public async openUpgradesMenu({ apartmentId, propertyId }) {
         const player = this.playerService.getPlayer();
 
-        if (!player.apartment) {
-            this.notifier.notify("Vous n'avez pas d'appartement !", 'error');
+        const apartment = this.housingRepository.findApartment(propertyId, apartmentId);
+        if (!apartment || apartment.owner !== player.citizenid) {
+            this.notifier.notify("Vous ne possédez pas cette d'habitation !", 'error');
             return;
         }
-
-        const { id, tier, price, property_id } = player.apartment;
-
-        const property = this.housingRepository.findProperty(property_id);
-
-        if (!property) {
-            this.notifier.notify("Cet appartement n'appartient à aucune propriété !", 'error');
-            return;
-        }
-
-        const enableParking = property.identifier.includes('trailer');
+        const property = this.housingRepository.findProperty(propertyId);
+        const isApartmentTrailer = isTrailer(property);
 
         let hasParking = true;
-
-        if (enableParking) {
-            const apartment = property.apartments.find(apartment => apartment.id === id);
-
+        if (isApartmentTrailer) {
             hasParking = apartment && apartment.hasParkingPlace;
         }
 
         const position = GetEntityCoords(PlayerPedId()) as Vector3;
 
+        const { tier, cloth_tier, money_tier, park_tier, price } = apartment;
         this.nuiMenu.openMenu(
             MenuType.HousingUpgrades,
             {
+                apartmentId,
+                propertyId,
                 apartmentPrice: price,
-                currentTier: tier,
+                currentTier: {
+                    tier,
+                    cloth_tier,
+                    money_tier,
+                    park_tier,
+                },
                 hasParking,
-                enableParking,
+                isApartmentTrailer,
             },
             {
                 position: {

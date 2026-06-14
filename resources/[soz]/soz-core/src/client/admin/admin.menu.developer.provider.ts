@@ -1,22 +1,33 @@
+import { ShopBrand } from '@public/config/shops';
 import { NotificationPoliceLogoType, NotificationPoliceType, NotificationType } from '@public/shared/notification';
+import { MenuType } from '@public/shared/nui/menu';
 
 import { Command } from '../../core/decorators/command';
 import { OnNuiEvent } from '../../core/decorators/event';
 import { Inject } from '../../core/decorators/injectable';
 import { Provider } from '../../core/decorators/provider';
 import { Tick } from '../../core/decorators/tick';
+import { emitRpc } from '../../core/rpc';
 import { NuiEvent, ServerEvent } from '../../shared/event';
+import { FuelType } from '../../shared/fuel';
 import { Font } from '../../shared/hud';
+import { RpcServerEvent } from '../../shared/rpc';
 import { ClipboardService } from '../clipboard.service';
 import { DrawService } from '../draw.service';
 import { GetObjectList, GetPedList, GetPickupList, GetVehicleList } from '../enumerate';
 import { Notifier } from '../notifier';
 import { InputService } from '../nui/input.service';
+import { NuiDispatch } from '../nui/nui.dispatch';
+import { NuiMenu } from '../nui/nui.menu';
 import { NuiZoneProvider } from '../nui/nui.zone.provider';
 import { ObjectProvider } from '../object/object.provider';
+import { ClothingShopRepository } from '../repository/shop.repository';
+import { UnderTypesShopRepository } from '../repository/under_types.shop.repository';
+import { ScreenService } from '../screen.service';
+import { TargetProvider } from '../target/target.provider';
 import { NoClipProvider } from '../utils/noclip.provider';
 import { VehicleConditionProvider } from '../vehicle/vehicle.condition.provider';
-import { VehicleOffroadProvider } from '../vehicle/vehicule.offroad.provider';
+import { VehicleOffroadProvider } from '../vehicle/vehicle.offroad.provider';
 
 @Provider()
 export class AdminMenuDeveloperProvider {
@@ -47,9 +58,31 @@ export class AdminMenuDeveloperProvider {
     @Inject(VehicleOffroadProvider)
     public vehicleOffroadProvider: VehicleOffroadProvider;
 
+    @Inject(TargetProvider)
+    public targetProvider: TargetProvider;
+
+    @Inject(ScreenService)
+    public screenService: ScreenService;
+
+    @Inject(NuiMenu)
+    public nuiMenu: NuiMenu;
+
+    @Inject(NuiDispatch)
+    public nuiDispatch: NuiDispatch;
+
+    @Inject(ClothingShopRepository)
+    public clothingShopRepository: ClothingShopRepository;
+
+    @Inject(UnderTypesShopRepository)
+    private underTypesShopRepository: UnderTypesShopRepository;
+
     public showCoordinates = false;
 
     public showMileage = false;
+
+    public showMouseDebug = false;
+
+    private _mouseDebugLastState = null;
 
     @OnNuiEvent(NuiEvent.AdminCreateZone)
     public async createZone(): Promise<void> {
@@ -64,6 +97,11 @@ export class AdminMenuDeveloperProvider {
                 maxZ: ${(zone.maxZ || zone.center[2] + 2.0).toFixed(2)},
             });`
         );
+    }
+
+    @OnNuiEvent(NuiEvent.AdminSetDisplayZones)
+    public async displayZones(value: boolean): Promise<void> {
+        this.targetProvider.setDebugPoly(value);
     }
 
     @OnNuiEvent(NuiEvent.AdminToggleNoClip)
@@ -103,9 +141,51 @@ export class AdminMenuDeveloperProvider {
         });
     }
 
+    @Tick(100)
+    public async showMouseDebugLoop(): Promise<void> {
+        if (!this.showMouseDebug) {
+            this._mouseDebugLastState = null;
+
+            return;
+        }
+
+        this._mouseDebugLastState = await this.screenService.getEntityOnMousePosition();
+    }
+
+    @Tick()
+    public async drawMouseDebug() {
+        if (this._mouseDebugLastState === null) {
+            return;
+        }
+
+        const [entity, position] = this._mouseDebugLastState;
+
+        const heading = GetEntityHeading(entity).toFixed(2);
+        const entityType = GetEntityType(entity);
+
+        const x = position[0].toFixed(2);
+        const y = position[1].toFixed(2);
+        const z = position[2].toFixed(2);
+
+        this.draw.drawText(
+            `~w~Entité ${entity}, Type: ${entityType}, :~b~ vector4(${x}, ${y}, ${z}, ${heading})`,
+            [0.4, 0.115],
+            {
+                font: Font.ChaletComprimeCologne,
+                size: 0.4,
+                color: [66, 182, 245, 255],
+            }
+        );
+    }
+
     @OnNuiEvent(NuiEvent.AdminToggleShowMileage)
     public async toggleShowMileage(active: boolean): Promise<void> {
         this.showMileage = active;
+    }
+
+    @OnNuiEvent(NuiEvent.AdminToggleShowMouseDebug)
+    public async toggleShowMouseDebug(active: boolean): Promise<void> {
+        this.showMouseDebug = active;
     }
 
     @Tick()
@@ -296,5 +376,29 @@ export class AdminMenuDeveloperProvider {
             } not networked, ${countPickupsNetworked} networked, ${GetMaxNumNetworkPickups()} max networked`
         );
         console.log(`Object from soz : ${this.objectProvider.getLoadedObjectsCount()} total`);
+    }
+
+    @OnNuiEvent(NuiEvent.AdminMenuClothes)
+    public async onClothes(brand: ShopBrand): Promise<void> {
+        const { shop: shop_content, content: shop_categories } =
+            await this.clothingShopRepository.getShopContent(brand);
+        const under_types = this.underTypesShopRepository.getAllUnderTypes();
+
+        this.nuiDispatch.dispatch('cloth_shop', 'SetCatalog', {
+            brand: brand,
+            shop_content,
+            shop_categories,
+            under_types,
+            isInCayo: true,
+        });
+    }
+    @OnNuiEvent(NuiEvent.AdminMenuOilPrice)
+    public async onOilChange(): Promise<void> {
+        const stationPrices = await emitRpc<Record<FuelType, number>>(RpcServerEvent.OIL_GET_STATION_PRICES);
+        if (!stationPrices) {
+            return;
+        }
+
+        this.nuiMenu.openMenu(MenuType.OilSetStationPrice, stationPrices);
     }
 }

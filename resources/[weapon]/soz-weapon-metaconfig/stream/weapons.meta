@@ -557,6 +557,275 @@
         </Item>
       </Tints>
     </Item>
+    <Item>
+      <Name>TINT_GUNRUNNING</Name>
+       <Tints>
+        <Item>
+          <SpecFresnel value="0.80000" />
+          <SpecFalloffMult value="40.000000" />
+          <SpecIntMult value="0.500000" />
+          <Spec2Factor value="20.000000" />
+          <Spec2ColorInt value="1.000000" />
+          <Spec2Color value="0x00000000e7e3d1" />
+        </Item>
+        <Item>
+          <SpecFresnel value="0.80000" />
+          <SpecFalloffMult value="40.000000" />
+          <SpecIntMult value="0.500000" />
+          <Spec2Factor value="20.000000" />
+          <Spec2ColorInt value="1.000000" />
+          <Spec2Color value="0x0000000061605b" />
+        </Item>
+        <Item>
+          <SpecFresnel value="0.80000" />
+          <SpecFalloffMult value="40.000000" />
+          <SpecIntMult value="0.500000" />
+          <Spec2Factor value="20.000000" />
+          <Spec2ColorInt value="1.000000" />
+          <Spec2Color value="0x0000000061605b" />
+        </Item>
+        <Item>
+          <SpecFresnel value="0.80000" />
+          <SpecFalloffMult value="40.000000" />
+          <SpecIntMult value="0.7500000" />
+          <Spec2Factor value="20.000000" />
+          <Spec2ColorInt value="2.000000" />
+          <Spec2Color value="0x00000000469bbd" />
+        </Item>
+        <Item>
+          <SpecFresnel value="0.80000" />
+          <SpecFalloffMult value="40.000000" />
+          <SpecIntMult value="0.500000" />
+          <Spec2Factor value="20.000000" />
+          <Spec2ColorInt value="1.000000" />
+          <Spec2Color value="0x000000009d8e68" />
+        </Item>
+        <Item>
+          <SpecFresnel value="0.80000" />
+          <SpecFalloffMult value="40.000000" />
+          <SpecIntMult value="0.500000" />
+          <Spec2Factor value="20.000000" />
+          <Spec2ColorInt value="1.000000" />
+          <Spec2Color value="0x00000000536941" />
+        </Item>
+        <Item>
+         <SpecFresnel value="0.80000" />
+          <SpecFalloffMult value="40.000000" />
+          <SpecIntMult value="0.500000" />
+          <Spec2Factor value="20.000000" />
+          <Spec2ColorInt value="1.000000" />
+          <Spec2Color value="0x00000000cfe7fc" />
+        </Item>
+        <Item>
+          <SpecFresnel value="0.75000" />
+          <SpecFalloffMult value="60.000000" />
+          <SpecIntMult value="0.750000" />
+          <Spec2Factor value="20.000000" />
+          <Spec2ColorInt value="1.000000" />
+          <Spec2Color value="0x00000000736548" />
+        </Item>
+        <Item>
+          <SpecFresnel value="0.80000" />
+          <SpecFalloffMult value="40.000000" />
+          <SpecIntMult value="0.500000" />
+          <Spec2Factor value="20.000000" />
+          <Spec2ColorInt value="1.000000" />
+          <Spec2Color value="0x00000000736548" />
+        </Item>
+        <Item>
+          <SpecFresnel value="0.75000" />
+          <SpecFalloffMult value="60.000000" />
+          <SpecIntMult value="0.800000" />
+          <Spec2Factor value="20.000000" />
+          <Spec2ColorInt value="1.000000" />
+          <Spec2Color value="0x00000000a62828" />
+        </Item>
+        <Item>
+          <SpecFresnel value="0.75000" />
+          <SpecFalloffMult value="60.000000" />
+          <SpecIntMult value="0.800000" />
+          <Spec2Factor value="20.000000" />
+          <Spec2ColorInt value="1.000000" />
+          <Spec2Color value="0x000000006d28a6" />
+        </Item>
+        <Item>
+          <SpecFresnel value="0.75000" />
+          <SpecFalloffMult value="60.000000" />
+          <SpecIntMult value="0.800000" />
+          <Spec2Factor value="20.000000" />
+          <Spec2ColorInt value="1.000000" />
+          <Spec2Color value="0x000000008a7848" />
+        </Item>
+        <Item>
+          <SpecFresnel value="0.75000" />
+          <SpecFalloffMult value="60.000000" />
+          <SpecIntMult value="0.800000" />
+          <Spec2Factor value="20.000000" />
+          <Spec2ColorInt value="1.000000" />
+          <Spec2Color value="0x00000000fbefde" />
+        </Item>
+        <Item>
+          <SpecFresnel value="0.75000" />
+          <SpecFalloffMult value="60.000000" />
+          <SpecIntMult value="0.750000" />
+          <Spec2Factor value="20.000000" />
+          <Spec2ColorInt value="1.000000" />
+          <Spec2Color value="0x00000000de2c8e" />
+        </Item>
+        <Item>
+          <SpecFresnel value="0.75000" />
+          <SpecFalloffMult value="60.000000" />
+          <SpecIntMult value="0.750000" />
+          <Spec2Factor value="20.000000" />
+          <Spec2ColorInt value="1.000000" />
+          <Spec2Color value="0x000000003052b8" />
+        </Item>
+        <Item>
+         <SpecFresnel value="0.75000" />
+          <SpecFalloffMult value="60.000000" />
+          <SpecIntMult value="0.7500000" />
+          <Spec2Factor value="20.000000" />
+          <Spec2ColorInt value="1.000000" />
+          <Spec2Color value="0x00000000de802c" />
+        </Item>
+        <Item>
+         <SpecFresnel value="0.75000" />
+          <SpecFalloffMult value="60.000000" />
+          <SpecIntMult value="0.7500000" />
+          <Spec2Factor value="20.000000" />
+          <Spec2ColorInt value="1.000000" />
+          <Spec2Color value="0x00000000b330b8" />
+        </Item>
+        <Item>
+         <SpecFresnel value="0.80000" />
+          <SpecFalloffMult value="40.000000" />
+          <SpecIntMult value="0.5000000" />
+          <Spec2Factor value="20.000000" />
+          <Spec2ColorInt value="1.000000" />
+          <Spec2Color value="0x00000000593f3f" />
+        </Item>
+        <Item>
+          <SpecFresnel value="0.80000" />
+          <SpecFalloffMult value="40.000000" />
+          <SpecIntMult value="0.500000" />
+          <Spec2Factor value="20.000000" />
+          <Spec2ColorInt value="1.000000" />
+          <Spec2Color value="0x000000003f5946" />
+        </Item>
+        <Item>
+          <SpecFresnel value="0.80000" />
+          <SpecFalloffMult value="40.000000" />
+          <SpecIntMult value="0.500000" />
+          <Spec2Factor value="20.000000" />
+          <Spec2ColorInt value="1.000000" />
+          <Spec2Color value="0x000000003f5659" />
+        </Item>
+        <Item>
+         <SpecFresnel value="0.80000" />
+          <SpecFalloffMult value="40.000000" />
+          <SpecIntMult value="0.5000000" />
+          <Spec2Factor value="20.000000" />
+          <Spec2ColorInt value="1.000000" />
+          <Spec2Color value="0x0000000058593f" />
+        </Item>
+        <Item>
+         <SpecFresnel value="0.75000" />
+          <SpecFalloffMult value="60.000000" />
+          <SpecIntMult value="0.7500000" />
+          <Spec2Factor value="20.000000" />
+          <Spec2ColorInt value="1.000000" />
+          <Spec2Color value="0x00000000c22929" />
+        </Item>
+        <Item>
+         <SpecFresnel value="0.75000" />
+          <SpecFalloffMult value="60.000000" />
+          <SpecIntMult value="0.7500000" />
+          <Spec2Factor value="20.000000" />
+          <Spec2ColorInt value="1.000000" />
+          <Spec2Color value="0x00000000298ac2" />
+        </Item>
+        <Item>
+          <SpecFresnel value="0.950000" />
+          <SpecFalloffMult value="100.000000" />
+          <SpecIntMult value="1" />
+          <Spec2Factor value="20.000000" />
+          <Spec2ColorInt value="2.000000" />
+          <Spec2Color value="0x00000000b08100" />
+        </Item>
+        <Item>
+          <SpecFresnel value="0.950000" />
+          <SpecFalloffMult value="100.000000" />
+          <SpecIntMult value="1.000000" />
+          <Spec2Factor value="20.000000" />
+          <Spec2ColorInt value="2.000000" />
+          <Spec2Color value="0x00000000d9f7ff" />
+        </Item>
+        <Item>
+          <SpecFresnel value="0.950000" />
+          <SpecFalloffMult value="100.000000" />
+          <SpecIntMult value="1.000000" />
+          <Spec2Factor value="115.000000" />
+          <Spec2ColorInt value="3.000000" />
+          <Spec2Color value="0x00000000f576b7" />
+        </Item>
+        <Item>
+          <SpecFresnel value="0.950000" />
+          <SpecFalloffMult value="100.000000" />
+          <SpecIntMult value="1" />
+          <Spec2Factor value="45.000000" />
+          <Spec2ColorInt value="3.000000" />
+          <Spec2Color value="0x0000000075fa00" />
+        </Item>
+        <Item>
+          <SpecFresnel value="0.950000" />
+          <SpecFalloffMult value="100.000000" />
+          <SpecIntMult value="1" />
+          <Spec2Factor value="115.000000" />
+          <Spec2ColorInt value="3.000000" />
+          <Spec2Color value="0x00000000ff3300" />
+        </Item>
+        <Item>
+          <SpecFresnel value="0.950000" />
+          <SpecFalloffMult value="100.000000" />
+          <SpecIntMult value="1" />
+          <Spec2Factor value="115.000000" />
+          <Spec2ColorInt value="3.000000" />
+          <Spec2Color value="0x0000000043f0b9" />
+        </Item>
+        <Item>
+          <SpecFresnel value="0.950000" />
+          <SpecFalloffMult value="100.000000" />
+          <SpecIntMult value="1" />
+          <Spec2Factor value="115.000000" />
+          <Spec2ColorInt value="3.000000" />
+          <Spec2Color value="0x0000000010b4e6" />
+        </Item>
+        <Item>
+          <SpecFresnel value="0.950000" />
+          <SpecFalloffMult value="100.000000" />
+          <SpecIntMult value="1" />
+          <Spec2Factor value="52.000000" />
+          <Spec2ColorInt value="4.000000" />
+          <Spec2Color value="0x0000000000ffd9" />
+        </Item>
+         <Item>
+          <SpecFresnel value="0.95000" />
+          <SpecFalloffMult value="100.000000" />
+          <SpecIntMult value="1.000000" />
+          <Spec2Factor value="52.000000" />
+          <Spec2ColorInt value="4.000000" />
+          <Spec2Color value="0x00000000ff6200" />
+        </Item>
+          <Item>
+          <SpecFresnel value="0.80000" />
+          <SpecFalloffMult value="40.000000" />
+          <SpecIntMult value="0.500000" />
+          <Spec2Factor value="20.000000" />
+          <Spec2ColorInt value="1.000000" />
+          <Spec2Color value="0x00000000e7e3d1" />
+        </Item>
+      </Tints>
+    </Item>
   </TintSpecValues>
   <FiringPatternAliases>
     <Item>
@@ -1226,70 +1495,6 @@
           <CoronaIntensity value="0.000000" />
           <CoronaZBias value="0.000000" />
           <ProjectileFlags>ProcessImpacts</ProjectileFlags>
-          <ThrownForce value="0.000000" />
-          <ThrownForceFromVehicle value="5.000000" />
-        </Item>
-        <Item type="CAmmoThrownInfo">
-          <Name>AMMO_SNOWBALL</Name>
-          <Model>w_ex_snowball</Model>
-          <Audio />
-          <Slot />
-          <AmmoMax value="10" />
-          <AmmoMax50 value="10" />
-          <AmmoMax100 value="10" />
-          <AmmoMaxMP value="10" />
-          <AmmoMax50MP value="10" />
-          <AmmoMax100MP value="10" />
-          <AmmoFlags>FixedAfterExplosion</AmmoFlags>
-          <Damage value="0.001000" />
-          <LifeTime value="10.000000" />
-          <FromVehicleLifeTime value="2.500000" />
-          <LifeTimeAfterImpact value="0.001000" />
-          <LifeTimeAfterExplosion value="0.000000" />
-          <ExplosionTime value="0.250000" />
-          <LaunchSpeed value="25.000000" />
-          <SeparationTime value="0.000000" />
-          <TimeToReachTarget value="0.000000" />
-          <Damping value="0.050000" />
-          <GravityFactor value="1.000000" />
-          <RicochetTolerance value="0.000000" />
-          <PedRicochetTolerance value="0.000000" />
-          <VehicleRicochetTolerance value="0.000000" />
-          <Explosion>
-            <Default>EXP_TAG_SNOWBALL</Default>
-            <HitCar>DONTCARE</HitCar>
-            <HitTruck>DONTCARE</HitTruck>
-            <HitBike>DONTCARE</HitBike>
-            <HitBoat>DONTCARE</HitBoat>
-            <HitPlane>DONTCARE</HitPlane>
-          </Explosion>
-          <FuseFx>proj_snowball_fuse</FuseFx>
-		      <FuseFxFP />
-          <TrailFx>proj_snowball_trail</TrailFx>
-          <TrailFxUnderWater />
-          <TrailFxFadeInTime value="0.000000" />
-          <TrailFxFadeOutTime value="0.000000" />
-          <PrimedFx />
-          <DisturbFxDefault />
-          <DisturbFxSand />
-          <DisturbFxWater />
-          <DisturbFxDirt />
-          <DisturbFxFoliage />
-          <DisturbFxProbeDist value="0.000000" />
-          <DisturbFxScale value="0.000000" />
-          <LightOnlyActiveWhenStuck value="false" />
-          <LightFlickers value="false" />
-          <LightBone />
-          <LightColour x="0.000000" y="0.000000" z="0.000000" />
-          <LightIntensity value="0.000000" />
-          <LightRange value="0.000000" />
-          <LightFalloffExp value="0.000000" />
-          <LightFrequency value="0.000000" />
-          <LightPower value="0.000000" />
-          <CoronaSize value="0.000000" />
-          <CoronaIntensity value="0.000000" />
-          <CoronaZBias value="0.000000" />
-          <ProjectileFlags>DestroyOnImpact ProcessImpacts NoPullPin DoubleDamping ApplyDamageOnImpact DontFireAnyEvents</ProjectileFlags>
           <ThrownForce value="0.000000" />
           <ThrownForceFromVehicle value="5.000000" />
         </Item>
@@ -5471,7 +5676,7 @@
           <AmmoInfo ref="AMMO_SMG" />
           <AimingInfo ref="RIFLE_LO_BASE_STRAFE" />
           <ClipSize value="30" />
-          <AccuracySpread value="3.500000" />
+          <AccuracySpread value="2.500000" />
           <AccurateModeAccuracyModifier value="0.500000" />
           <RunAndGunAccuracyModifier value="2.000000" />
           <RunAndGunAccuracyMaxModifier value="1.000000" />
@@ -5486,7 +5691,7 @@
           <MinHeadShotDistancePlayer value="5.000000" />
           <MaxHeadShotDistancePlayer value="40.000000" />
           <HeadShotDamageModifierPlayer value="18.000000" />
-          <Damage value="22.000000" />
+          <Damage value="25.000000" />
           <DamageTime value="0.000000" />
           <DamageTimeInVehicle value="0.000000" />
           <DamageTimeInVehicleHeadShot value="0.000000" />
@@ -5774,7 +5979,7 @@
           <AmmoInfo ref="AMMO_SMG" />
           <AimingInfo ref="SMG_2H_BASE_STRAFE" />
           <ClipSize value="30" />
-          <AccuracySpread value="3.000000" />
+          <AccuracySpread value="2.500000" />
           <AccurateModeAccuracyModifier value="0.500000" />
           <RunAndGunAccuracyModifier value="2.000000" />
           <RunAndGunAccuracyMaxModifier value="1.000000" />
@@ -5789,7 +5994,7 @@
           <MinHeadShotDistancePlayer value="5.000000" />
           <MaxHeadShotDistancePlayer value="40.000000" />
           <HeadShotDamageModifierPlayer value="18.000000" />
-          <Damage value="23.000000" />
+          <Damage value="25.000000" />
           <DamageTime value="0.000000" />
           <DamageTimeInVehicle value="0.000000" />
           <DamageTimeInVehicleHeadShot value="0.000000" />

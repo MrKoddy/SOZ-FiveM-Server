@@ -1,15 +1,19 @@
+import { Command } from '@core/decorators/command';
+import { Once, OnceStep, OnEvent } from '@core/decorators/event';
+import { Inject } from '@core/decorators/injectable';
+import { Provider } from '@core/decorators/provider';
+import { Tick, TickInterval } from '@core/decorators/tick';
+import { emitRpc } from '@core/rpc';
+import { wait, waitUntil } from '@core/utils';
+import { POLICE_MINESWEEPER_ROBOT_CAR_MODEL } from '@private/shared/police';
+import { PhoneAppSocietyProvider } from '@public/client/phone/apps/phone.app.society.provider';
+import { PhoneService } from '@public/client/phone/phone.service';
+import { Feature } from '@public/shared/features';
 import { getRandomItem } from '@public/shared/random';
 
-import { Command } from '../../core/decorators/command';
-import { Once, OnceStep, OnEvent } from '../../core/decorators/event';
-import { Inject } from '../../core/decorators/injectable';
-import { Provider } from '../../core/decorators/provider';
-import { Tick, TickInterval } from '../../core/decorators/tick';
-import { emitRpc } from '../../core/rpc';
-import { uuidv4, wait, waitUntil } from '../../core/utils';
 import { ClientEvent, ServerEvent } from '../../shared/event';
+import { DEFAULT_MAX_INVENTORY_DISTANCE, getPositionZone } from '../../shared/inventory';
 import { PlayerData } from '../../shared/player';
-import { BoxZone } from '../../shared/polyzone/box.zone';
 import { getDistance, Vector3 } from '../../shared/polyzone/vector';
 import { RpcServerEvent } from '../../shared/rpc';
 import {
@@ -22,23 +26,16 @@ import {
     VehicleVolatileState,
 } from '../../shared/vehicle/vehicle';
 import { AnimationService } from '../animation/animation.service';
+import { FeatureProvider } from '../feature/feature.provider';
+import { InventoryManager } from '../inventory/inventory.manager';
 import { Notifier } from '../notifier';
+import { NuiDispatch } from '../nui/nui.dispatch';
 import { PlayerService } from '../player/player.service';
 import { VehicleRepository } from '../repository/vehicle.repository';
 import { SoundService } from '../sound.service';
 import { VehicleSeatbeltProvider } from './vehicle.seatbelt.provider';
 import { VehicleService } from './vehicle.service';
 import { VehicleStateService } from './vehicle.state.service';
-
-export const VEHICLE_TRUNK_TYPES = {
-    [GetHashKey('tanker')]: 'tanker',
-    [GetHashKey('tanker2')]: 'tanker',
-    [GetHashKey('trailerlogs')]: 'trailerlogs',
-    [GetHashKey('brickade')]: 'brickade',
-    [GetHashKey('brickade1')]: 'brickade',
-    [GetHashKey('trash')]: 'trash',
-    [GetHashKey('tiptruck2')]: 'tiptruck',
-};
 
 // A list of vehicles using exlusively seat bones, as the native GetEntryPositionOfDoor has a bad behavior with them. Fill in more vehicles if needed.
 const VEHICLE_FORCE_USE_BONES = {
@@ -79,7 +76,20 @@ export class VehicleLockProvider {
     @Inject(VehicleStateService)
     private vehicleStateService: VehicleStateService;
 
-    private vehicleTrunkOpened: TrunkOpened | null = null;
+    @Inject(InventoryManager)
+    public inventoryManager: InventoryManager;
+
+    @Inject(NuiDispatch)
+    public nuiDispatch: NuiDispatch;
+
+    @Inject(FeatureProvider)
+    public featureProvider: FeatureProvider;
+
+    @Inject(PhoneService)
+    private phoneService: PhoneService;
+
+    @Inject(PhoneAppSocietyProvider)
+    private readonly phoneSocietyProvider: PhoneAppSocietyProvider;
 
     private vehicleOpened: Set<number> = new Set();
 
@@ -149,12 +159,9 @@ export class VehicleLockProvider {
             SetVehicleDoorsLocked(vehicleId, VehicleLockStatus.Unlocked);
         } else {
             SetVehicleDoorsLocked(vehicleId, VehicleLockStatus.Locked);
-
-            if (this.vehicleTrunkOpened && this.vehicleTrunkOpened.vehicle === vehicleId) {
-                this.vehicleTrunkOpened = null;
-                TriggerEvent('inventory:client:closeInventory');
-            }
         }
+
+        if (GetPedInVehicleSeat(vehicleId, VehicleSeat.Driver) === PlayerPedId()) return;
 
         if (NetworkHasControlOfEntity(vehicleId)) {
             SetVehicleLights(vehicleId, 2);
@@ -177,6 +184,11 @@ export class VehicleLockProvider {
         const vehicle = GetVehiclePedIsTryingToEnter(ped);
 
         if (!vehicle) {
+            return;
+        }
+
+        if (GetEntityModel(vehicle) === GetHashKey(POLICE_MINESWEEPER_ROBOT_CAR_MODEL)) {
+            ClearPedTasksImmediately(ped);
             return;
         }
 
@@ -207,6 +219,7 @@ export class VehicleLockProvider {
             return;
         }
 
+        SetVehicleDoorsLocked(vehicle, VehicleLockStatus.Unlocked);
         const closestSeat = this.getClosestSeat(ped, vehicle);
 
         const start = GetGameTimer();
@@ -311,15 +324,7 @@ export class VehicleLockProvider {
             },
         ],
     })
-    async openVehicleTrunk() {
-        this.openVehicleTrunkInner();
-    }
-
-    async openVehiclePolice(vehicle: number) {
-        this.openVehicleTrunkInner(vehicle, false);
-    }
-
-    private async openVehicleTrunkInner(definedVehicle?: number, checkOpen = true) {
+    public async openVehicle(definedVehicle?: number, checkOpen = true) {
         const ped = PlayerPedId();
 
         const player = this.playerService.getPlayer();
@@ -362,6 +367,10 @@ export class VehicleLockProvider {
 
         const vehicleState = await this.vehicleStateService.getServerVehicleState(vehicle);
 
+        if (vehicleState.dead) {
+            return false;
+        }
+
         if (!vehicleState.forced && !player.metadata.godmode && checkOpen && !vehicleState.open) {
             this.notifier.notify('Véhicule verrouillé.', 'error');
 
@@ -374,69 +383,20 @@ export class VehicleLockProvider {
             return;
         }
 
-        const plate = vehicleState.plate || GetVehicleNumberPlateText(vehicle);
-        const vehicleModel = GetEntityModel(vehicle);
-        const vehicleClass = GetVehicleClass(vehicle);
-        const trunkType = VEHICLE_TRUNK_TYPES[vehicleModel] || 'trunk';
-
-        TriggerServerEvent('inventory:server:openInventory', trunkType, plate, {
-            model: vehicleModel,
-            class: vehicleClass,
-            entity: vehicleNetworkId,
-        });
-        TriggerServerEvent(ServerEvent.VEHICLE_SET_TRUNK_STATE, vehicleNetworkId, true);
-
-        this.vehicleTrunkOpened = opened;
+        this.inventoryManager.openVehicleInventory(vehicle);
     }
 
     private isInTrunkZone(opened: TrunkOpened) {
         const position = GetEntityCoords(opened.vehicle, false) as Vector3;
-        const center = [
-            position[0] + (opened.max[0] + opened.min[0]) / 2,
-            position[1] + (opened.max[1] + opened.min[1]) / 2,
-            position[2] + opened.min[2],
-        ] as Vector3;
-
-        const vehicleTrunkZone = new BoxZone(
-            center,
-            opened.max[1] - opened.min[1] + 3.0,
-            opened.max[0] - opened.min[0] + 3.0,
-            {
-                heading: GetEntityHeading(opened.vehicle),
-                minZ: center[2],
-                maxZ: center[2] + 6.0,
-            }
+        const vehicleTrunkZone = getPositionZone(
+            position,
+            GetEntityHeading(opened.vehicle),
+            opened,
+            DEFAULT_MAX_INVENTORY_DISTANCE
         );
-
         const pedPosition = GetEntityCoords(PlayerPedId(), false) as Vector3;
 
         return vehicleTrunkZone.isPointInside(pedPosition);
-    }
-
-    @Tick(TickInterval.EVERY_SECOND)
-    async checkKeepVehicleTrunkOpen() {
-        if (!this.vehicleTrunkOpened) {
-            return;
-        }
-
-        if (DoesEntityExist(this.vehicleTrunkOpened.vehicle)) {
-            if (this.isInTrunkZone(this.vehicleTrunkOpened)) {
-                return;
-            }
-        }
-
-        this.closeVehicleTrunk();
-        TriggerEvent('inventory:client:closeInventory');
-        this.notifier.notify('Le coffre est trop loin.', 'warning');
-    }
-
-    @OnEvent(ClientEvent.VEHICLE_CLOSE_TRUNK)
-    closeVehicleTrunk() {
-        if (this.vehicleTrunkOpened) {
-            TriggerServerEvent(ServerEvent.VEHICLE_SET_TRUNK_STATE, this.vehicleTrunkOpened.vehicleNetworkId, false);
-        }
-
-        this.vehicleTrunkOpened = null;
     }
 
     @OnEvent(ClientEvent.VEHICLE_SET_TRUNK_STATE)
@@ -474,7 +434,7 @@ export class VehicleLockProvider {
             return;
         }
 
-        if (exports['soz-phone'].isPhoneVisible()) {
+        if (this.phoneService.isPhoneVisible()) {
             return;
         }
 
@@ -494,6 +454,8 @@ export class VehicleLockProvider {
 
             return;
         }
+
+        if (GetEntityModel(vehicle) === GetHashKey(POLICE_MINESWEEPER_ROBOT_CAR_MODEL)) return;
 
         if (GetEntitySpeed(vehicle) * 3.6 > 75) {
             this.notifier.notify('Vous allez trop vite pour faire ça.', 'error');
@@ -549,7 +511,7 @@ export class VehicleLockProvider {
 
     private async hasVehicleKey(player: PlayerData, state: VehicleVolatileState) {
         // Case for temporary care, only owner can unlock / lock vehicle
-        if (state.id === null) {
+        if (state.id === null && state.rentOwner === null) {
             return state.owner === player.citizenid;
         }
 
@@ -562,6 +524,10 @@ export class VehicleLockProvider {
 
     @OnEvent(ClientEvent.VEHICLE_LOCKPICK)
     public onLockpick(type: string, model: number) {
+        if (!this.featureProvider.isFeatureEnabled(Feature.PoliceAlert)) {
+            return;
+        }
+
         const coords = GetEntityCoords(PlayerPedId());
         const zoneID = GetNameOfZone(coords[0], coords[1], coords[2]);
         if (zoneID == 'ISHEIST') {
@@ -575,7 +541,7 @@ export class VehicleLockProvider {
         const message = getRandomItem(messages);
         const modelName = modelInfo ? modelInfo.name : GetDisplayNameFromVehicleModel(model);
 
-        TriggerServerEvent('phone:sendSocietyMessage', 'phone:sendSocietyMessage:' + uuidv4(), {
+        this.phoneSocietyProvider.sendMessage({
             anonymous: true,
             number: '555-POLICE',
             message: message.replace('${0}', zone).replace('${1}', modelName),
@@ -583,7 +549,7 @@ export class VehicleLockProvider {
                 .replace('${0}', `<span {class}>${zone}</span>`)
                 .replace('${1}', `<span {class}>${modelName}</span>`),
             position: true,
-            info: { type: 'auto-theft' },
+            type: 'auto-theft',
             overrideIdentifier: 'System',
         });
     }

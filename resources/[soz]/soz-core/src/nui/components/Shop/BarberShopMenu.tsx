@@ -1,8 +1,10 @@
-import { PlayerData } from '@public/shared/player';
-import { BarberConfiguration, BarberShopCategory, BarberShopColors, BarberShopContent } from '@public/shared/shop';
+import { ShopScalp } from '@public/config/scalp';
+import { usePlayer } from '@public/nui/hook/data';
+import { PlayerData, Skin } from '@public/shared/player';
+import { BarberShopCategory, BarberShopColors, BarberShopContent } from '@public/shared/shop';
+import { TaxType } from '@public/shared/tax';
 import { FunctionComponent, useState } from 'react';
 
-import { TaxType } from '../../../shared/bank';
 import { NuiEvent } from '../../../shared/event';
 import { MenuType } from '../../../shared/nui/menu';
 import { fetchNui } from '../../fetch';
@@ -16,33 +18,46 @@ import {
     MenuItemSelect,
     MenuItemSelectOption,
     MenuItemSelectOptionColor,
+    MenuSubTitle,
     MenuTitle,
 } from '../Styleguide/Menu';
 
 type MenuBarberShopStateProps = {
     data: {
         shop_content: BarberShopContent;
-        player_data: PlayerData;
         shop_colors: BarberShopColors;
     };
 };
 
 export const BarberShopMenu: FunctionComponent<MenuBarberShopStateProps> = ({ data }) => {
-    const banner = 'https://nui-img/soz/menu_shop_barber';
-    const content = data.shop_content[data.player_data.skin.Model.Hash];
-    const [configuration, setConfiguration] = useState<Record<string, BarberConfiguration>>({});
+    const player_data = usePlayer();
+    const content = data.shop_content[player_data.skin.Model.Hash];
+    const [configuration, setConfiguration] = useState<Record<string, Skin>>({});
     const [currentCat, setCurrentCat] = useState<string>('Hair');
-    const [totalConfiguration, setTotalConfiguration] = useState<BarberConfiguration>({
+    const [totalConfiguration, setTotalConfiguration] = useState<Skin>({
         Hair: {},
         Makeup: {},
-        FaceTraits: {},
+        FaceTrait: {},
     });
 
-    const updateConfiguration = (category: string, overlay: string, field: string, value: number | boolean) => {
-        configuration[category] = configuration[category] || { Hair: {}, Makeup: {}, FaceTraits: {} };
+    const updateConfiguration = (
+        category: string,
+        overlay: string,
+        field: string,
+        value: number | boolean,
+        secondField: string = null,
+        secondValue: number | boolean = null
+    ) => {
+        configuration[category] ??= { Hair: {}, Makeup: {}, FaceTrait: {} };
         configuration[category][overlay][field] = value;
+        if (secondField) {
+            configuration[category][overlay][secondField] = secondValue;
+        }
         setConfiguration(configuration);
         totalConfiguration[overlay][field] = value;
+        if (secondField) {
+            totalConfiguration[overlay][secondField] = secondValue;
+        }
         setTotalConfiguration(totalConfiguration);
         fetchNui(NuiEvent.BarberShopPreview, totalConfiguration);
     };
@@ -66,11 +81,11 @@ export const BarberShopMenu: FunctionComponent<MenuBarberShopStateProps> = ({ da
     return (
         <Menu type={MenuType.BarberShop}>
             <MainMenu>
-                <MenuTitle banner={banner}>Coiffeur</MenuTitle>
+                <MenuTitle title="Coiffeur" />
                 <MenuContent>
                     <MenuBarberHairComponent
                         cat={content.find(cat => cat.category === 'Hair')}
-                        player_data={data.player_data}
+                        player_data={player_data}
                         shop_colors={data.shop_colors}
                         updateConfiguration={updateConfiguration}
                         onSelectCam={onSelectCam}
@@ -82,7 +97,7 @@ export const BarberShopMenu: FunctionComponent<MenuBarberShopStateProps> = ({ da
                     />
                     <MenuBarberBeardComponent
                         cat={content.find(cat => cat.category === 'Beard')}
-                        player_data={data.player_data}
+                        player_data={player_data}
                         shop_colors={data.shop_colors}
                         updateConfiguration={updateConfiguration}
                         onSelectCam={onSelectCam}
@@ -94,7 +109,7 @@ export const BarberShopMenu: FunctionComponent<MenuBarberShopStateProps> = ({ da
                     />
                     <MenuBarberChestHairComponent
                         cat={content.find(cat => cat.category === 'ChestHair')}
-                        player_data={data.player_data}
+                        player_data={player_data}
                         shop_colors={data.shop_colors}
                         updateConfiguration={updateConfiguration}
                         onSelectCam={onSelectCam}
@@ -106,7 +121,7 @@ export const BarberShopMenu: FunctionComponent<MenuBarberShopStateProps> = ({ da
                     />
                     <MenuBarberEyebrowComponent
                         cat={content.find(cat => cat.category === 'Eyebrow')}
-                        player_data={data.player_data}
+                        player_data={player_data}
                         shop_colors={data.shop_colors}
                         updateConfiguration={updateConfiguration}
                         onSelectCam={onSelectCam}
@@ -117,19 +132,19 @@ export const BarberShopMenu: FunctionComponent<MenuBarberShopStateProps> = ({ da
                         onSelectCam={onSelectCam}
                     />
                     <MenuBarberEyeComponent
-                        cat={content.find(cat => cat.category === 'FaceTraits')}
-                        player_data={data.player_data}
+                        cat={content.find(cat => cat.category === 'FaceTrait')}
+                        player_data={player_data}
                         updateConfiguration={updateConfiguration}
                         onSelectCam={onSelectCam}
                     />
                     <MenuBarberValidateButton
-                        cat={content.find(cat => cat.category === 'FaceTraits')}
-                        config={configuration['FaceTraits']}
+                        cat={content.find(cat => cat.category === 'FaceTrait')}
+                        config={configuration['FaceTrait']}
                         onSelectCam={onSelectCam}
                     />
                     <MenuBarberMakeupComponent
                         cat={content.find(cat => cat.category === 'Makeup')}
-                        player_data={data.player_data}
+                        player_data={player_data}
                         shop_colors={data.shop_colors}
                         updateConfiguration={updateConfiguration}
                         onSelectCam={onSelectCam}
@@ -141,7 +156,7 @@ export const BarberShopMenu: FunctionComponent<MenuBarberShopStateProps> = ({ da
                     />
                     <MenuBarberBlushComponent
                         cat={content.find(cat => cat.category === 'Blush')}
-                        player_data={data.player_data}
+                        player_data={player_data}
                         shop_colors={data.shop_colors}
                         updateConfiguration={updateConfiguration}
                         onSelectCam={onSelectCam}
@@ -153,7 +168,7 @@ export const BarberShopMenu: FunctionComponent<MenuBarberShopStateProps> = ({ da
                     />
                     <MenuBarberLipstickComponent
                         cat={content.find(cat => cat.category === 'Lipstick')}
-                        player_data={data.player_data}
+                        player_data={player_data}
                         shop_colors={data.shop_colors}
                         updateConfiguration={updateConfiguration}
                         onSelectCam={onSelectCam}
@@ -171,7 +186,7 @@ export const BarberShopMenu: FunctionComponent<MenuBarberShopStateProps> = ({ da
 
 const MenuBarberValidateButton: FunctionComponent<{
     cat: BarberShopCategory;
-    config: BarberConfiguration;
+    config: Skin;
     onSelectCam: (cat: string) => void;
 }> = ({ cat, config, onSelectCam }) => {
     const getPrice = useGetPrice();
@@ -205,27 +220,46 @@ const MenuBarberHairComponent: FunctionComponent<{
     cat: BarberShopCategory;
     player_data: PlayerData;
     shop_colors: BarberShopColors;
-    updateConfiguration: (cat: string, overlay: string, field: string, v: any) => void;
+    updateConfiguration: (
+        cat: string,
+        overlay: string,
+        field: string,
+        v: any,
+        secondaryField?: string,
+        secondaryV?: any
+    ) => void;
     onSelectCam: (cat: string) => void;
 }> = ({ cat, player_data, shop_colors, updateConfiguration, onSelectCam }) => {
     if (!cat) {
         return null;
     }
+
+    const hairIndex = cat.items.findIndex(
+        elem => player_data.skin.Hair.HairType == elem.value && player_data.skin.Hair.Collection == elem.Collection
+    );
     return (
         <>
-            <MenuTitle>{cat.label}</MenuTitle>
+            <MenuSubTitle>{cat.label}</MenuSubTitle>
             <MenuItemSelect
                 title="Type"
-                onChange={async (_, type) => {
-                    updateConfiguration(cat.category, cat.overlay, 'HairType', type);
+                onChange={async index => {
+                    const type = cat.items[index];
+                    updateConfiguration(
+                        cat.category,
+                        cat.overlay,
+                        'HairType',
+                        type.value,
+                        'Collection',
+                        type.Collection
+                    );
                 }}
                 onSelected={async () => {
                     onSelectCam(cat.category);
                 }}
-                value={player_data.skin.Hair.HairType}
+                value={hairIndex}
             >
-                {cat.items.map(entry => (
-                    <MenuItemSelectOption key={entry.value} value={entry.value}>
+                {cat.items.map((entry, index) => (
+                    <MenuItemSelectOption key={index} value={index}>
                         {entry.label}
                     </MenuItemSelectOption>
                 ))}
@@ -262,6 +296,40 @@ const MenuBarberHairComponent: FunctionComponent<{
                     ></MenuItemSelectOptionColor>
                 ))}
             </MenuItemSelect>
+            <MenuItemSelect
+                title="Cuir chevelu"
+                onChange={async (index, value: number) => {
+                    const scalp = ShopScalp[player_data.skin.Model.Hash][value];
+                    updateConfiguration(
+                        cat.category,
+                        cat.overlay,
+                        'Scalp',
+                        scalp
+                            ? {
+                                  Collection: scalp.collection,
+                                  Overlay: scalp.nameHash,
+                              }
+                            : null
+                    );
+                }}
+                value={ShopScalp[player_data.skin.Model.Hash].findIndex(
+                    elem =>
+                        elem.collection == player_data.skin.Hair.Scalp?.Collection &&
+                        elem.nameHash == player_data.skin.Hair.Scalp?.Overlay
+                )}
+            >
+                <MenuItemSelectOption key={'scalp'} value={null}>
+                    Aucun
+                </MenuItemSelectOption>
+                {ShopScalp[player_data.skin.Model.Hash]
+                    .map((elem, index) => ({ ...elem, index }))
+                    .sort((a, b) => a.name.localeCompare(b.name))
+                    .map(elem => (
+                        <MenuItemSelectOption key={'scalp' + elem.index} value={elem.index} helper={elem.name}>
+                            {elem.name}
+                        </MenuItemSelectOption>
+                    ))}
+            </MenuItemSelect>
         </>
     );
 };
@@ -278,7 +346,7 @@ const MenuBarberBeardComponent: FunctionComponent<{
     }
     return (
         <>
-            <MenuTitle>{cat.label}</MenuTitle>
+            <MenuSubTitle>{cat.label}</MenuSubTitle>
             <MenuItemSelect
                 title="Type"
                 onChange={async (_, type) => {
@@ -342,7 +410,7 @@ const MenuBarberChestHairComponent: FunctionComponent<{
     }
     return (
         <>
-            <MenuTitle>{cat.label}</MenuTitle>
+            <MenuSubTitle>{cat.label}</MenuSubTitle>
             <MenuItemSelect
                 title="Type"
                 onChange={async (_, type) => {
@@ -406,7 +474,7 @@ const MenuBarberMakeupComponent: FunctionComponent<{
     }
     return (
         <>
-            <MenuTitle>{cat.label}</MenuTitle>
+            <MenuSubTitle>{cat.label}</MenuSubTitle>
             <MenuItemSelect
                 title="Type"
                 onChange={async (_, type) => {
@@ -494,7 +562,7 @@ const MenuBarberBlushComponent: FunctionComponent<{
     }
     return (
         <>
-            <MenuTitle>{cat.label}</MenuTitle>
+            <MenuSubTitle>{cat.label}</MenuSubTitle>
             <MenuItemSelect
                 title="Type"
                 onChange={async (_, type) => {
@@ -558,7 +626,7 @@ const MenuBarberLipstickComponent: FunctionComponent<{
     }
     return (
         <>
-            <MenuTitle>{cat.label}</MenuTitle>
+            <MenuSubTitle>{cat.label}</MenuSubTitle>
             <MenuItemSelect
                 title="Type"
                 onChange={async (_, type) => {
@@ -621,7 +689,7 @@ const MenuBarberEyeComponent: FunctionComponent<{
     }
     return (
         <>
-            <MenuTitle>{cat.label}</MenuTitle>
+            <MenuSubTitle>{cat.label}</MenuSubTitle>
             <MenuItemSelect
                 title="Couleur"
                 onChange={async (_, type) => {
@@ -654,7 +722,7 @@ const MenuBarberEyebrowComponent: FunctionComponent<{
     }
     return (
         <>
-            <MenuTitle>{cat.label}</MenuTitle>
+            <MenuSubTitle>{cat.label}</MenuSubTitle>
             <MenuItemSelect
                 title="Type"
                 onChange={async (_, type) => {

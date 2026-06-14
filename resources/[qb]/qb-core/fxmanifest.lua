@@ -12,10 +12,8 @@ shared_scripts {
     'shared/items.lua',
     'shared/jobs.lua',
     'shared/vehicles.lua',
-    'shared/gangs.lua',
     'shared/uuid.lua',
     'shared/trunks.lua',
-    'shared/upw.lua',
 }
 
 client_scripts {

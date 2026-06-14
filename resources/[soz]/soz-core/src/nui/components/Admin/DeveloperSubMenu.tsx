@@ -1,3 +1,6 @@
+import { ShopBrand } from '@public/config/shops';
+import { SozRole } from '@public/core/permissions';
+import { DeveloperSubMenuState } from '@public/shared/admin/admin';
 import { FunctionComponent } from 'react';
 
 import { NuiEvent } from '../../../shared/event';
@@ -13,12 +16,8 @@ import {
 } from '../Styleguide/Menu';
 
 export type DeveloperSubMenuProps = {
-    banner: string;
-    state: {
-        noClip: boolean;
-        displayCoords: boolean;
-        displayMileage: boolean;
-    };
+    permission: SozRole;
+    state: DeveloperSubMenuState;
 };
 
 const coordOptions = [
@@ -32,11 +31,13 @@ const notificationTypeOptions = [
     { label: 'Police', value: 'police' },
 ];
 
-export const DeveloperSubMenu: FunctionComponent<DeveloperSubMenuProps> = ({ banner, state }) => {
+export const DeveloperSubMenu: FunctionComponent<DeveloperSubMenuProps> = ({ permission, state }) => {
+    const isAdmin = permission === 'admin';
+    const isAdminOrStaff = isAdmin || permission === 'staff';
     return (
         <SubMenu id="developer">
-            <MenuTitle banner={banner}>Si véloces ces développeurs</MenuTitle>
-            <MenuContent>
+            <MenuTitle title={permission} />
+            <MenuContent subtitle="Si véloces ces développeurs">
                 <MenuItemCheckbox
                     checked={state.noClip}
                     onChange={async () => {
@@ -60,6 +61,14 @@ export const DeveloperSubMenu: FunctionComponent<DeveloperSubMenuProps> = ({ ban
                     }}
                 >
                     Afficher le kilométrage
+                </MenuItemCheckbox>
+                <MenuItemCheckbox
+                    checked={state.displayMouseDebug}
+                    onChange={async value => {
+                        await fetchNui(NuiEvent.AdminToggleShowMouseDebug, value);
+                    }}
+                >
+                    Debug entité sous le curseur
                 </MenuItemCheckbox>
                 <MenuItemSelect
                     title="📋 Copier les coords"
@@ -103,6 +112,54 @@ export const DeveloperSubMenu: FunctionComponent<DeveloperSubMenuProps> = ({ ban
                     }}
                 >
                     Créer une zone
+                </MenuItemButton>
+                <MenuItemCheckbox
+                    checked={state.debugPoly}
+                    disabled={!isAdminOrStaff}
+                    onChange={async value => {
+                        state.doors = value;
+                        await fetchNui(NuiEvent.AdminSetDisplayZones, value);
+                    }}
+                >
+                    🧊Affichage des zones
+                </MenuItemCheckbox>
+                <MenuItemCheckbox
+                    checked={state.doors}
+                    disabled={!isAdminOrStaff}
+                    onChange={async value => {
+                        state.doors = value;
+                        await fetchNui(NuiEvent.AdminSetDoorManagement, value);
+                    }}
+                >
+                    🚪Gestions des portes
+                </MenuItemCheckbox>
+                <MenuItemSelect
+                    title="Magasin"
+                    onConfirm={async (_, brand) => {
+                        await fetchNui(NuiEvent.AdminMenuClothes, brand);
+                    }}
+                >
+                    {[ShopBrand.Ponsonbys, ShopBrand.Binco, ShopBrand.Suburban, ShopBrand.Mask].map(option => (
+                        <MenuItemSelectOption key={'cloth_shop' + option} value={option}>
+                            {option}
+                        </MenuItemSelectOption>
+                    ))}
+                </MenuItemSelect>
+                <MenuItemButton
+                    disabled={!isAdmin}
+                    onConfirm={async () => {
+                        await fetchNui(NuiEvent.AdminMenuOilPrice);
+                    }}
+                >
+                    ⛽ Changer le prix des stations
+                </MenuItemButton>
+                <MenuItemButton
+                    disabled={!isAdminOrStaff}
+                    onConfirm={async () => {
+                        await fetchNui(NuiEvent.AdminMenuTraveling);
+                    }}
+                >
+                    🎥 Prise de vue
                 </MenuItemButton>
             </MenuContent>
         </SubMenu>

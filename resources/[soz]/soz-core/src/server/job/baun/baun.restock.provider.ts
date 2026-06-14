@@ -1,13 +1,15 @@
+import { InventoryFactory } from '@public/server/inventory/inventory.factory';
+
 import { OnEvent } from '../../../core/decorators/event';
 import { Inject } from '../../../core/decorators/injectable';
 import { Provider } from '../../../core/decorators/provider';
 import { ServerEvent } from '../../../shared/event/server';
-import { InventoryManager } from '../../inventory/inventory.manager';
+import { ADD_ERROR_MESSAGE } from '../../../shared/inventory';
 import { ItemService } from '../../item/item.service';
 import { Notifier } from '../../notifier';
 import { ProgressService } from '../../player/progress.service';
 
-const RESTOCK_CONFIG: Record<string, { name: string; amount: number }[]> = {
+export const RESTOCK_CONFIG: Record<string, { name: string; amount: number }[]> = {
     liquor_crate: [
         { name: 'vodka', amount: 2 },
         { name: 'gin', amount: 2 },
@@ -35,12 +37,20 @@ const RESTOCK_CONFIG: Record<string, { name: string; amount: number }[]> = {
         { name: 'peanuts', amount: 10 },
         { name: 'olives', amount: 10 },
     ],
+    beer_crate: [
+        { name: 'beer_crown', amount: 4 },
+        { name: 'beer_chiliad_ipa', amount: 4 },
+        { name: 'beer_paleto_wheat', amount: 4 },
+        { name: 'beer_captus', amount: 4 },
+        { name: 'beer_kuro', amount: 4 },
+        { name: 'beer_sunkiss', amount: 4 },
+    ],
 };
 
 @Provider()
 export class BaunRestockProvider {
-    @Inject(InventoryManager)
-    private inventoryManager: InventoryManager;
+    @Inject(InventoryFactory)
+    private inventoryFactory: InventoryFactory;
 
     @Inject(Notifier)
     private notifier: Notifier;
@@ -52,7 +62,7 @@ export class BaunRestockProvider {
     private itemService: ItemService;
 
     @OnEvent(ServerEvent.BAUN_RESTOCK)
-    public async onRestock(source: number, { storage, item }: { storage: string; item: string }) {
+    public async onRestock(source: number, storage: string, item: string) {
         const config = RESTOCK_CONFIG[item];
 
         if (!config) {
@@ -60,14 +70,17 @@ export class BaunRestockProvider {
         }
 
         const itemData = this.itemService.getItem(item);
+        const inventory = await this.inventoryFactory.getPlayerInventory(source);
 
-        if (!this.inventoryManager.hasEnoughItem(source, item, 1, true)) {
+        if (!inventory.hasEnoughItem(item, 1, true)) {
             this.notifier.notify(source, `Vous n'avez pas de ${itemData.label}.`, 'error');
 
             return;
         }
 
-        while (this.inventoryManager.hasEnoughItem(source, item, 1, true)) {
+        const targetInventory = await this.inventoryFactory.get(storage);
+
+        while (inventory.hasEnoughItem(item, 1, true)) {
             const { completed } = await this.progressService.progress(
                 source,
                 'restock',
@@ -92,22 +105,22 @@ export class BaunRestockProvider {
                 break;
             }
 
-            if (!this.inventoryManager.hasEnoughItem(source, item, 1, true)) {
+            if (!inventory.hasEnoughItem(item, 1, true)) {
                 break;
             }
 
-            if (!this.inventoryManager.canCarryItems(storage, config)) {
-                this.notifier.notify(source, `Il n'y a pas assez de place pour stocker ${itemData.label}.`, 'error');
+            if (!targetInventory.canCarryItems(config)) {
+                this.notifier.notify(source, ADD_ERROR_MESSAGE['not_enough_space'], 'error');
 
                 break;
             }
 
-            if (!this.inventoryManager.removeNotExpiredItem(source, item, 1)) {
+            if (!inventory.remove(item, 1, false)) {
                 break;
             }
 
             for (const { name, amount } of config) {
-                this.inventoryManager.addItemToInventoryNotPlayer(storage, name, amount);
+                targetInventory.add(name, amount);
             }
         }
 

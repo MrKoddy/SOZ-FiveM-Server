@@ -43,23 +43,18 @@ export class LSMCPlasterProvider {
         const index = player.metadata.plaster.indexOf(location);
         if (index != -1) {
             player.metadata.plaster.splice(index, 1);
-            this.notifier.notify(source, 'Vous avez ~g~retiré~s~ une plâtre sur ' + plasterConfig.label);
+            this.notifier.notify(source, 'Vous avez ~g~retiré~s~ un plâtre sur ' + plasterConfig.label);
         } else {
             player.metadata.plaster.push(location);
-            this.notifier.notify(source, 'Vous avez ~g~posé~s~ une plâtre sur ' + plasterConfig.label);
+            this.notifier.notify(source, 'Vous avez ~g~posé~s~ un plâtre sur ' + plasterConfig.label);
         }
 
-        this.monitor.publish(
-            'lsmc_plaster',
-            {
-                player_source: source,
-                target_source: target,
-            },
-            {
-                location: location,
-                remove: index != -1,
-            }
-        );
+        this.monitor.traceEvent('lsmc_plaster', {
+            player_source: source,
+            target_source: target,
+            plaster_location: location,
+            plaster_remove: index != -1,
+        });
 
         this.playerService.setPlayerMetadata(target, 'plaster', player.metadata.plaster);
     }

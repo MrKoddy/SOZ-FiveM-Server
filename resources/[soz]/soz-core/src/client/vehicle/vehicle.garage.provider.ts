@@ -3,17 +3,21 @@ import { Inject } from '@core/decorators/injectable';
 import { Provider } from '@core/decorators/provider';
 import { emitRpc } from '@core/rpc';
 import { wait } from '@core/utils';
+import { CasinoVipService } from '@private/client/casino/casino.vip.service';
+import { FeatureProvider } from '@public/client/feature/feature.provider';
+import { InteractionProvider } from '@public/client/quick-interaction/interaction.provider';
 import { Apartment } from '@public/shared/housing/housing';
+import { PositiveNumberValidator } from '@public/shared/nui/input';
 
 import { ClientEvent, NuiEvent, ServerEvent } from '../../shared/event';
-import { Feature, isFeatureEnabled } from '../../shared/features';
+import { Feature } from '../../shared/features';
 import { JobPermission, JobType } from '../../shared/job';
 import { MenuType } from '../../shared/nui/menu';
 import { BoxZone } from '../../shared/polyzone/box.zone';
-import { getDistance, toVector3Object, Vector3, Vector4 } from '../../shared/polyzone/vector';
+import { add2Vector3, getDistance, toVector3Object, Vector3, Vector4 } from '../../shared/polyzone/vector';
 import { Err, Ok } from '../../shared/result';
 import { RpcServerEvent } from '../../shared/rpc';
-import { Garage, GarageCategory, GarageType, GarageVehicle } from '../../shared/vehicle/garage';
+import { Garage, GarageCategory, GarageType, GarageVehicle, MaxPlaces } from '../../shared/vehicle/garage';
 import { VehicleClass } from '../../shared/vehicle/vehicle';
 import { BlipFactory } from '../blip';
 import { InventoryManager } from '../inventory/inventory.manager';
@@ -94,6 +98,15 @@ export class VehicleGarageProvider {
     @Inject(Monitor)
     private monitor: Monitor;
 
+    @Inject(FeatureProvider)
+    private featureProvider: FeatureProvider;
+
+    @Inject(InteractionProvider)
+    private interactionProvider: InteractionProvider;
+
+    @Inject(CasinoVipService)
+    private casinoVipService: CasinoVipService;
+
     private pounds: Record<string, Garage> = {};
 
     private isShowingGaragePlaces = false;
@@ -104,10 +117,13 @@ export class VehicleGarageProvider {
         const jobGaragePayStation = GetHashKey('soz_prop_paystation');
         this.pounds = {};
 
+        const interactionDistance = 2.0;
+        const drawDistance = 6.0;
+
         for (const garageIdentifier of Object.keys(garageList)) {
             const garage = garageList[garageIdentifier];
 
-            if (!isFeatureEnabled(Feature.Boat) && garage.category === GarageCategory.Sea) {
+            if (!this.featureProvider.isFeatureEnabled(Feature.Boat) && garage.category === GarageCategory.Sea) {
                 continue;
             }
 
@@ -123,26 +139,35 @@ export class VehicleGarageProvider {
                 });
             }
 
-            const targets = [];
+            const coords = garage.zone.center as Vector3;
+            const coordsWithOffset = add2Vector3(garage.zone.center as Vector3, [0, 0, 1] as Vector3);
 
             if (garage.type === GarageType.Public) {
-                targets.push({
-                    label: 'Accéder au parking public',
-                    icon: 'c:garage/ParkingPublic.png',
-                    action: () => {
-                        this.enterGarage(garageIdentifier, garage);
+                this.interactionProvider.createInteractionForCoords(
+                    garage.category == GarageCategory.Sea ? coordsWithOffset : coords,
+                    {
+                        label: 'Parking public',
+                        action: () => {
+                            this.enterGarage(garageIdentifier, garage);
+                        },
                     },
-                });
+                    interactionDistance,
+                    drawDistance
+                );
             }
 
             if (garage.type === GarageType.Private) {
-                targets.push({
-                    label: 'Accéder au parking privé',
-                    icon: 'c:garage/ParkingPrive.png',
-                    action: () => {
-                        this.enterGarage(garageIdentifier, garage);
+                this.interactionProvider.createInteractionForCoords(
+                    garage.id === 'lsmc_privateparking' ? coordsWithOffset : coords,
+                    {
+                        label: 'Parking privé',
+                        action: () => {
+                            this.enterGarage(garageIdentifier, garage);
+                        },
                     },
-                });
+                    interactionDistance,
+                    drawDistance
+                );
             }
 
             if (
@@ -157,13 +182,17 @@ export class VehicleGarageProvider {
                 });
 
                 if (garage.type === GarageType.Depot) {
-                    targets.push({
-                        label: 'Accéder à la fourrière',
-                        icon: 'c:garage/Fourriere.png',
-                        action: () => {
-                            this.enterGarage(garageIdentifier, garage);
+                    this.interactionProvider.createInteractionForCoords(
+                        coordsWithOffset,
+                        {
+                            label: 'Fourrière',
+                            action: () => {
+                                this.enterGarage(garageIdentifier, garage);
+                            },
                         },
-                    });
+                        interactionDistance,
+                        drawDistance
+                    );
 
                     this.pounds[garageIdentifier] = garage;
                 }
@@ -176,14 +205,21 @@ export class VehicleGarageProvider {
                     id: `garage_${garageIdentifier}`,
                 });
 
-                targets.push({
-                    label: 'Accéder au parking entreprise',
-                    icon: 'c:garage/GarageEntreprise.png',
-                    action: () => {
-                        this.enterGarage(garageIdentifier, garage);
+                this.interactionProvider.createInteractionForCoords(
+                    coordsWithOffset,
+                    {
+                        label: 'Parking entreprise',
+                        canInteract: () => {
+                            const player = this.playerService.getPlayer();
+                            return player && player.job.id == garage.job;
+                        },
+                        action: () => {
+                            this.enterGarage(garageIdentifier, garage);
+                        },
                     },
-                    job: garage.job,
-                });
+                    interactionDistance,
+                    drawDistance
+                );
             }
 
             if (garage.type === GarageType.JobLuxury) {
@@ -193,22 +229,36 @@ export class VehicleGarageProvider {
                     id: `garage_${garageIdentifier}`,
                 });
 
-                targets.push({
-                    label: 'Accéder au parking entreprise luxe',
-                    icon: 'c:garage/GarageEntreprise.png',
-                    action: () => {
-                        this.enterGarage(garageIdentifier, garage);
+                this.interactionProvider.createInteractionForCoords(
+                    coordsWithOffset,
+                    {
+                        label: 'Parking entreprise luxe',
+                        action: () => {
+                            this.enterGarage(garageIdentifier, garage);
+                        },
+                        job: garage.job,
                     },
-                    job: garage.job,
-                });
+                    interactionDistance,
+                    drawDistance
+                );
             }
 
-            if (targets.length > 0) {
-                this.targetFactory.createForBoxZone(
-                    `garage_enter_${garageIdentifier}`,
-                    { ...garage.zone },
-                    targets,
-                    2.5
+            if (garage.type === GarageType.CasinoVip) {
+                this.objectProvider.createObject({
+                    model: jobGaragePayStation,
+                    position: [...garage.zone.center, garage.zone.heading] as Vector4,
+                    id: `garage_${garageIdentifier}`,
+                });
+
+                this.interactionProvider.createInteractionForCoords(
+                    coordsWithOffset,
+                    {
+                        label: 'Parking VIP',
+                        canInteract: () => this.casinoVipService.hasVipSubscription(),
+                        action: () => this.enterGarage(garageIdentifier, garage),
+                    },
+                    interactionDistance,
+                    drawDistance
                 );
             }
         }
@@ -217,7 +267,8 @@ export class VehicleGarageProvider {
             [
                 {
                     label: 'Fourriérer',
-                    icon: 'c:mechanic/CarFourriere.png',
+                    icon: 'mechanic/CarFourriere',
+                    category: 'society',
                     action: async entity => {
                         const closestPound = this.getClosestPound();
 
@@ -229,29 +280,13 @@ export class VehicleGarageProvider {
                     },
                     blackoutGlobal: true,
                     blackoutJob: JobType.Bennys,
-                    canInteract: (): boolean => {
-                        const player = this.playerService.getPlayer();
-
-                        if (!player) {
-                            return false;
-                        }
-
-                        if (player.job.id !== JobType.Bennys || !player.job.onduty) {
-                            return false;
-                        }
-
-                        const closestPound = this.getClosestPound();
-
-                        if (!closestPound) {
-                            return false;
-                        }
-
-                        return true;
-                    },
+                    job: JobType.Bennys,
+                    canInteract: (): boolean => !!this.getClosestPound(),
                 },
                 {
                     label: 'Fourrière Fédérale',
-                    icon: 'c:mechanic/CarFourriere.png',
+                    icon: 'mechanic/CarFourriere',
+                    category: 'society',
                     action: async entity => {
                         const closestPound = this.getClosestPound();
 
@@ -283,25 +318,12 @@ export class VehicleGarageProvider {
 
                         await wait(50);
 
-                        const model = GetEntityModel(entity);
-                        const vehConfig = this.vehicleRepository.getByModelHash(model);
-                        const maxPrice = Math.round(vehConfig.price * 0.15);
-
                         const cost = await this.inputService.askInput<number>(
                             {
-                                title: `Coût de sortie (0-${maxPrice})`,
+                                title: `Coût de sortie`,
                                 maxCharacters: 30,
                             },
-                            value => {
-                                if (!value) {
-                                    return Ok(null);
-                                }
-                                const int = parseInt(value);
-                                if (isNaN(int) || int < 0 || int > maxPrice) {
-                                    return Err('Valeur incorrecte');
-                                }
-                                return Ok(int);
-                            }
+                            PositiveNumberValidator
                         );
 
                         if (cost === null) {
@@ -316,10 +338,6 @@ export class VehicleGarageProvider {
                         const player = this.playerService.getPlayer();
 
                         if (!player) {
-                            return false;
-                        }
-
-                        if (!player.job.onduty) {
                             return false;
                         }
 
@@ -419,6 +437,11 @@ export class VehicleGarageProvider {
     }
 
     public async doStoreVehicle(id: string, garage: Garage, vehicle: number, delai = 0, cost = 0) {
+        if (IsEntityDead(vehicle) && garage.type === GarageType.Depot) {
+            this.notifier.notify(`Ce véhicule est ~r~détruit~s~ ! Il doit être déposé à la casse et non en fourrière.`);
+            return;
+        }
+
         if (IsVehicleAttachedToTrailer(vehicle)) {
             DetachVehicleFromTrailer(vehicle);
 
@@ -428,17 +451,12 @@ export class VehicleGarageProvider {
         const networkId = NetworkGetNetworkIdFromEntity(vehicle);
         const plate = GetVehicleNumberPlateText(vehicle).trim();
 
-        this.monitor.publish(
-            'vehicle_garage_in_client_start',
-            {
-                vehicle_plate: plate,
-            },
-            {
-                garage: id,
-                garage_type: garage.type,
-                position: toVector3Object(GetEntityCoords(PlayerPedId()) as Vector3),
-            }
-        );
+        this.monitor.traceEvent('vehicle_garage_in_client_start', {
+            vehicle_plate: plate,
+            garage_id: id,
+            garage_type: garage.type,
+            position: toVector3Object(GetEntityCoords(PlayerPedId()) as Vector3),
+        });
         TriggerServerEvent(ServerEvent.VEHICLE_GARAGE_STORE, id, garage, networkId, delai, cost);
     }
 
@@ -561,7 +579,13 @@ export class VehicleGarageProvider {
         this.nuiMenu.closeMenu();
     }
 
-    public async enterGarage(id: string, garage: Garage, apartments: Apartment[] = []) {
+    public async enterGarage(id: string, garage: Garage, apartments: Apartment[] = [], range = 5.0) {
+        const player = this.playerService.getPlayer();
+
+        if (!player) {
+            return;
+        }
+
         const vehicles = await emitRpc<GarageVehicle[]>(RpcServerEvent.VEHICLE_GARAGE_GET_VEHICLES, id, garage);
         if (vehicles === null) {
             return;
@@ -571,7 +595,7 @@ export class VehicleGarageProvider {
         let max_places = null;
         let apartmentPlaces = {} as Record<number, [number | null, number | null]>;
 
-        if (garage.type === GarageType.Private) {
+        if (MaxPlaces[garage.type]) {
             [free_places, max_places] = await emitRpc<[number, number]>(
                 RpcServerEvent.VEHICLE_GARAGE_GET_PLACES,
                 id,
@@ -606,7 +630,8 @@ export class VehicleGarageProvider {
                 garage,
                 free_places,
                 max_places,
-                has_fake_ticket: this.inventoryManager.hasEnoughItem('parking_ticket_fake', 1),
+                citizenId: player.citizenid,
+                has_fake_ticket: this.inventoryManager.hasEnoughItem('parking_ticket_fake', 1, true),
                 transferGarageList:
                     garage.transferList
                         ?.map(garageId => {
@@ -628,8 +653,9 @@ export class VehicleGarageProvider {
             {
                 position: {
                     position: garage.zone.center,
-                    distance: 5.0,
+                    distance: range,
                 },
+                originMenuType: this.nuiMenu.getOpened(),
             }
         );
     }

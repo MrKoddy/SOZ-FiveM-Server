@@ -1,5 +1,6 @@
 PlayerData = QBCore.Functions.GetPlayerData()
 local mask = 0
+local maskCollection = nil
 
 -----------------------------------------------------
 -- All the + 0.0 are needed to convert from integer to num ber (float) as values may come from Typescript removing comma
@@ -24,7 +25,11 @@ local function ApplyPlayerModelHash(playerId, hash)
 end
 
 local function ApplyPedHair(ped, hair)
-    SetPedComponentVariation(ped, ComponentType.Hair, hair.HairType, 0, 0);
+    if hair.Collection then
+        SetPedCollectionComponentVariation(ped, ComponentType.Hair, hair.Collection, hair.HairType, 0, 0);
+    else
+        SetPedComponentVariation(ped, ComponentType.Hair, hair.HairType, 0, 0);
+    end
     SetPedHairColor(ped, hair.HairColor, hair.HairSecondaryColor or 0);
     SetPedHeadOverlay(ped, HeadOverlayType.Eyebrows, hair.EyebrowType, (hair.EyebrowOpacity or 0) + 0.0 or 1.0);
     SetPedHeadOverlayColor(ped, HeadOverlayType.Eyebrows, 1, hair.EyebrowColor, 0);
@@ -32,11 +37,15 @@ local function ApplyPedHair(ped, hair)
     SetPedHeadOverlayColor(ped, HeadOverlayType.FacialHair, 1, hair.BeardColor, 0);
     SetPedHeadOverlay(ped, HeadOverlayType.ChestHair, hair.ChestHairType, (hair.ChestHairOpacity or 0) + 0.0 or 1.0);
     SetPedHeadOverlayColor(ped, HeadOverlayType.ChestHair, 1, hair.ChestHairColor, 0);
+    if hair.Scalp then
+        AddPedDecorationFromHashes(ped, hair.Scalp.Collection, hair.Scalp.Overlay)
+    end
 end
 
 local function ApplyPedFaceTrait(ped, faceTrait, model)
-    if MaskResetFace[GetEntityModel(ped)] and MaskResetFace[GetEntityModel(ped)][mask] then
-        SetPedHeadBlendData(ped, 0, 0, 0, model.Father, model.Mother, 0, (model.ShapeMix or 0) + 0.0, (model.SkinMix or 0) + 0.0, 0, false);
+    if MaskResetFace[maskCollection or ""] and MaskResetFace[maskCollection or ""][mask] then
+        local defaultFace = model.Hash == GetHashKey("mp_f_freemode_01") and 21 or 0
+        SetPedHeadBlendData(ped, defaultFace, defaultFace, 0, model.Father, model.Mother, 0, (model.ShapeMix or 0) + 0.0, (model.SkinMix or 0) + 0.0, 0, false);
     else
         SetPedHeadBlendData(ped, model.Father, model.Mother, 0, model.Father, model.Mother, 0, (model.ShapeMix or 0) + 0.0, (model.SkinMix or 0) + 0.0, 0, false);
     end
@@ -51,9 +60,9 @@ local function ApplyPedFaceTrait(ped, faceTrait, model)
 
     SetPedFaceFeature(ped, FaceFeatureType.EyesOpening, (faceTrait.EyesOpening or 0) + 0.0);
 
-    if MaskResetFace[GetEntityModel(ped)] and MaskResetFace[GetEntityModel(ped)][mask] then
+    if MaskResetFace[maskCollection or ""] and MaskResetFace[maskCollection or ""][mask] then
         SetPedFaceFeature(ped, FaceFeatureType.EyebrowHigh, 0.0);
-        SetPedFaceFeature(ped, FaceFeatureType.EyebrowForward, 0.0);
+        SetPedFaceFeature(ped, FaceFeatureType.EyebrowForward, -1.0);
         SetPedFaceFeature(ped, FaceFeatureType.CheeksBoneHigh, -1.0);
         SetPedFaceFeature(ped, FaceFeatureType.CheeksBoneWidth, -1.0);
         SetPedFaceFeature(ped, FaceFeatureType.CheeksWidth, 0.0);
@@ -65,7 +74,7 @@ local function ApplyPedFaceTrait(ped, faceTrait, model)
         SetPedFaceFeature(ped, FaceFeatureType.JawBoneWidth, 0.0);
         SetPedFaceFeature(ped, FaceFeatureType.LipsThickness, 0.0);
         SetPedFaceFeature(ped, FaceFeatureType.NeckThickness, 0.0);
-        SetPedFaceFeature(ped, FaceFeatureType.NoseBoneHigh, 0.0);
+        SetPedFaceFeature(ped, FaceFeatureType.NoseBoneHigh, 1.0);
         SetPedFaceFeature(ped, FaceFeatureType.NoseBoneTwist, 0.0);
         SetPedFaceFeature(ped, FaceFeatureType.NosePeakLength, 1.0);
         SetPedFaceFeature(ped, FaceFeatureType.NosePeakLowering, 0.0);
@@ -154,14 +163,26 @@ end
 
 local function ApplyPedClothSet(ped, clothSet)
     for componentId, component in pairs(clothSet.Components) do
-        SetPedComponentVariation(ped, tonumber(componentId), component.Drawable, component.Texture or 0, component.Palette or 0);
+        local comp = tonumber(componentId);
+        local drawable = component.Drawable
+        if comp == ComponentType.Mask and drawable >= 190 and GetEntityModel(ped) == GetHashKey("mp_f_freemode_01") then
+            drawable = drawable + 1
+        end
+
+        if component.Collection then
+            SetPedCollectionComponentVariation(ped, comp, component.Collection, drawable, component.Texture or 0, component.Palette or 0)
+        else
+            SetPedComponentVariation(ped, comp, drawable, component.Texture or 0, component.Palette or 0);
+        end
     end
 
     for _, propId in pairs(PropType) do
         local prop = clothSet.Props[tostring(propId)]
         if tonumber(propId) ~= nil then
-            if prop == nil or prop.Clear == true then
+            if prop == nil or prop.Clear == true or prop.Drawable == -1 then
                 ClearPedProp(ped, tonumber(propId))
+            elseif prop.Collection then
+                SetPedCollectionPropIndex(ped, tonumber(propId), prop.Collection, prop.Drawable, prop.Texture or 0, true)
             else
                 SetPedPropIndex(ped, tonumber(propId), prop.Drawable, prop.Texture or 0, prop.Palette or 0)
             end
@@ -195,8 +216,21 @@ function CanApplyBaseHeadProp(clothConfig)
     return false
 end
 
-function ClothConfigComputeToClothSet(clothConfig)
+function ClothConfigComputeToClothSet(ped, clothConfig)
+    local empty = {
+        Components = {[ComponentType.Mask] = {Drawable = 0, Texture = 0, Palette = 0}},
+        Props = {
+            [PropType.Head] = {Clear = true},
+            [PropType.Helmet] = {Clear = true},
+            [PropType.Glasses] = {Clear = true},
+            [PropType.Ear] = {Clear = true},
+            [PropType.RightHand] = {Clear = true},
+            [PropType.LeftHand] = {Clear = true},
+        },
+    }
+
     local clothSet = Clone(clothConfig.BaseClothSet)
+    clothSet = MergeClothSet(empty, clothSet)
 
     local function getNakedComponent(component)
         return clothConfig.NakedClothSet.Components[component] or clothConfig.NakedClothSet.Components[tostring(component)]
@@ -214,18 +248,18 @@ function ClothConfigComputeToClothSet(clothConfig)
         clothSet = MergeClothSet(clothSet, clothConfig.NakedClothSet)
     end
 
-    local hasHelmet = clothSet.Props[PropType.Helmet] ~= nil
+    local hasHelmet = clothSet.Props[PropType.Helmet] ~= nil and not clothSet.Props[PropType.Helmet].Clear and clothConfig.Config.ShowHelmet
     if not hasHelmet then
-        SetPedConfigFlag(PlayerPedId(), 34, hasHelmet)
+        SetPedConfigFlag(ped, 34, hasHelmet)
     end
 
-    SetPedCanLosePropsOnDamage(PlayerPedId(), not clothConfig.Config.ShowHelmet or not hasHelmet, 0)
-    if clothConfig.Config.ShowHelmet and hasHelmet then
+    SetPedCanLosePropsOnDamage(ped, not hasHelmet, 0)
+    if hasHelmet then
         local override = {Props = {[PropType.Head] = clothSet.Props[PropType.Helmet]}}
 
         clothSet = MergeClothSet(clothSet, override)
     elseif clothConfig.Config.HideHead then
-        local override = {Props = {[PropType.Head] = {Clear = true}}}
+        local override = {Props = {[PropType.Head] = {Clear = true}, [PropType.Helmet] = {Clear = true}}}
 
         clothSet = MergeClothSet(clothSet, override)
     else
@@ -242,20 +276,28 @@ function ClothConfigComputeToClothSet(clothConfig)
         clothSet = MergeClothSet(clothSet, override)
     end
 
-    if PlayerData.skin then
+    if PlayerData.skin and ped == PlayerPedId() then
         local component = clothSet.Components[tostring(ComponentType.Mask)] or clothSet.Components[ComponentType.Mask]
         local maskDrawable = component.Drawable
         local hair = 0
+        local collection = nil
 
-        if exports["soz-core"]:DisplayHairWithMask(maskDrawable) then
+        if exports["soz-core"]:DisplayHairWithMask(maskDrawable, component.Collection) then
             hair = PlayerData.skin.Hair.HairType
+            collection = PlayerData.skin.Hair.Collection
         end
 
-        clothSet.Components[tostring(ComponentType.Hair)] = {Drawable = hair, Texture = 0, Palette = 0}
+        clothSet.Components[tostring(ComponentType.Hair)] = {
+            Drawable = hair,
+            Texture = 0,
+            Palette = 0,
+            Collection = collection,
+        }
 
         if maskDrawable ~= mask then
             mask = maskDrawable
-            ApplyPedFaceTrait(PlayerPedId(), PlayerData.skin.FaceTrait, PlayerData.skin.Model)
+            maskCollection = component.Collection
+            ApplyPedFaceTrait(ped, PlayerData.skin.FaceTrait, PlayerData.skin.Model)
         end
     end
 
@@ -346,11 +388,14 @@ function ApplyPlayerClothSet(playerId, clothSet)
 
     ApplyPedClothSet(ped, clothSet)
 
-    TriggerEvent("soz-character:Client:Cloth:Applied", clothSet)
+    if ped == PlayerPedId() then
+        TriggerEvent("soz-character:Client:Cloth:Applied", clothSet)
+    end
 end
 
 function ApplyPlayerClothConfig(playerId, clothConfig)
-    local clothSet = ClothConfigComputeToClothSet(clothConfig)
+    local ped = GetPlayerPed(playerId)
+    local clothSet = ClothConfigComputeToClothSet(ped, clothConfig)
 
     ApplyPlayerClothSet(playerId, clothSet)
 end

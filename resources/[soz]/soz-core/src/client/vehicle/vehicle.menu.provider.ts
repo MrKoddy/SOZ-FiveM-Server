@@ -1,5 +1,8 @@
+import { VehicleBusinessProvider } from '@private/client/gang/business.vehicle.provider';
 import { FDO } from '@public/shared/job';
-import { VehicleClass, VehicleSeat } from '@public/shared/vehicle/vehicle';
+import { VehicleWithSirens } from '@public/shared/job/police';
+import { Vector3 } from '@public/shared/polyzone/vector';
+import { LSCustomMode, VehicleClass, VehicleSeat } from '@public/shared/vehicle/vehicle';
 
 import { Command } from '../../core/decorators/command';
 import { OnNuiEvent } from '../../core/decorators/event';
@@ -7,7 +10,7 @@ import { Inject } from '../../core/decorators/injectable';
 import { Provider } from '../../core/decorators/provider';
 import { Tick, TickInterval } from '../../core/decorators/tick';
 import { emitRpc } from '../../core/rpc';
-import { NuiEvent } from '../../shared/event';
+import { NuiEvent, ServerEvent } from '../../shared/event';
 import { MenuType } from '../../shared/nui/menu';
 import { Err, Ok } from '../../shared/result';
 import { RpcServerEvent } from '../../shared/rpc';
@@ -15,6 +18,7 @@ import { Notifier } from '../notifier';
 import { InputService } from '../nui/input.service';
 import { NuiMenu } from '../nui/nui.menu';
 import { PlayerService } from '../player/player.service';
+import { ZoneRepository } from '../repository/zone.repository';
 import { VoipRadioVehicleProvider } from '../voip/voip.radio.vehicle.provider';
 import { VehicleCustomProvider } from './vehicle.custom.provider';
 import { VehicleStateService } from './vehicle.state.service';
@@ -41,6 +45,12 @@ export class VehicleMenuProvider {
 
     @Inject(VoipRadioVehicleProvider)
     private voipRadioVehicleProvider: VoipRadioVehicleProvider;
+
+    @Inject(ZoneRepository)
+    private zoneRepository: ZoneRepository;
+
+    @Inject(VehicleBusinessProvider)
+    private vehicleBusinessProvider: VehicleBusinessProvider;
 
     @OnNuiEvent<boolean, boolean>(NuiEvent.VehicleSetEngine)
     async setVehicleEngine(engineOn: boolean) {
@@ -118,6 +128,8 @@ export class VehicleMenuProvider {
             return false;
         }
 
+        const isTrain = IsMissionTrain(vehicle);
+
         // -1 is for current speed
         if (speedLimit === -1) {
             const currentSpeed = GetEntitySpeed(vehicle) * 3.6;
@@ -133,7 +145,7 @@ export class VehicleMenuProvider {
                 (input: string) => {
                     const value = parseInt(input);
 
-                    if (isNaN(value) || value < 0) {
+                    if (isNaN(value) || (!isTrain && value < 0)) {
                         return Err('Veuillez entrer un nombre supérieur à 0');
                     }
 
@@ -141,9 +153,15 @@ export class VehicleMenuProvider {
                 }
             );
 
-            if (!speedLimit) {
+            if (speedLimit == null) {
                 return false;
             }
+        }
+
+        if (isTrain) {
+            SetTrainCruiseSpeed(vehicle, speedLimit / 3.6);
+            this.notifier.notify(`Vitesse de croisière: ${speedLimit} km/h.`);
+            return;
         }
 
         this.vehicleStateService.updateVehicleState(vehicle, { speedLimit }, false);
@@ -172,6 +190,19 @@ export class VehicleMenuProvider {
             SetVehicleDoorShut(vehicle, doorIndex, false);
         }
 
+        if (GetEntityModel(vehicle) == GetHashKey('metrotrain')) {
+            const carriage = GetTrainCarriage(vehicle, 1);
+            if (carriage) {
+                if (open) {
+                    SetVehicleDoorOpen(carriage, 3 - doorIndex, false, false);
+                } else {
+                    SetVehicleDoorShut(carriage, 3 - doorIndex, false);
+                }
+            }
+
+            TriggerServerEvent(ServerEvent.VEHICLE_SYNC_DOOR_TRAIN, VehToNet(vehicle), doorIndex, open);
+        }
+
         return true;
     }
 
@@ -192,7 +223,7 @@ export class VehicleMenuProvider {
     }
 
     @OnNuiEvent(NuiEvent.VehicleOpenLSCustom)
-    async handleVehicleLSCustom(admin?: boolean) {
+    async handleVehicleLSCustom(mode: LSCustomMode) {
         const ped = PlayerPedId();
         const vehicle = GetVehiclePedIsIn(ped, false);
 
@@ -200,9 +231,13 @@ export class VehicleMenuProvider {
             return false;
         }
 
+        if (mode == LSCustomMode.CrimiPerfo && !this.vehicleBusinessProvider.testCrimiGarage(ped, true)) {
+            return;
+        }
+
         this.nuiMenu.closeMenu();
 
-        await this.vehicleCustomProvider.upgradeVehicle(vehicle, admin);
+        await this.vehicleCustomProvider.upgradeVehicle(vehicle, mode);
 
         return true;
     }
@@ -276,7 +311,7 @@ export class VehicleMenuProvider {
         const ped = PlayerPedId();
         const vehicle = GetVehiclePedIsIn(ped, false);
 
-        if (!vehicle || player.metadata.isdead) {
+        if (!vehicle || player.metadata.isdead || player.metadata.ishandcuffed) {
             return;
         }
 
@@ -288,6 +323,7 @@ export class VehicleMenuProvider {
         }
 
         const vehicleState = await this.vehicleStateService.getVehicleState(vehicle);
+        const model = GetEntityModel(vehicle);
 
         if (isCopilot && !vehicleState.hasRadio) {
             return;
@@ -324,22 +360,48 @@ export class VehicleMenuProvider {
             }
         };
 
-        this.nuiMenu.openMenu<MenuType.Vehicle>(MenuType.Vehicle, {
-            isDriver,
-            engineOn: GetIsVehicleEngineRunning(vehicle),
-            speedLimit: vehicleState.speedLimit,
-            doorStatus,
-            hasRadio: vehicleState.hasRadio,
-            insideLSCustom: this.vehicleCustomProvider.isPedInsideCustomZone(),
-            permission: isAllowed ? permission : null,
-            isAnchor: IsBoatAnchoredAndFrozen(vehicle),
-            isBoat: GetVehicleClass(vehicle) == VehicleClass.Boats,
-            police: FDO.includes(player.job.id) && FDO.includes(vehicleState.job),
-            policeLocator: vehicleState.policeLocatorEnabled,
-            onDutyNg: pitstop[0],
-            pitstopPrice: pitstop[1],
-            neonLightsStatus: vehicleState.neonLightsStatus,
-            hasNeon: hasNeon(),
-        });
+        const crimiGarage = this.vehicleBusinessProvider.testCrimiGarage(ped, false);
+        const isLSCustom = this.vehicleCustomProvider.isPedInsideCustomZone();
+        const crimiPerformance = crimiGarage && this.vehicleBusinessProvider.canPerformance();
+        const crimiCustom = crimiGarage && this.vehicleBusinessProvider.canCustom();
+
+        this.nuiMenu.openMenu<MenuType.Vehicle>(
+            MenuType.Vehicle,
+            {
+                isDriver,
+                engineOn: GetIsVehicleEngineRunning(vehicle),
+                speedLimit: vehicleState.speedLimit,
+                doorStatus,
+                hasRadio: vehicleState.hasRadio,
+                insideLSCustom: this.vehicleCustomProvider.isPedInsideCustomZone(),
+                permission: isAllowed ? permission : null,
+                isAnchor: IsBoatAnchoredAndFrozen(vehicle),
+                isBoat: GetVehicleClass(vehicle) == VehicleClass.Boats,
+                police: FDO.includes(player.job.id) && FDO.includes(vehicleState.job),
+                policeLocator: vehicleState.policeLocatorEnabled,
+                onDutyNg: pitstop[0],
+                pitstopPrice: pitstop[1],
+                neonLightsStatus: vehicleState.neonLightsStatus,
+                hasNeon: hasNeon(),
+                crimiPerformance,
+                crimiCustom,
+                canGyro:
+                    isDriver &&
+                    FDO.includes(player.job.id) &&
+                    player.job.onduty &&
+                    !VehicleWithSirens[model] &&
+                    IsThisModelACar(model),
+                hasGyro: !!vehicleState.gyro,
+            },
+            {
+                position:
+                    isLSCustom || crimiPerformance || crimiCustom
+                        ? {
+                              distance: 5.0,
+                              position: GetEntityCoords(ped) as Vector3,
+                          }
+                        : null,
+            }
+        );
     }
 }

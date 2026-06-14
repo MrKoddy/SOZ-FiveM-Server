@@ -1,5 +1,6 @@
 import { Talent } from '@private/shared/talent';
-import { InventoryItem, InventoryItemMetadata } from '@public/shared/item';
+import { InventoryItem, InventoryItemMetadata } from '@public/shared/inventory';
+import { PlayerMetadata } from '@public/shared/player';
 
 import { Feature } from './features';
 
@@ -7,14 +8,18 @@ export type CriminalCraftingRequirements = {
     items: Record<string, number>;
     talent: Talent;
     expire: boolean;
+    noExtendExpiration?: boolean;
     metadata?: InventoryItemMetadata;
     outputCount?: number;
     resell: number;
     feature?: Feature;
+    corbin?: boolean;
+    metadataRequired?: keyof PlayerMetadata;
 };
 
 export type CriminalCraftingCheckItem = {
     check: boolean;
+    checkAmount: number;
     count: number;
 };
 

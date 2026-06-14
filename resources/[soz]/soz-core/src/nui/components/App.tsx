@@ -5,7 +5,18 @@ import { DrugContractApp } from '@private/nui/drug/DrugContractApp';
 import { DrugSkillApp } from '@private/nui/drug/DrugSkillApp';
 import { DrugTransformApp } from '@private/nui/drug/DrugTransformApp';
 import { FishingApp } from '@private/nui/fishing/FishingApp';
+import { BusinessCyberApp } from '@private/nui/gang/BusinessCyber/BusinessCyberApp';
+import { CyberReportApp } from '@private/nui/gang/BusinessCyber/ReportApp';
+import { BusinessSmugglingPrintApp } from '@private/nui/gang/BusinessSmuggling/BusinessSmugglingPrintApp/BusinessSmugglingPrintApp';
+import { BusinessVehicleMappingApp } from '@private/nui/gang/BusinessVehicle/BusinessVehicleMapping';
+import { BusinessVehicleOrderApp } from '@private/nui/gang/BusinessVehicle/BusinessVehicleOrderApp';
+import { ArchetypesPresentationsApp } from '@private/nui/group/ArchetypesPresentationsApp';
+import { BusinessManagementApp } from '@private/nui/group/BusinessManagementApp';
+import { HackingDeviceApp } from '@private/nui/hacking/HackingDeviceApp';
 import { HoodApp } from '@private/nui/hood/HoodApp';
+import { ArrowsMinigameApp } from '@private/nui/minigames/arrows/ArrowsMinigameApp';
+import { GridMinigameApp } from '@private/nui/minigames/grid/GridMinigameApp';
+import { PincrakerMinigameApp } from '@private/nui/minigames/pincraker/PincrakerMinigameApp';
 import { MissiveApp } from '@private/nui/missive/MissiveApp';
 import { DetectiveBoard } from '@private/nui/Police/DetectiveBoard';
 import { ScientistCamera } from '@private/nui/Police/ScientistCamera';
@@ -20,19 +31,34 @@ import { Provider } from 'react-redux';
 import { NuiEvent } from '../../shared/event';
 import { fetchNui } from '../fetch';
 import { useNuiEvent } from '../hook/nui';
+import { useInterval } from '../hook/useInterval';
+import { GlassMorphismProvider } from '../providers/GlassMorphismProvider';
 import { store } from '../store';
 import { AudioApp } from './Audio/AudioApp';
+import { AtmApp } from './Bank/AtmApp';
+import { BankApp } from './Bank/BankApp';
+import { SafeApp } from './Bank/SafeApp';
 import { RepairApp } from './Bennys/RepairApp';
+import { BlipApp } from './Blip/BlipApp';
 import { BookApp } from './Book/BookApp';
 import { CardApp } from './Card/CardApp';
 import { CraftApp } from './Craft/CraftApp';
 import { FieldHealthApp } from './Field/FieldHealthApp';
 import { FieldZoneHealthApp } from './Field/FieldZoneHealthApp';
+import { FlashApp } from './Flash/FlashApp';
+import { LaserGameApp } from './Games/LaserGameApp';
 import { HudApp } from './Hud/HudApp';
 import { InputApp } from './Input/InputApp';
+import { InventoryApp } from './Inventory/InventoryApp';
+import { KeychainApp } from './Inventory/KeychainApp';
+import { PlayerInventoryApp } from './Inventory/PlayerInventoryApp';
+import { ShopCartApp } from './Inventory/ShopCartApp';
+import { WalletApp } from './Inventory/WalletApp';
 import { MedicalApp } from './LSMC/DiagnosticPad/MedicalApp';
 import { MenuApp } from './Menu/MenuApp';
 import { PanelApp } from './Panel/PanelApp';
+import { PhoneApp } from './Phone/PhoneApp';
+import { MapPickerApp } from './Picker/MapPickerApp';
 import { BreathAnalyzerApp } from './Police/BreathAnalyzer';
 import { DrugScreeningApp } from './Police/DrugScreeningApp';
 import { RadarApp } from './Police/RadarApp';
@@ -40,8 +66,17 @@ import { ProgressApp } from './Progress/ProgressApp';
 import { RaceApp } from './Race/RaceApp';
 import { RadioApp } from './Radio/RadioApp';
 import { RadioVehicleApp } from './Radio/RadioVehicleApp';
+import { SceneSearchPropApp } from './Scene/SceneSearchPropApp';
+import { ScreenshotApp } from './Screenshot/ScreenshotApp';
+import { ClothShopMenu } from './Shop/ClothShopMenu';
 import { StateApp } from './StateApp';
+import { GlassMorphism } from './Styleguide/GlassMorphism';
+import { TargetOverlay } from './Target/TargetOverlay';
 import { TaxiHorodateurApp } from './Taxi/TaxiHorodateurApp';
+import { TextureLoaderApp } from './TextureLoader/TextureLoaderApp';
+import { WhatIfApp } from './WhatIf/WhatIfApp';
+import { Election } from './World/Election';
+import { Meteor } from './World/Meteor';
 
 export const App: FunctionComponent = () => {
     const [pauseMenuActive, setPauseMenuActive] = useState(false);
@@ -61,56 +96,92 @@ export const App: FunctionComponent = () => {
     });
 
     useEffect(() => {
-        const interval = setInterval(() => {
-            fetchNui(NuiEvent.Ping);
-        }, 1000);
         store.dispatch.api.loadApi();
-
-        return () => clearInterval(interval);
     }, []);
 
+    useInterval(async () => {
+        await fetchNui(NuiEvent.Ping);
+    }, 1000);
+
     return (
-        <Provider store={store}>
-            <StateApp />
-            <StatePrivateApp />
-            <AudioApp />
-            <div className={classes}>
-                <HudApp />
-                <CardApp />
-            </div>
-            <div className={menuClasses}>
-                <MenuApp />
-            </div>
-            <div className={classes}>
-                <ProgressApp />
-                <PanelApp />
-                <RepairApp />
-                <MissiveApp />
-                <DrugContractApp />
-                <RadarApp />
-                <RadioApp />
-                <RadioVehicleApp />
-                <BreathAnalyzerApp />
-                <DrugScreeningApp />
-                <DetectiveBoard />
-                <ScientistCamera />
-                <ScientistPhoto />
+        <GlassMorphismProvider>
+            <Provider store={store}>
+                <StateApp />
+                <StatePrivateApp />
+                <AudioApp />
+                <GlassMorphism globalHide={pauseMenuActive || hideHud} />
+                <div className={classes}>
+                    <MapPickerApp />
+                    <TargetOverlay />
+                    <HudApp />
+                    <CardApp />
+                    <ProgressApp />
+                </div>
+                <div className={menuClasses}>
+                    <MenuApp />
+                    <PlayerInventoryApp />
+                    <InventoryApp />
+                    <KeychainApp />
+                    <WalletApp />
+                    <ShopCartApp />
+                </div>
+                <div className={classes}>
+                    <ClothShopMenu />
+                    <PanelApp />
+                    <SceneSearchPropApp />
+                    <RepairApp />
+                    <MissiveApp />
+                    <DrugContractApp />
+                    <RadarApp />
+                    <RadioApp />
+                    <RadioVehicleApp />
+                    <BreathAnalyzerApp />
+                    <DrugScreeningApp />
+                    <DetectiveBoard />
+                    <ScientistPhoto />
+                    <TaxiHorodateurApp />
+                    <TalentApp />
+                    <CraftingApp />
+                    <FishingApp />
+                    <SozedexApp />
+                    <DrugSkillApp />
+                    <DrugTransformApp />
+                    <RaceApp />
+                    <LaserGameApp />
+                    <BookApp />
+                    <FieldHealthApp />
+                    <FieldZoneHealthApp />
+                    <CraftApp />
+                    <MedicalApp />
+                    <BankApp />
+                    <AtmApp />
+                    <SafeApp />
+                    <BusinessManagementApp />
+                    <BusinessVehicleOrderApp />
+                    <BusinessCyberApp />
+                    <BusinessSmugglingPrintApp />
+                    <ArchetypesPresentationsApp />
+                    <HackingDeviceApp />
+                    <ArrowsMinigameApp />
+                    <GridMinigameApp />
+                    <BusinessVehicleMappingApp />
+                    <CyberReportApp />
+                    <PincrakerMinigameApp />
+                    <ScreenshotApp />
+                    <WhatIfApp />
+                </div>
                 <HoodApp />
-                <TaxiHorodateurApp />
-                <TalentApp />
-                <CraftingApp />
-                <FishingApp />
-                <SozedexApp />
-                <DrugSkillApp />
-                <DrugTransformApp />
-                <RaceApp />
-                <BookApp />
-                <FieldHealthApp />
-                <FieldZoneHealthApp />
-                <CraftApp />
-                <InputApp />
-                <MedicalApp />
-            </div>
-        </Provider>
+                <FlashApp />
+                <ScientistCamera />
+                <TextureLoaderApp />
+                <div className={menuClasses}>
+                    <InputApp />
+                    <PhoneApp />
+                </div>
+                <Meteor />
+                <Election />
+                <BlipApp />
+            </Provider>
+        </GlassMorphismProvider>
     );
 };

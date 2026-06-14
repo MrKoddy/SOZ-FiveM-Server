@@ -4,7 +4,7 @@ import { PlayerInjuryProvider } from '@private/server/player/player.injuries.pro
 import { Command } from '@public/core/decorators/command';
 import { OnEvent } from '@public/core/decorators/event';
 import { Rpc } from '@public/core/decorators/rpc';
-import { InventoryManager } from '@public/server/inventory/inventory.manager';
+import { InventoryFactory } from '@public/server/inventory/inventory.factory';
 import { ItemService } from '@public/server/item/item.service';
 import { Notifier } from '@public/server/notifier';
 import { PlayerService } from '@public/server/player/player.service';
@@ -14,6 +14,8 @@ import { ClientEvent, ServerEvent } from '@public/shared/event';
 import { Vector3 } from '@public/shared/polyzone/vector';
 import { RpcServerEvent } from '@public/shared/rpc';
 
+import { ADD_ERROR_MESSAGE } from '../../../shared/inventory';
+import { Monitor } from '../../monitor/monitor';
 import { LSMCDamageProvider } from './lsmc.damage.provider';
 
 @Provider()
@@ -27,8 +29,8 @@ export class LSMCProvider {
     @Inject(Notifier)
     private notifier: Notifier;
 
-    @Inject(InventoryManager)
-    private inventoryManager: InventoryManager;
+    @Inject(InventoryFactory)
+    private inventoryFactory: InventoryFactory;
 
     @Inject(PlayerInjuryProvider)
     private playerInjuryProvider: PlayerInjuryProvider;
@@ -38,6 +40,9 @@ export class LSMCProvider {
 
     @Inject(ItemService)
     private itemService: ItemService;
+
+    @Inject(Monitor)
+    private monitor: Monitor;
 
     @Rpc(RpcServerEvent.LSMC_CAN_REMOVE_ITT)
     public canRemoveITT(source: number, target: number) {
@@ -50,10 +55,6 @@ export class LSMCProvider {
         const state = this.playerStateService.getClientState(target);
 
         if (state.isDead) {
-            return false;
-        }
-
-        if (this.playerInjuryProvider.remainingForcedITT(target) > 0) {
             return false;
         }
 
@@ -96,14 +97,16 @@ export class LSMCProvider {
     }
 
     @OnEvent(ServerEvent.LSMC_HEAL)
-    public onHeal(source: number, id: number) {
+    public async onHeal(source: number, id: number) {
         const player = this.playerService.getPlayer(id);
 
         if (!player) {
             return;
         }
 
-        if (!this.inventoryManager.removeItemFromInventory(source, 'firstaid')) {
+        const inventory = await this.inventoryFactory.getPlayerInventory(source);
+
+        if (!inventory.remove('firstaid', 1, false)) {
             return;
         }
 
@@ -114,21 +117,33 @@ export class LSMCProvider {
 
         this.LSMCDamageProvider.removeDamages(player.source);
 
+        const target = this.playerService.getPlayer(id);
+
+        this.monitor.traceEvent('job_lsmc_heal', {
+            player_source: source,
+            target_source: id,
+            before_health: target?.metadata.health,
+            position: GetEntityCoords(GetPlayerPed(player.source)) as Vector3,
+        });
+
         TriggerClientEvent(ClientEvent.LSMC_HEAL, player.source, 100);
     }
 
     @OnEvent(ServerEvent.LSMC_GIVE_BLOOD)
-    public onGiveBlood(source: number, id: number) {
+    public async onGiveBlood(source: number, id: number) {
         const player = this.playerService.getPlayer(id);
 
         if (!player) {
             return;
         }
 
-        if (!this.inventoryManager.removeItemFromInventory(source, 'empty_bloodbag')) {
+        const inventory = await this.inventoryFactory.getPlayerInventory(source);
+
+        if (!inventory.remove('empty_bloodbag', 1, false)) {
             return;
         }
-        this.inventoryManager.addItemToInventory(source, 'bloodbag');
+
+        inventory.add('bloodbag');
 
         this.playerService.setPlayerMetaDatas(id, {
             hunger: player.metadata.hunger - 20,
@@ -178,7 +193,7 @@ export class LSMCProvider {
     }
 
     @OnEvent(ServerEvent.LSMC_SET_CURRENT_ORGAN)
-    public onSetCurrentOrgan(source: number, organ: Organ | null, id: number) {
+    public async onSetCurrentOrgan(source: number, organ: Organ | null, id: number) {
         id = id || source;
         const player = this.playerService.getPlayer(id);
 
@@ -186,13 +201,15 @@ export class LSMCProvider {
             return;
         }
 
+        const inventory = await this.inventoryFactory.getPlayerInventory(source);
+
         if (!organ && player.metadata.organ) {
-            if (!this.inventoryManager.removeItemFromInventory(source, player.metadata.organ)) {
+            if (!inventory.remove(player.metadata.organ, 1, false)) {
                 return;
             }
         } else {
-            if (!this.inventoryManager.canCarryItem(source, 'expired_organ', 1)) {
-                this.notifier.notify(source, `Tu n’as pas assez de place dans ton inventaire.`, 'error');
+            if (!inventory.canCarryItem('expired_organ', 1)) {
+                this.notifier.notify(source, ADD_ERROR_MESSAGE['not_enough_space'], 'error');
                 return;
             }
         }
@@ -201,7 +218,7 @@ export class LSMCProvider {
 
         if (organ) {
             const item = this.itemService.getItem(organ as string);
-            this.inventoryManager.addItemToInventory(source, 'expired_organ', 1);
+            inventory.add('expired_organ', 1);
             this.notifier.notify(source, `Vous avez retiré un ${item.label}`, 'success');
         }
     }

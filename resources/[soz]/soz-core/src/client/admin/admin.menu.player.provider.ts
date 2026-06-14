@@ -1,9 +1,13 @@
+import { ServerJobPet, ServerPet } from '@public/shared/animal';
+
 import { OnEvent, OnNuiEvent } from '../../core/decorators/event';
 import { Inject } from '../../core/decorators/injectable';
 import { Provider } from '../../core/decorators/provider';
 import { emitRpc } from '../../core/rpc';
 import { AdminPlayer, HEALTH_OPTIONS, MOVEMENT_OPTIONS, VOCAL_OPTIONS } from '../../shared/admin/admin';
 import { ClientEvent, NuiEvent, ServerEvent } from '../../shared/event';
+import { VampireGameRole } from '../../shared/halloween';
+import { InventoryType } from '../../shared/inventory';
 import { PositiveNumberValidator } from '../../shared/nui/input';
 import { Err, Ok } from '../../shared/result';
 import { RpcServerEvent } from '../../shared/rpc';
@@ -28,7 +32,7 @@ export class AdminMenuPlayerProvider {
 
     private async getPlayers(): Promise<AdminPlayer[]> {
         return (await emitRpc<AdminPlayer[]>(RpcServerEvent.ADMIN_GET_PLAYERS)).sort((a, b) =>
-            a.name.localeCompare(b.name)
+            a?.name?.localeCompare(b?.name)
         );
     }
 
@@ -37,6 +41,20 @@ export class AdminMenuPlayerProvider {
         const players = await this.getPlayers();
 
         return Ok(players);
+    }
+
+    @OnNuiEvent(NuiEvent.AdminGetPlayerPet)
+    public async onGetPlayerPet(citizenId: string) {
+        const pet = await emitRpc<ServerPet>(RpcServerEvent.ADMIN_GET_PLAYER_PET, citizenId);
+
+        return Ok(pet);
+    }
+
+    @OnNuiEvent(NuiEvent.AdminGetJobPets)
+    public async onGetJobPets(job: string) {
+        const pets = await emitRpc<Array<ServerJobPet>>(RpcServerEvent.ADMIN_GET_JOB_PETS, job);
+
+        return Ok(pets);
     }
 
     @OnNuiEvent(NuiEvent.AdminMenuPlayerHandleSearchPlayer)
@@ -80,6 +98,7 @@ export class AdminMenuPlayerProvider {
         if (action === 'kill') {
             TriggerServerEvent(ServerEvent.ADMIN_KILL_PLAYER, player);
         } else {
+            TriggerServerEvent(ServerEvent.HALLOWEEN_VAMPIRE_GAME_CANCEL_VAMPIRE_KNOCKOUT, player.id, true);
             TriggerServerEvent(ServerEvent.LSMC_REVIVE, player.id, true, false, false);
         }
 
@@ -184,7 +203,7 @@ export class AdminMenuPlayerProvider {
 
     @OnNuiEvent(NuiEvent.AdminMenuPlayerHandleOpenGunSmith)
     public async handleOpenGunSmith(): Promise<void> {
-        emit(ClientEvent.WEAPON_OPEN_GUNSMITH);
+        emit(ClientEvent.WEAPON_OPEN_GUNSMITH, true);
     }
 
     @OnNuiEvent(NuiEvent.AdminMenuPlayerHandleSetAttribute)
@@ -246,6 +265,11 @@ export class AdminMenuPlayerProvider {
         TriggerServerEvent(ServerEvent.ADMIN_SET_REPUTATION, player.id, value);
     }
 
+    @OnNuiEvent(NuiEvent.AdminMenuPlayerHandleSetCanCraftMissive)
+    public async handleSetCanCraftMissive({ player, value }: { player: AdminPlayer; value: boolean }) {
+        TriggerServerEvent(ServerEvent.ADMIN_SET_CAN_CRAFT_MISSIVE, player.id, value);
+    }
+
     @OnNuiEvent(NuiEvent.AdminMenuPlayerHandleResetCrimi)
     public async handleResetCrimi(player: AdminPlayer): Promise<void> {
         const value = await this.inputService.askInput({
@@ -265,8 +289,8 @@ export class AdminMenuPlayerProvider {
     }
 
     @OnNuiEvent(NuiEvent.AdminMenuPlayerSearch)
-    public async handleResePlayerSearch(player: AdminPlayer): Promise<void> {
-        TriggerServerEvent('inventory:server:openInventory', 'player', player.id);
+    public async handleResetPlayerSearch(player: AdminPlayer): Promise<void> {
+        TriggerServerEvent(ServerEvent.INVENTORY_OPEN, InventoryType.Player, 'player_' + player.citizenId);
     }
 
     @OnNuiEvent(NuiEvent.AdminMenuPlayerSetSenateParty)
@@ -285,8 +309,42 @@ export class AdminMenuPlayerProvider {
         TriggerServerEvent(ServerEvent.ADMIN_PLAYER_SET_ZOMBIE, player.id, value);
     }
 
+    @OnNuiEvent(NuiEvent.AdminMenuPlayerSetHalloweenRole)
+    public async handlePlayerSetHalloweenRole({
+        player,
+        value,
+    }: {
+        player: AdminPlayer;
+        value: VampireGameRole;
+    }): Promise<void> {
+        TriggerServerEvent(ServerEvent.ADMIN_HALLOWEEN_FOCE_TRANSFORM_PLAYER, player.id, value);
+    }
+
     @OnNuiEvent(NuiEvent.AdminMenuPlayerSetVoipDebug)
     public async setPlayerDebug({ player, value }: { player: AdminPlayer; value: boolean }): Promise<void> {
         TriggerServerEvent(ServerEvent.ADMIN_PLAYER_SET_VOIP_DEBUG, player.id, value);
+    }
+
+    @OnNuiEvent(NuiEvent.AdminMenuPlayerSetPlate)
+    public async setPlayerPlate({
+        type,
+        player,
+        value,
+    }: {
+        type: 'plate' | 'special_plate';
+        player: AdminPlayer;
+        value: boolean;
+    }): Promise<void> {
+        TriggerServerEvent(ServerEvent.ADMIN_PLAYER_SET_PLATE, type, player, value);
+    }
+
+    @OnNuiEvent(NuiEvent.AdminMenuPlayerResetWhatIfClan)
+    public async handleResetWhatIfClan(player: AdminPlayer): Promise<void> {
+        TriggerServerEvent(ServerEvent.ADMIN_SET_METADATA, player, 'whatif_guild', '');
+    }
+
+    @OnNuiEvent(NuiEvent.AdminMenuPlayerResetWhatIfInfection)
+    public async handleResetWhatIfInfection(player: AdminPlayer): Promise<void> {
+        TriggerServerEvent(ServerEvent.WHAT_IF_RESET_INFECTION, player.id);
     }
 }

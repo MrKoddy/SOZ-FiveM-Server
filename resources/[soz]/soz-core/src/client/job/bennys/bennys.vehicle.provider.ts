@@ -1,5 +1,16 @@
-import { JobType } from '@public/shared/job';
-import { isVehicleModelElectric, isVehicleModelTrailer, VehicleSeat } from '@public/shared/vehicle/vehicle';
+import { VehicleBusinessProvider } from '@private/client/gang/business.vehicle.provider';
+import { DealershipType } from '@public/config/dealership';
+import { JobPermission, JobType } from '@public/shared/job';
+import {
+    isVehicleModelElectric,
+    isVehicleModelTrailer,
+    LSCustomMode,
+    VehicleCategoryMap,
+    VehicleClass,
+    VehicleOrderMode,
+    VehicleSeat,
+    VehiculeInformation,
+} from '@public/shared/vehicle/vehicle';
 
 import { Once, OnceStep, OnEvent, OnNuiEvent } from '../../../core/decorators/event';
 import { Inject } from '../../../core/decorators/injectable';
@@ -21,6 +32,7 @@ import { TargetFactory } from '../../target/target.factory';
 import { VehicleModificationService } from '../../vehicle/vehicle.modification.service';
 import { VehicleService } from '../../vehicle/vehicle.service';
 import { VehicleStateService } from '../../vehicle/vehicle.state.service';
+import { JobService } from '../job.service';
 
 @Provider()
 export class BennysVehicleProvider {
@@ -54,7 +66,18 @@ export class BennysVehicleProvider {
     @Inject(PhoneService)
     private phoneService: PhoneService;
 
+    @Inject(VehicleBusinessProvider)
+    private vehicleBusinessProvider: VehicleBusinessProvider;
+
+    @Inject(JobService)
+    private jobService: JobService;
+
     private upgradeZone: MultiZone<BoxZone> = new MultiZone([
+        new BoxZone([-199.1, -1324.23, 31.11], 6.4, 5.2, {
+            heading: 269.06,
+            minZ: 30.11,
+            maxZ: 32.11,
+        }),
         new BoxZone([-222.49, -1323.6, 30.89], 9, 6, {
             heading: 90,
             minZ: 29.89,
@@ -75,17 +98,17 @@ export class BennysVehicleProvider {
             minZ: 48.57,
             maxZ: 51.57,
         }),
-        new BoxZone([1913.98, 3088.9, 46.92], 8.8, 6.2, {
+        new BoxZone([1913.98, 3088.9, 46.92], 10.8, 9.1, {
             heading: 330.0,
             minZ: 45.92,
             maxZ: 48.922,
         }),
-        new BoxZone([1900.02, 3081.82, 46.91], 6.2, 10.0, {
+        new BoxZone([1900.02, 3081.82, 46.91], 8.2, 10.0, {
             heading: 330.0,
             minZ: 45.91,
             maxZ: 48.912,
         }),
-        new BoxZone([1915.46, 3107.86, 46.81], 6.6, 16.4, {
+        new BoxZone([1915.46, 3107.86, 46.81], 8.6, 16.4, {
             heading: 330.0,
             minZ: 43.81,
             maxZ: 50.812,
@@ -101,148 +124,67 @@ export class BennysVehicleProvider {
     public setupBennysJob() {
         this.targetFactory.createForAllVehicle([
             {
-                icon: 'c:mechanic/repair_engine.png',
+                icon: 'mechanic/repair_engine',
                 label: 'Réparer moteur',
-                color: 'bennys',
                 action: this.repairVehicleEngine.bind(this),
                 blackoutGlobal: true,
-                blackoutJob: 'bennys',
-                canInteract: entity => {
-                    const player = this.playerService.getPlayer();
-
-                    if (!player) {
-                        return false;
-                    }
-
-                    if (IsEntityDead(entity)) {
-                        return false;
-                    }
-
-                    if (!this.isInsideUpgradeZoneOrNearRepairVehicle()) {
-                        return false;
-                    }
-
-                    return player.job.onduty && player.job.id === JobType.Bennys;
-                },
+                blackoutJob: JobType.Bennys,
+                job: JobType.Bennys,
+                category: 'society',
+                canInteract: entity => !IsEntityDead(entity) && this.isInsideUpgradeZoneOrNearRepairVehicle(),
             },
             {
-                icon: 'c:mechanic/reparer.png',
+                icon: 'mechanic/reparer',
                 label: 'Réparer carrosserie',
-                color: 'bennys',
                 action: this.repairVehicleBody.bind(this),
                 blackoutGlobal: true,
-                blackoutJob: 'bennys',
-                canInteract: entity => {
-                    const player = this.playerService.getPlayer();
-
-                    if (!player) {
-                        return false;
-                    }
-
-                    if (IsEntityDead(entity)) {
-                        return false;
-                    }
-
-                    if (!this.isInsideUpgradeZoneOrNearRepairVehicle()) {
-                        return false;
-                    }
-
-                    return player.job.onduty && player.job.id === JobType.Bennys;
-                },
+                blackoutJob: JobType.Bennys,
+                job: JobType.Bennys,
+                category: 'society',
+                canInteract: entity => !IsEntityDead(entity) && this.isInsideUpgradeZoneOrNearRepairVehicle(),
             },
             {
-                icon: 'c:mechanic/repair_tank.png',
+                icon: 'mechanic/repair_tank',
                 label: 'Réparer réservoir',
-                color: 'bennys',
                 action: this.repairVehicleTank.bind(this),
                 blackoutGlobal: true,
-                blackoutJob: 'bennys',
-                canInteract: entity => {
-                    const player = this.playerService.getPlayer();
-
-                    if (!player) {
-                        return false;
-                    }
-
-                    if (IsEntityDead(entity)) {
-                        return false;
-                    }
-
-                    if (!this.isInsideUpgradeZoneOrNearRepairVehicle()) {
-                        return false;
-                    }
-
-                    if (isVehicleModelElectric(GetEntityModel(entity))) {
-                        return false;
-                    }
-
-                    return player.job.onduty && player.job.id === JobType.Bennys;
-                },
+                blackoutJob: JobType.Bennys,
+                job: JobType.Bennys,
+                category: 'society',
+                canInteract: entity =>
+                    !IsEntityDead(entity) &&
+                    this.isInsideUpgradeZoneOrNearRepairVehicle() &&
+                    !isVehicleModelElectric(GetEntityModel(entity)),
             },
             {
-                icon: 'c:mechanic/repair_wheel.png',
+                icon: 'mechanic/repair_wheel',
                 label: 'Changement des roues',
-                color: 'bennys',
                 action: this.repairVehicleWheel.bind(this),
                 blackoutGlobal: true,
-                blackoutJob: 'bennys',
-                canInteract: entity => {
-                    const player = this.playerService.getPlayer();
-
-                    if (!player) {
-                        return false;
-                    }
-
-                    if (IsEntityDead(entity)) {
-                        return false;
-                    }
-
-                    if (!this.isInsideUpgradeZoneOrNearRepairVehicle()) {
-                        return false;
-                    }
-
-                    return player.job.onduty && player.job.id === JobType.Bennys;
-                },
+                blackoutJob: JobType.Bennys,
+                job: JobType.Bennys,
+                category: 'society',
+                canInteract: entity => !IsEntityDead(entity) && this.isInsideUpgradeZoneOrNearRepairVehicle(),
             },
             {
-                icon: 'c:mechanic/nettoyer.png',
+                icon: 'mechanic/nettoyer',
                 label: 'Laver',
-                color: 'bennys',
                 blackoutGlobal: true,
-                blackoutJob: 'bennys',
+                blackoutJob: JobType.Bennys,
+                category: 'society',
                 action: this.washVehicle.bind(this),
-                canInteract: () => {
-                    const player = this.playerService.getPlayer();
-
-                    if (!player) {
-                        return false;
-                    }
-
-                    if (!this.isInsideUpgradeZoneOrNearRepairVehicle()) {
-                        return false;
-                    }
-
-                    return player.job.onduty && player.job.id === JobType.Bennys;
-                },
+                job: JobType.Bennys,
+                canInteract: entity => !IsEntityDead(entity) && this.isInsideUpgradeZoneOrNearRepairVehicle(),
             },
             {
-                icon: 'c:mechanic/repair_diag.png',
+                icon: 'mechanic/repair_diag',
                 label: 'Faire un diagnostic',
-                color: 'bennys',
                 blackoutGlobal: true,
-                blackoutJob: 'bennys',
-                job: 'bennys',
+                blackoutJob: JobType.Bennys,
+                job: JobType.Bennys,
                 item: 'diagnostic_pad',
+                category: 'society',
                 action: this.analyzeVehicle.bind(this),
-                canInteract: () => {
-                    const player = this.playerService.getPlayer();
-
-                    if (!player) {
-                        return false;
-                    }
-
-                    return player.job.onduty && player.job.id === JobType.Bennys;
-                },
             },
         ]);
     }
@@ -275,10 +217,13 @@ export class BennysVehicleProvider {
         return closestVehicle !== null;
     }
 
-    public async upgradeVehicle(vehicleEntityId: number) {
+    public async upgradeVehicle(vehicleEntityId: number, mode: LSCustomMode) {
         const vehicleCondition = await this.vehicleStateService.getVehicleCondition(vehicleEntityId);
 
-        if (this.vehicleService.isInBadCondition(vehicleEntityId, vehicleCondition)) {
+        if (
+            [LSCustomMode.LsCustom, LSCustomMode.NewGahray].includes(mode) &&
+            this.vehicleService.isInBadCondition(vehicleEntityId, vehicleCondition)
+        ) {
             this.notifier.notify(
                 'Ce véhicule est trop endommagé pour être modifié, veuillez le réparer avant de le modifier.',
                 'error'
@@ -287,7 +232,7 @@ export class BennysVehicleProvider {
             return;
         }
 
-        if (vehicleCondition.dirtLevel > 5.0) {
+        if ([LSCustomMode.LsCustom, LSCustomMode.NewGahray].includes(mode) && vehicleCondition.dirtLevel > 5.0) {
             this.notifier.notify(
                 'Ce véhicule est trop sale pour être modifié, veuillez le laver avant de le modifier.',
                 'error'
@@ -309,7 +254,8 @@ export class BennysVehicleProvider {
                 options,
                 originalConfiguration: vehicleConfiguration,
                 currentConfiguration: vehicleConfiguration,
-                admin: false,
+                mode: mode,
+                advenced: false,
             },
             {
                 useMouse: true,
@@ -364,12 +310,18 @@ export class BennysVehicleProvider {
     }
 
     @OnNuiEvent(NuiEvent.BennysUpgradeVehicle)
-    public async onUpgradeVehicle() {
+    public async onUpgradeVehicle(mode: LSCustomMode) {
         const vehicle = GetVehiclePedIsIn(PlayerPedId(), false);
 
-        if (vehicle) {
-            await this.upgradeVehicle(vehicle);
+        if (!vehicle) {
+            return;
         }
+
+        if (mode == LSCustomMode.CrimiCusto && !this.vehicleBusinessProvider.testCrimiGarage(vehicle, true)) {
+            return;
+        }
+
+        await this.upgradeVehicle(vehicle, mode);
 
         return true;
     }
@@ -440,6 +392,21 @@ export class BennysVehicleProvider {
         const model = GetEntityModel(vehicle);
         const doorExist = this.vehicleService.getDoorExists(vehicle, condition);
         const windowExist = this.vehicleService.getWindowExists(vehicle);
+        const vehicleClass = GetVehicleClassFromName(model) as VehicleClass;
+        const vehicleCategory = VehicleCategoryMap[vehicleClass] ?? '';
+        const vehicleBrandName = GetMakeNameFromVehicleModel(model)
+            ? GetLabelText(GetMakeNameFromVehicleModel(model))
+            : null;
+        const vehicleName = GetDisplayNameFromVehicleModel(model)
+            ? GetLabelText(GetDisplayNameFromVehicleModel(model))
+            : null;
+
+        const vehiculeInformations: VehiculeInformation = {
+            plate: GetVehicleNumberPlateText(vehicle) ?? '',
+            brand: vehicleBrandName,
+            model: vehicleName,
+            category: vehicleCategory,
+        };
 
         let tabletType: 'car' | 'electric' | 'trailer' = 'car';
 
@@ -451,10 +418,49 @@ export class BennysVehicleProvider {
         }
 
         this.nuiDispatch.dispatch('repair', 'open', {
+            vehiculeInformations: vehiculeInformations,
             condition: condition,
             doors: doorExist,
             windows: windowExist,
             tabletType: tabletType,
         });
+    }
+
+    @Once(OnceStep.Start)
+    public async onStart() {
+        const orderZone = BennysConfig.Order.zone;
+        this.targetFactory.createForBoxZone(orderZone.name, orderZone, [
+            {
+                label: 'Commander une voiture',
+                icon: 'mechanic/order',
+                job: JobType.Bennys,
+                blackoutJob: JobType.Bennys,
+                blackoutGlobal: true,
+                category: 'society',
+                canInteract: () => {
+                    return this.jobService.hasPermission(JobType.Bennys, JobPermission.Order);
+                },
+                action: async () => {
+                    this.nuiMenu.openMenu(
+                        MenuType.VehicleOrderMenu,
+                        {
+                            dealerships: [
+                                DealershipType.Cycle,
+                                DealershipType.Luxury,
+                                DealershipType.Moto,
+                                DealershipType.Pdm,
+                            ],
+                            mode: VehicleOrderMode.Job,
+                        },
+                        {
+                            position: {
+                                position: orderZone.center,
+                                distance: 5.0,
+                            },
+                        }
+                    );
+                },
+            },
+        ]);
     }
 }

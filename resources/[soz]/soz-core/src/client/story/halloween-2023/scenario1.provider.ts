@@ -6,9 +6,10 @@ import { Halloween2023Scenario1, Halloween2023Scenario1Alcool } from '@public/sh
 import { Once, OnceStep } from '../../../core/decorators/event';
 import { Inject } from '../../../core/decorators/injectable';
 import { Provider } from '../../../core/decorators/provider';
-import { Feature, isFeatureEnabled } from '../../../shared/features';
+import { Feature } from '../../../shared/features';
 import { BlipFactory } from '../../blip';
 import { PedFactory } from '../../factory/ped.factory';
+import { FeatureProvider } from '../../feature/feature.provider';
 import { ProgressService } from '../../progress.service';
 import { TargetFactory } from '../../target/target.factory';
 import { StoryProvider } from '../story.provider';
@@ -33,9 +34,12 @@ export class Halloween2023Scenario1Provider {
     @Inject(InventoryManager)
     private inventoryManager: InventoryManager;
 
+    @Inject(FeatureProvider)
+    private featureProvider: FeatureProvider;
+
     @Once(OnceStep.PlayerLoaded)
     public async onPlayerLoaded() {
-        if (!isFeatureEnabled(Feature.Halloween2023Scenario1)) {
+        if (!this.featureProvider.isFeatureEnabled(Feature.Halloween2023Scenario1)) {
             return;
         }
 
@@ -48,7 +52,7 @@ export class Halloween2023Scenario1Provider {
     }
 
     public createBlip(player: PlayerData) {
-        if (!isFeatureEnabled(Feature.Halloween2023Scenario1)) {
+        if (!this.featureProvider.isFeatureEnabled(Feature.Halloween2023Scenario1)) {
             return;
         }
 
@@ -83,7 +87,8 @@ export class Halloween2023Scenario1Provider {
                 options: [
                     {
                         label: 'Parler',
-                        icon: 'fas fa-comment',
+                        icon: 'global/comment',
+                        category: 'citizen',
                         canInteract: () => this.storyService.canInteractForPart('halloween2023', 'scenario1', 0),
                         action: async entity => {
                             TriggerServerEvent(ServerEvent.STORY_HALLOWEEN_2023_SCENARIO_1, 1);
@@ -212,7 +217,8 @@ export class Halloween2023Scenario1Provider {
                 options: [
                     {
                         label: 'Parler',
-                        icon: 'fas fa-comment',
+                        icon: 'global/comment',
+                        category: 'citizen',
                         canInteract: () => this.storyService.canInteractForPart('halloween2023', 'scenario1', 1),
                         action: async entity => {
                             TriggerServerEvent(ServerEvent.STORY_HALLOWEEN_2023_SCENARIO_1, 2);
@@ -245,13 +251,11 @@ export class Halloween2023Scenario1Provider {
                     ),
                     {
                         label: 'Donner',
-                        icon: 'c:pole/livrer.png',
+                        icon: 'pole/livrer',
+                        item: 'halloween_prehistoric_blood_analysis',
+                        category: 'citizen',
                         canInteract: () => {
                             if (!this.storyService.canInteractForPart('halloween2023', 'scenario1', 3)) {
-                                return false;
-                            }
-
-                            if (!this.inventoryManager.hasEnoughItem('halloween_prehistoric_blood_analysis')) {
                                 return false;
                             }
 
@@ -300,7 +304,8 @@ export class Halloween2023Scenario1Provider {
                 options: [
                     {
                         label: 'Parler',
-                        icon: 'fas fa-comment',
+                        icon: 'global/comment',
+                        category: 'citizen',
                         canInteract: () => this.storyService.canInteractForPart('halloween2023', 'scenario1', 4),
                         action: async entity => {
                             TriggerServerEvent(ServerEvent.STORY_HALLOWEEN_2023_SCENARIO_1, 5);
@@ -325,7 +330,8 @@ export class Halloween2023Scenario1Provider {
                     ),
                     {
                         label: 'Parler',
-                        icon: 'fas fa-comment',
+                        icon: 'global/comment',
+                        category: 'citizen',
                         canInteract: () => this.storyService.canInteractForPart('halloween2023', 'scenario1', 7),
                         action: async entity => {
                             TriggerServerEvent(ServerEvent.STORY_HALLOWEEN_2023_SCENARIO_1, 8);
@@ -358,7 +364,8 @@ export class Halloween2023Scenario1Provider {
                 options: [
                     {
                         label: 'Parler',
-                        icon: 'fas fa-comment',
+                        icon: 'global/comment',
+                        category: 'citizen',
                         canInteract: () => this.storyService.canInteractForPart('halloween2023', 'scenario1', 5),
                         action: async entity => {
                             TriggerServerEvent(ServerEvent.STORY_HALLOWEEN_2023_SCENARIO_1, 6);
@@ -383,7 +390,8 @@ export class Halloween2023Scenario1Provider {
                     ),
                     {
                         label: 'Donner',
-                        icon: 'c:pole/livrer.png',
+                        icon: 'pole/livrer',
+                        category: 'citizen',
                         canInteract: () => {
                             if (!this.storyService.canInteractForPart('halloween2023', 'scenario1', 6)) {
                                 return false;
@@ -426,6 +434,7 @@ export class Halloween2023Scenario1Provider {
                 {
                     label: zone.label,
                     icon: zone.icon,
+                    category: 'citizen',
                     canInteract: () => this.storyService.canInteractForPart('halloween2023', 'scenario1', zone.part),
                     action: async () => {
                         const { completed } = await this.progressService.progress(
@@ -440,9 +449,7 @@ export class Halloween2023Scenario1Provider {
                                     repeat: true,
                                 },
                             },
-                            {
-                                useAnimationService: true,
-                            }
+                            {}
                         );
 
                         if (completed) {

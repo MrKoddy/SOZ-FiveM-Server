@@ -1,11 +1,18 @@
+import { useAssetPath } from '@public/nui/hook/assets';
+import { useItems } from '@public/nui/hook/data';
+import { RootState } from '@public/nui/store';
+import { TaxType } from '@public/shared/tax';
+import { LSCustomMode } from '@public/shared/vehicle/vehicle';
 import { FunctionComponent, useEffect, useState } from 'react';
+import { useSelector } from 'react-redux';
 
-import { TaxType } from '../../../shared/bank';
 import { NuiEvent } from '../../../shared/event';
 import { MenuType } from '../../../shared/nui/menu';
 import {
+    getVehicleCrimiCustomPrice,
     getVehicleCustomPrice,
     VehicleConfiguration,
+    VehicleCustomInput,
     VehicleCustomMenuData,
     VehicleModification,
     VehicleUpgradeChoice,
@@ -20,6 +27,7 @@ import {
     MenuItemButton,
     MenuItemSelect,
     MenuItemSelectOptionBox,
+    MenuItemText,
     MenuTitle,
 } from '../Styleguide/Menu';
 
@@ -38,6 +46,8 @@ export const MenuItemSelectVehicleCustomLevel: FunctionComponent<MenuItemSelectV
     onChange,
     title,
 }) => {
+    const { getPath } = useAssetPath();
+
     if (!option || option.choice.type === 'toggle') {
         return null;
     }
@@ -49,7 +59,7 @@ export const MenuItemSelectVehicleCustomLevel: FunctionComponent<MenuItemSelectV
             onChange={(index, value) => onChange(value)}
             title={
                 <div className="flex items-center w-[9.3em]">
-                    <img alt={image} className="ml-4 w-8 h-8" src={`/public/images/vehicle/${image}.webp`} />
+                    <img alt={image} className="ml-4 w-8 h-8" src={getPath(`images/vehicle/${image}.webp`)} />
                     <h3 className="ml-2 uppercase">{title}</h3>
                 </div>
             }
@@ -70,6 +80,10 @@ type MenuVehicleCustomProps = {
 export const MenuVehicleCustom: FunctionComponent<MenuVehicleCustomProps> = ({ data }) => {
     const [configuration, setConfiguration] = useState<VehicleConfiguration | null>(null);
     const getPrice = useGetPrice();
+    const items = useItems();
+    const crimi = ![LSCustomMode.Admin, LSCustomMode.LsCustom].includes(data.mode);
+    const { getPath } = useAssetPath();
+    const whatIf = useSelector((state: RootState) => state.features.WhatIfFirstEpisode);
 
     useEffect(() => {
         if (data?.currentConfiguration) {
@@ -92,20 +106,15 @@ export const MenuVehicleCustom: FunctionComponent<MenuVehicleCustomProps> = ({ d
         return null;
     }
 
-    const price = data.admin
-        ? 0
-        : configuration
-        ? getVehicleCustomPrice(data.vehiclePrice, data.options, data.currentConfiguration, configuration)
-        : 0;
-
     const onConfirm = () => {
-        fetchNui(NuiEvent.VehicleCustomConfirmModification, {
+        const input: VehicleCustomInput = {
             vehicleEntityId: data.vehicle,
             originalConfiguration: data.originalConfiguration,
             vehicleConfiguration: configuration,
-            usePricing: !data.admin,
+            mode: data.mode,
             onlyPerformance: true,
-        });
+        };
+        fetchNui(NuiEvent.VehicleCustomConfirmModification, input);
     };
 
     const createOnChange = (key: keyof VehicleModification) => (value: any) => {
@@ -118,11 +127,46 @@ export const MenuVehicleCustom: FunctionComponent<MenuVehicleCustomProps> = ({ d
         });
     };
 
+    const manualChange = () => (value: boolean) => {
+        setConfiguration({
+            ...configuration,
+            manualGearbox: value,
+        });
+    };
+
+    const crimiPrice = () => {
+        const price = getVehicleCrimiCustomPrice(
+            data.vehiclePrice,
+            data.options,
+            data.currentConfiguration,
+            configuration,
+            whatIf
+        );
+
+        return Object.keys(price).map(item => {
+            return price[item] + 'x ' + items.find(elem => elem.name == item).label;
+        });
+    };
+
     return (
         <Menu type={MenuType.VehicleCustom}>
             <MainMenu>
-                <MenuTitle banner="https://nui-img/soz/menu_shop_lscustoms">LS Customs</MenuTitle>
-                <MenuContent>
+                <MenuTitle title={crimi ? 'Performance' : 'LS Customs'} />
+                <MenuContent
+                    helpPanel={
+                        data.mode == LSCustomMode.CrimiPerfo &&
+                        crimiPrice().length > 0 && (
+                            <>
+                                <MenuItemText>
+                                    <span className="underline">Coût totaux : </span>
+                                </MenuItemText>
+                                {crimiPrice().map(elem => (
+                                    <MenuItemText key={'cost_' + elem}>• {elem}</MenuItemText>
+                                ))}
+                            </>
+                        )
+                    }
+                >
                     <MenuItemSelectVehicleCustomLevel
                         value={configuration.modification.engine}
                         option={data.options.modification.engine}
@@ -165,8 +209,32 @@ export const MenuVehicleCustom: FunctionComponent<MenuVehicleCustomProps> = ({ d
                             onChange={(index, value) => createOnChange('turbo')(value)}
                             title={
                                 <div className="flex items-center w-[9.3rem]">
-                                    <img alt="Turbo" className="ml-4 w-8 h-8" src="/public/images/vehicle/turbo.webp" />
+                                    <img
+                                        alt="Turbo"
+                                        className="ml-4 w-8 h-8"
+                                        src={getPath('images/vehicle/turbo.webp')}
+                                    />
                                     <h3 className="ml-2 uppercase">Turbo</h3>
+                                </div>
+                            }
+                        >
+                            <MenuItemSelectOptionBox value={false}>Désactivé</MenuItemSelectOptionBox>
+                            <MenuItemSelectOptionBox value={true}>Activé</MenuItemSelectOptionBox>
+                        </MenuItemSelect>
+                    )}
+                    {data.advenced && (
+                        <MenuItemSelect
+                            value={!!configuration.manualGearbox}
+                            showAllOptions
+                            onChange={(index, value) => manualChange()(value)}
+                            title={
+                                <div className="flex items-center w-[9.3rem]">
+                                    <img
+                                        alt="Manual"
+                                        className="ml-4 w-8 h-8"
+                                        src={getPath('images/vehicle/transmission.webp')}
+                                    />
+                                    <h3 className="ml-2 uppercase">Boite manuelle</h3>
                                 </div>
                             }
                         >
@@ -176,8 +244,23 @@ export const MenuVehicleCustom: FunctionComponent<MenuVehicleCustomProps> = ({ d
                     )}
                     <MenuItemButton className="border-t border-white/50" onConfirm={() => onConfirm()}>
                         <div className="flex w-full justify-between items-center">
-                            <span>Confirmer les changements</span>
-                            <span>$ {Intl.NumberFormat('fr-FR').format(getPrice(price, TaxType.VEHICLE))}</span>
+                            <span>✅ Confirmer les changements</span>
+                            {data.mode == LSCustomMode.LsCustom && (
+                                <span>
+                                    ${' '}
+                                    {Intl.NumberFormat('fr-FR').format(
+                                        getPrice(
+                                            getVehicleCustomPrice(
+                                                data.vehiclePrice,
+                                                data.options,
+                                                data.currentConfiguration,
+                                                configuration
+                                            ),
+                                            TaxType.VEHICLE
+                                        )
+                                    )}
+                                </span>
+                            )}
                         </div>
                     </MenuItemButton>
                 </MenuContent>

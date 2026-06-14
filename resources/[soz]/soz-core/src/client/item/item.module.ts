@@ -1,7 +1,9 @@
 import { Module } from '../../core/decorators/module';
 import { AlbumProvider } from './album.provider';
+import { ComputerProvider } from './computer.provider';
 import { ItemBookProvider } from './item.book.provider';
 import { ItemCameraProvider } from './item.camera.provider';
+import { ItemGiftProvider } from './item.gift.provider';
 import { ItemHalloweenProvider } from './item.halloween.provider';
 import { ItemMicrophoneProvider } from './item.microphone.provider';
 import { ItemParachuteProvider } from './item.parachute.provider';
@@ -16,6 +18,8 @@ import { ItemProvider } from './item.provider';
         ItemMicrophoneProvider,
         ItemHalloweenProvider,
         ItemParachuteProvider,
+        ItemGiftProvider,
+        ComputerProvider,
     ],
 })
 export class ItemModule {}

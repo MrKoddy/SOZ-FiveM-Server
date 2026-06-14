@@ -1,12 +1,17 @@
 import { SozRole } from '@core/permissions';
 import { DrugSkill } from '@private/shared/drugs';
 import { Talent } from '@private/shared/talent';
+import { BankMoneyType } from '@public/shared/bank';
+import { VampireGameRole } from '@public/shared/halloween';
+import { ApartementTiers } from '@public/shared/housing/housing';
 import { SenatePartyMember } from '@public/shared/senate';
+import { Radio } from '@public/shared/voip';
+import { WhatIfGuild } from '@public/shared/whatif';
 
-import { ClothConfig } from './cloth';
+import { ClothConfig, OutfitType } from './cloth';
 import { Disease, Organ } from './disease';
 import { DrivingSchoolLicenseType } from './driving-school';
-import { InventoryItem } from './item';
+import { joaat } from './joaat';
 import { JobType } from './job';
 import { PlasterLocation } from './job/lsmc';
 import { Halloween2022, Halloween2023 } from './story/halloween2022';
@@ -14,21 +19,28 @@ import { Halloween2022, Halloween2023 } from './story/halloween2022';
 export type QBCorePlayer = {
     Functions: {
         SetApartment: (data: any) => void;
-        SetApartmentTier: (tier: number) => void;
+        SetApartmentTier: (tier: Partial<ApartementTiers>) => void;
         SetPartyMember: (data: SenatePartyMember | null) => void;
         SetApartmentHasParkingPlace: (hasParkingPlace: boolean) => void;
         SetMetaData: (key: string, val: any) => void;
         SetMetaDatas: (data: Record<string, any>) => void;
+        SetValidated: (validated: boolean) => void;
         UpdateMaxWeight: () => void;
-        AddMoney: (type: 'money' | 'marked_money', amount: number) => boolean;
-        RemoveMoney: (type: 'money' | 'marked_money', amount: number) => boolean;
+        AddMoney: (type: BankMoneyType, amount: number) => boolean;
+        RemoveMoney: (type: BankMoneyType, amount: number) => boolean;
         SetClothConfig: (config: ClothConfig, skipApply: boolean) => void;
-        GetMoney: (type: 'money' | 'marked_money') => number;
+        GetMoney: (type: BankMoneyType) => number;
         SetJobDuty: (onDuty: boolean) => void;
         SetJob: (job: JobType, grade: number) => void;
         SetSkin: (skin: Skin, skipApply: boolean) => void;
+        SetGang: (gangId: number, isboss: boolean) => void;
     };
     PlayerData: PlayerData;
+};
+
+export type GangPlayerData = {
+    id: number;
+    isboss: boolean;
 };
 
 export type PlayerData = {
@@ -38,7 +50,11 @@ export type PlayerData = {
         | {
               id: number;
               property_id: number;
+              identifier: string;
               tier: number;
+              cloth_tier: number;
+              money_tier: number;
+              park_tier: number;
               price: number;
               owner: string;
           }
@@ -55,10 +71,13 @@ export type PlayerData = {
     role: SozRole;
     metadata: PlayerMetadata;
     job: PlayerJob;
-    items: Record<string, InventoryItem> | InventoryItem[];
     skin: Skin;
     cloth_config: ClothConfig;
     source: number;
+    gang: GangPlayerData;
+    position: { x: number; y: number; z: number };
+    is_validated: boolean;
+    created_at: number;
 };
 
 export type FakeId = {
@@ -73,6 +92,7 @@ export type FakeId = {
 export type Skin = {
     Hair: {
         HairType?: number;
+        Collection?: string;
         HairColor?: number;
         HairSecondaryColor?: number;
         BeardType?: number;
@@ -84,8 +104,12 @@ export type Skin = {
         ChestHairType?: number;
         ChestHairOpacity?: number;
         ChestHairColor?: number;
+        Scalp?: {
+            Collection: string;
+            Overlay: string;
+        };
     };
-    Makeup: {
+    Makeup?: {
         BeardType?: number;
         BeardColor?: number;
         FullMakeupType?: number;
@@ -100,22 +124,52 @@ export type Skin = {
         LipstickOpacity?: number;
         LipstickColor?: number;
     };
-    FaceTrait: {
+    FaceTrait?: {
         EyeColor?: number;
+        Blemish?: number;
+        Ageing?: number;
+        Complexion?: number;
+        Moles?: number;
+        BodyBlemish?: number;
+        AddBodyBlemish?: number;
+        EyebrowHigh?: number;
+        EyebrowForward?: number;
+        EyesOpening?: number;
+        CheeksBoneHigh?: number;
+        CheeksBoneWidth?: number;
+        CheeksWidth?: number;
+        ChimpBoneLength?: number;
+        ChimpBoneLower?: number;
+        ChimpBoneWidth?: number;
+        ChimpHole?: number;
+        JawBoneBackLength?: number;
+        JawBoneWidth?: number;
+        LipsThickness?: number;
+        NeckThickness?: number;
+        NoseBoneHigh?: number;
+        NoseBoneTwist?: number;
+        NosePeakLength?: number;
+        NosePeakLower?: number;
+        NosePeakHeight?: number;
+        NoseWidth?: number;
     };
-    Model: {
+    Model?: {
         Hash: number;
+        Father: number;
+        Mother: number;
+        ShapeMix: number;
+        SkinMix: number;
     };
-    Tattoos: {
+    Tattoos?: {
         Collection: number;
         Overlay: number;
     }[];
 };
 
-export const PlayerPedHash = {
-    Male: 1885233650,
-    Female: -1667301416,
-};
+export enum PlayerPedHash {
+    Male = joaat('mp_m_freemode_01'),
+    Female = joaat('mp_f_freemode_01'),
+}
 
 export const TenueComponents = {
     [1]: { label: 'Chapeau', propId: 0, value: 'HideHead' },
@@ -195,9 +249,9 @@ export type PlayerServerState = {
     exercise: PlayerServerStateExercise & {
         completed: number;
     };
-    lastStrengthUpdate: Date;
-    lastMaxStaminaUpdate: Date;
-    lastStressLevelUpdate: Date;
+    lastStrengthUpdate: number;
+    lastMaxStaminaUpdate: number;
+    lastStressLevelUpdate: number;
 };
 
 export type PlayerClientState = {
@@ -207,15 +261,24 @@ export type PlayerClientState = {
     isZipped: boolean;
     isEscorted: boolean;
     isEscorting: boolean;
+    isKnockedOut: boolean;
     escorting: number | null;
     isInShop: boolean;
     isInHospital: boolean;
     isInHub: boolean;
+    isInGame: boolean;
+    isInGameHub: boolean;
     disableMoneyCase: boolean;
     hasPrisonerClothes: boolean;
     isWearingPatientOutfit: boolean;
     isLooted: boolean;
     carryBox: boolean;
+    halloweenRole: VampireGameRole | null;
+    inCyberHeist: boolean;
+    nbArmorPlates: number;
+    usedArmorPlates: number;
+    maxArmorPlates: number;
+    radioShortRange: Radio;
 };
 
 export enum PlayerLicenceType {
@@ -230,6 +293,18 @@ export enum PlayerLicenceType {
     Rescuer = 'rescuer',
 }
 
+export const PlayerLicencePointType: Record<PlayerLicenceType, boolean> = {
+    [PlayerLicenceType.Car]: true,
+    [PlayerLicenceType.Truck]: true,
+    [PlayerLicenceType.Moto]: true,
+    [PlayerLicenceType.Boat]: true,
+    [PlayerLicenceType.Heli]: true,
+    [PlayerLicenceType.Weapon]: false,
+    [PlayerLicenceType.Fishing]: false,
+    [PlayerLicenceType.Hunting]: false,
+    [PlayerLicenceType.Rescuer]: false,
+};
+
 export const PlayerLicenceLabels = {
     [PlayerLicenceType.Car]: 'Permis voiture',
     [PlayerLicenceType.Truck]: 'Permis poids lourd',
@@ -242,7 +317,19 @@ export const PlayerLicenceLabels = {
     [PlayerLicenceType.Rescuer]: 'Secouriste',
 };
 
-export type PlayerListStateKey = 'dead' | 'zipped' | 'wearingPatientOutfit' | 'escorted';
+export const ShortPlayerLicenceLabels = {
+    [PlayerLicenceType.Car]: 'Voiture',
+    [PlayerLicenceType.Truck]: 'Poids lourd',
+    [PlayerLicenceType.Moto]: 'Moto',
+    [PlayerLicenceType.Boat]: 'Maritime',
+    [PlayerLicenceType.Heli]: 'Aviation',
+    [PlayerLicenceType.Weapon]: "Port d'arme",
+    [PlayerLicenceType.Fishing]: 'Pêche',
+    [PlayerLicenceType.Hunting]: 'Chasse',
+    [PlayerLicenceType.Rescuer]: 'Secouriste',
+};
+
+export type PlayerListStateKey = 'dead' | 'zipped' | 'wearingPatientOutfit' | 'escorted' | 'knockedOut' | 'validated';
 
 export enum PlayerCriminalState {
     None,
@@ -284,18 +371,30 @@ export type PlayerMetadata = PlayerHealthBook & {
     disease: Disease | null;
     last_disease_at: number | null;
     // Typing is intentionally in that way so that you could program future items that gives clothes.
-    isWearingItem: 'zevent2022_tshirt' | null;
+    isWearingItem: string | null;
     gym_subscription_expire_at: number | null;
+    gym_state: PlayerServerState;
     halloween2022: Halloween2022 | null;
     halloween2023: Halloween2023 | null;
     licences: Partial<Record<PlayerLicenceType, number>>;
-    shortcuts: Record<number, Partial<InventoryItem>>;
+    shortcuts: Record<
+        number,
+        {
+            name: string;
+            metadata?: {
+                type?: string;
+                serial?: string;
+                url?: string;
+            };
+        }
+    >;
     mort: string | null;
     missive_count: number;
     criminal_state: PlayerCriminalState;
     criminal_reputation: number;
     criminal_talents: Talent[];
     criminal_lastaction: number;
+    criminal_can_craft_missive: boolean;
     drugs_skills: DrugSkill[];
     drugs_heavy_contract_date: number;
     vehiclelimit: number;
@@ -312,6 +411,22 @@ export type PlayerMetadata = PlayerHealthBook & {
     scuba: boolean;
     health_book_update_date: number | null;
     plaster: PlasterLocation[];
+    plate?: boolean;
+    special_plate?: boolean;
+    casino_alice_frame?: boolean;
+    reputation_token_date?: number;
+    main_residence_last_change?: number;
+    noclip: boolean;
+    cloth_type?: OutfitType;
+    // casino
+    casino_bundle_claim?: boolean;
+    casino_vip_standard_subscription_expire_at: number | null;
+    casino_vip_premium_subscription_expire_at: number | null;
+    casino_vip_point?: number;
+    casino_vip_rewards?: number[];
+    casino_diamond_frame?: boolean;
+    whatif_guild?: WhatIfGuild;
+    hazmat_protection?: number;
 };
 
 export const isAdmin = (player: PlayerData) => {
@@ -325,3 +440,11 @@ export const isStaff = (player: PlayerData) => {
 export const isGameMaster = (player: PlayerData) => {
     return player.role === 'gamemaster' || isStaff(player);
 };
+
+export const expirationVisaDuration = 2 * 7 * 24 * 3600 * 1000;
+
+export enum PedType {
+    ANIMAL = 28,
+}
+
+export const IsPedAnAnimal = (entity: number) => GetPedType(entity) === PedType.ANIMAL;

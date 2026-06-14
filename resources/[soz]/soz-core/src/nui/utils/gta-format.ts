@@ -251,8 +251,11 @@ export const formatText = (text: string) => {
         return '';
     }
 
+    text = text.replace(/µ/g, ' ');
+    text = text.replace(/~a~/g, '');
     text = text.replace(/~n~/g, '<br />');
     text = text.replace(/~h~/g, '<strong>');
+    text = text.replace(/~\/h~/g, '</strong>');
 
     Object.keys(HUDColors).forEach(tag => {
         text = text.replace(RegExp(`~${tag}~`, 'g'), `<span style="color: ${HUDColors[tag]}">`);
@@ -262,4 +265,21 @@ export const formatText = (text: string) => {
     const domObj = d.parseFromString(text || '', 'text/html');
 
     return domObj.body.innerHTML;
+};
+
+export const cleanText = (text: string) => {
+    if (!text) {
+        return '';
+    }
+
+    text = text.replace(/µ/g, ' ');
+    text = text.replace(/~a~/g, '');
+    text = text.replace(/~n~/g, '');
+    text = text.replace(/~h~/g, '');
+
+    Object.keys(HUDColors).forEach(tag => {
+        text = text.replace(RegExp(`~${tag}~`, 'g'), '');
+    });
+
+    return text;
 };

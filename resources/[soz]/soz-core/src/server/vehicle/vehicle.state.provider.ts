@@ -3,6 +3,7 @@ import { emitClientRpc } from '@public/core/rpc';
 import { uuidv4 } from '@public/core/utils';
 import { joaat } from '@public/shared/joaat';
 import { FDO_NO_FBI } from '@public/shared/job';
+import { VehicleConfiguration } from '@public/shared/vehicle/modification';
 
 import { OnEvent } from '../../core/decorators/event';
 import { Exportable } from '../../core/decorators/exports';
@@ -78,19 +79,12 @@ export class VehicleStateProvider {
                     },
                 });
 
-                this.monitor.publish(
-                    'vehicle_despawn',
-                    {
-                        vehicle_id: state.volatile.id || null,
-                        vehicle_net_id: netId,
-                        vehicle_plate: state.volatile.plate || null,
-                    },
-                    {
-                        owner: state.owner || null,
-                        condition: state.condition || null,
-                        position: toVector3Object(state.position || [0, 0, 0]),
-                    }
-                );
+                this.monitor.traceEvent('vehicle_despawn', {
+                    vehicle_plate: state.volatile.plate || null,
+                    player_source: state.owner || null,
+                    vehicle_condition: JSON.stringify(state.condition),
+                    position: toVector3Object(state.position || [0, 0, 0]),
+                });
 
                 continue;
             }
@@ -106,23 +100,17 @@ export class VehicleStateProvider {
                 this.vehicleStateService.switchOwner(netId, owner);
                 const previousOwner = this.playerService.getPlayer(state.owner);
 
-                this.monitor.publish(
-                    'vehicle_condition_switch_owner',
-                    {
-                        vehicle_id: state.volatile.id || null,
-                        vehicle_net_id: netId,
-                        vehicle_plate: state.volatile.plate,
-                        player_source: owner,
-                    },
-                    {
-                        previous_owner: previousOwner?.citizenid,
-                        previous_owner_name: previousOwner?.charinfo.firstname + ' ' + previousOwner?.charinfo.lastname,
-                        previous_owner_source: state.owner,
-                        owner: owner,
-                        condition: state.condition || null,
-                        position: toVector3Object(state.position || [0, 0, 0]),
-                    }
-                );
+                this.monitor.traceEvent('vehicle_condition_switch_owner', {
+                    vehicle_id: state.volatile.id || null,
+                    vehicle_net_id: netId,
+                    vehicle_plate: state.volatile.plate,
+                    player_source: owner,
+                    vehicle_previous_owner_id: previousOwner?.citizenid,
+                    vehicle_previous_owner_name:
+                        previousOwner?.charinfo.firstname + ' ' + previousOwner?.charinfo.lastname,
+                    vehicle_condition: JSON.stringify(state.condition || null),
+                    position: toVector3Object(state.position || [0, 0, 0]),
+                });
             }
 
             const attachedTo = GetEntityAttachedTo(entityId);
@@ -137,20 +125,13 @@ export class VehicleStateProvider {
                     this.vehicleStateService.updateVehicleVolatileState(attachedToNetId, {
                         flatbedAttachedVehicle: netId,
                     });
-                    this.monitor.publish(
-                        'vehicle_fix_attached',
-                        {
-                            vehicle_plate: state.volatile.plate,
-                            player_source: owner,
-                        },
-                        {
-                            vehicle_id: state.volatile.id,
-                            vehicle_net_id: netId,
-                            attachedTo: attachedTo,
-                            attachedToNetId: attachedToNetId,
-                            owner: owner,
-                        }
-                    );
+                    this.monitor.traceEvent('vehicle_fix_attached', {
+                        vehicle_plate: state.volatile.plate,
+                        player_source: owner,
+                        vehicle_id: state.volatile.id,
+                        vehicle_net_id: netId,
+                        vehicle_attached_net_id: attachedToNetId,
+                    });
                 }
             }
         }
@@ -160,6 +141,12 @@ export class VehicleStateProvider {
     @Rpc(RpcServerEvent.VEHICLE_GET_STATE)
     public getVehicleState(source: number, vehicleNetworkId: number): VehicleVolatileState {
         return this.vehicleStateService.getVehicleState(vehicleNetworkId).volatile;
+    }
+
+    @Exportable('GetVehicleConfiguration')
+    @Rpc(RpcServerEvent.VEHICLE_GET_CONFIGURATION)
+    public getVehicleConfiguration(source: number, vehicleNetworkId: number): VehicleConfiguration {
+        return this.vehicleStateService.getVehicleState(vehicleNetworkId).configuration;
     }
 
     @Rpc(RpcServerEvent.VEHICLE_GET_CONDITION)
@@ -273,7 +260,7 @@ export class VehicleStateProvider {
     public getFDOVehiclePosition(): VehicleLocation[] {
         const ret: VehicleLocation[] = [];
         for (const [netId, state] of this.vehicleStateService.getStates().entries()) {
-            if (!FDO_NO_FBI.includes(state.volatile.job)) {
+            if (!FDO_NO_FBI.includes(state.volatile.job) && !state.volatile.stolenLocator) {
                 continue;
             }
 
@@ -287,7 +274,8 @@ export class VehicleStateProvider {
                 plate: state.volatile.plate,
                 model: state.volatile.model,
                 position: [state.position[0], state.position[1], state.position[2]],
-                name: state.volatile.label,
+                name: state.volatile.stolenLocator ? 'Véhicule volé' : state.volatile.label,
+                stolen: state.volatile.stolenLocator,
             });
         }
 

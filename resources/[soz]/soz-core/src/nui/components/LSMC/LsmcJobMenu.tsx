@@ -1,32 +1,18 @@
-import { NuiEvent } from '@public/shared/event';
+import { usePlayer } from '@public/nui/hook/data';
 import { FunctionComponent } from 'react';
 
+import { JobLabel } from '../../../shared/job';
 import { MenuType } from '../../../shared/nui/menu';
-import { fetchNui } from '../../fetch';
-import {
-    MainMenu,
-    Menu,
-    MenuContent,
-    MenuItemSelect,
-    MenuItemSelectOption,
-    MenuItemText,
-    MenuTitle,
-} from '../Styleguide/Menu';
+import { MainMenu, Menu, MenuContent, MenuItemText, MenuTitle } from '../Styleguide/Menu';
 
-type LSMCStateProps = {
-    data: {
-        onDuty: boolean;
-    };
-};
+export const LsmcJobMenu: FunctionComponent = () => {
+    const player = usePlayer();
 
-export const LsmcJobMenu: FunctionComponent<LSMCStateProps> = ({ data }) => {
-    const banner = 'https://nui-img/soz/menu_job_lsmc';
-
-    if (!data.onDuty) {
+    if (!player.job.onduty) {
         return (
             <Menu type={MenuType.LsmcJobMenu}>
                 <MainMenu>
-                    <MenuTitle banner={banner}></MenuTitle>
+                    <MenuTitle title={JobLabel.lsmc} />
                     <MenuContent>
                         <MenuItemText>Vous n'êtes pas en service.</MenuItemText>
                     </MenuContent>
@@ -38,24 +24,8 @@ export const LsmcJobMenu: FunctionComponent<LSMCStateProps> = ({ data }) => {
     return (
         <Menu type={MenuType.LsmcJobMenu}>
             <MainMenu>
-                <MenuTitle banner={banner}></MenuTitle>
-                <MenuContent>
-                    <MenuItemSelect
-                        onConfirm={(index, value) => {
-                            fetchNui(NuiEvent.ObjectPlace, value);
-                        }}
-                        title="🚧 Poser un objet"
-                    >
-                        <MenuItemSelectOption
-                            value={{
-                                item: 'cone',
-                                props: 'prop_roadcone02a',
-                            }}
-                        >
-                            Cône de circulation
-                        </MenuItemSelectOption>
-                    </MenuItemSelect>
-                </MenuContent>
+                <MenuTitle title={JobLabel.lsmc} />
+                <MenuContent></MenuContent>
             </MainMenu>
         </Menu>
     );

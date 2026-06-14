@@ -1,6 +1,6 @@
+import { TaxType } from '@public/shared/tax';
 import { FunctionComponent } from 'react';
 
-import { TaxType } from '../../../shared/bank';
 import { NuiEvent } from '../../../shared/event';
 import { MenuType } from '../../../shared/nui/menu';
 import { ShopProduct } from '../../../shared/shop';
@@ -13,7 +13,6 @@ type MenuEasterShopStateProps = {
 };
 
 export const EasterShopMenu: FunctionComponent<MenuEasterShopStateProps> = ({ data }) => {
-    const banner = 'https://nui-img/soz/menu_shop_easter';
     const getPrice = useGetPrice();
 
     if (!data) {
@@ -23,7 +22,7 @@ export const EasterShopMenu: FunctionComponent<MenuEasterShopStateProps> = ({ da
     return (
         <Menu type={MenuType.EasterShop}>
             <MainMenu>
-                <MenuTitle banner={banner}>Magasin société</MenuTitle>
+                <MenuTitle title="Vendeur festif" />
                 <MenuContent>
                     {data.map((product, id) => (
                         <MenuItemButton

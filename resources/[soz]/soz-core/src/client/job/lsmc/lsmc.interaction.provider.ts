@@ -19,7 +19,9 @@ import { MultiZone } from '@public/shared/polyzone/multi.zone';
 import { Vector3 } from '@public/shared/polyzone/vector';
 import { RpcServerEvent } from '@public/shared/rpc';
 
+import { Feature } from '../../../shared/features';
 import { PositiveNumberValidator } from '../../../shared/nui/input';
+import { FeatureProvider } from '../../feature/feature.provider';
 import { PlayerListStateService } from '../../player/player.list.state.service';
 import { PoliceLicenceProvider } from '../police/police.licence.provider';
 import { LSMCDeathProvider } from './lsmc.death.provider';
@@ -69,21 +71,20 @@ export class LSMCInteractionProvider {
     @Inject(InputService)
     private inputService: InputService;
 
+    @Inject(FeatureProvider)
+    private featureProvider: FeatureProvider;
+
     @Once()
     public onStart() {
         this.targetFactory.createForAllPlayer([
             {
                 label: 'Rehabiliter',
-                color: JobType.LSMC,
-                icon: 'c:ems/Rehabiliter.png',
+                icon: 'ems/Rehabiliter',
                 job: JobType.LSMC,
                 blackoutGlobal: true,
-                blackoutJob: 'lsmc',
+                blackoutJob: JobType.LSMC,
+                category: 'society',
                 canInteract: async entity => {
-                    if (!this.playerService.isOnDuty()) {
-                        return false;
-                    }
-
                     if (!hopital.isPointInside(GetEntityCoords(PlayerPedId()) as Vector3)) {
                         return false;
                     }
@@ -101,16 +102,12 @@ export class LSMCInteractionProvider {
             },
             {
                 label: 'Deshabiliter',
-                color: JobType.LSMC,
-                icon: 'c:ems/Deshabiliter.png',
+                icon: 'ems/Deshabiliter',
                 job: JobType.LSMC,
                 blackoutGlobal: true,
-                blackoutJob: 'lsmc',
+                blackoutJob: JobType.LSMC,
+                category: 'society',
                 canInteract: async entity => {
-                    if (!this.playerService.isOnDuty()) {
-                        return false;
-                    }
-
                     if (!hopital.isPointInside(GetEntityCoords(PlayerPedId()) as Vector3)) {
                         return false;
                     }
@@ -141,14 +138,10 @@ export class LSMCInteractionProvider {
             },
             {
                 label: 'Déshabiller',
-                color: JobType.LSMC,
-                icon: 'c:ems/desabhiller.png',
+                icon: 'ems/desabhiller',
                 job: JobType.LSMC,
+                category: 'society',
                 canInteract: entity => {
-                    if (!this.playerService.isOnDuty()) {
-                        return false;
-                    }
-
                     if (!hopital.isPointInside(GetEntityCoords(PlayerPedId()) as Vector3)) {
                         return false;
                     }
@@ -167,14 +160,10 @@ export class LSMCInteractionProvider {
             },
             {
                 label: 'Rhabiller',
-                color: JobType.LSMC,
-                icon: 'c:ems/rhabiller.png',
+                icon: 'ems/rhabiller',
                 job: JobType.LSMC,
+                category: 'society',
                 canInteract: entity => {
-                    if (!this.playerService.isOnDuty()) {
-                        return false;
-                    }
-
                     if (!hopital.isPointInside(GetEntityCoords(PlayerPedId()) as Vector3)) {
                         return false;
                     }
@@ -193,15 +182,24 @@ export class LSMCInteractionProvider {
             },
             {
                 label: 'Soigner',
-                color: JobType.LSMC,
-                icon: 'c:ems/heal.png',
-                job: JobType.LSMC,
+                icon: 'ems/heal',
+                category: 'society',
+                event: 'whatif:2',
                 canInteract: entity => {
-                    if (!this.playerService.isOnDuty()) {
-                        return false;
+                    const target = GetPlayerServerId(NetworkGetPlayerIndexFromPed(entity));
+
+                    if (
+                        this.featureProvider.isFeatureEnabled(Feature.WhatIfFirstEpisode) ||
+                        this.featureProvider.isFeatureEnabled(Feature.WhatIfSecondEpisode)
+                    ) {
+                        return !this.playerListStateService.isDead(target);
                     }
 
-                    const target = GetPlayerServerId(NetworkGetPlayerIndexFromPed(entity));
+                    const player = this.playerService.getPlayer();
+
+                    if (player?.job.id !== JobType.LSMC || !player?.job.onduty) {
+                        return false;
+                    }
 
                     return !this.playerListStateService.isDead(target);
                 },
@@ -225,37 +223,18 @@ export class LSMCInteractionProvider {
                         return;
                     }
 
-                    const beforeHealth = GetEntityHealth(entity);
                     const serverId = GetPlayerServerId(NetworkGetPlayerIndexFromPed(entity));
-                    TriggerServerEvent(ServerEvent.LSMC_HEAL, serverId);
 
-                    this.monitor.publish(
-                        'job_lsmc_heal',
-                        {},
-                        {
-                            before_health: beforeHealth,
-                            target_source: serverId,
-                            position: GetEntityCoords(entity),
-                        },
-                        true
-                    );
+                    TriggerServerEvent(ServerEvent.LSMC_HEAL, serverId);
                 },
                 item: 'firstaid',
             },
             {
                 label: 'Réanimer',
-                color: JobType.LSMC,
-                icon: 'c:ems/revive.png',
+                icon: 'ems/revive',
                 job: JobType.LSMC,
+                category: 'society',
                 canInteract: entity => {
-                    if (!this.playerService.isOnDuty()) {
-                        return false;
-                    }
-
-                    if (!this.inventoryManager.hasEnoughItem('bloodbag', 1, true)) {
-                        return false;
-                    }
-
                     const target = GetPlayerServerId(NetworkGetPlayerIndexFromPed(entity));
 
                     return this.playerListStateService.isDead(target);
@@ -263,11 +242,13 @@ export class LSMCInteractionProvider {
                 action: entity => {
                     this.LSMCDeathProvider.reviveTarget(entity, true);
                 },
+                item: 'bloodbag',
             },
             {
                 label: 'Utiliser Défibrilateur',
-                color: JobType.LSMC,
-                icon: 'c:ems/revive.png',
+                icon: 'ems/revive',
+                category: 'society',
+                event: 'whatif:2',
                 canInteract: entity => {
                     const target = GetPlayerServerId(NetworkGetPlayerIndexFromPed(entity));
 
@@ -280,16 +261,11 @@ export class LSMCInteractionProvider {
             },
             {
                 label: 'Prise de sang',
-                color: JobType.LSMC,
-                icon: 'c:ems/take_blood.png',
+                icon: 'ems/take_blood',
                 job: JobType.LSMC,
+                category: 'society',
                 canInteract: entity => {
                     const target = GetPlayerServerId(NetworkGetPlayerIndexFromPed(entity));
-
-                    if (!this.playerService.isOnDuty()) {
-                        return false;
-                    }
-
                     return !this.playerListStateService.isDead(target);
                 },
                 action: async entity => {
@@ -316,27 +292,19 @@ export class LSMCInteractionProvider {
                         ServerEvent.LSMC_GIVE_BLOOD,
                         GetPlayerServerId(NetworkGetPlayerIndexFromPed(entity))
                     );
-                    this.monitor.publish(
-                        'job_lsmc_bloodbag',
-                        {},
-                        {
-                            target_source: GetPlayerServerId(NetworkGetPlayerIndexFromPed(entity)),
-                            position: GetEntityCoords(entity),
-                        },
-                        true
-                    );
+                    this.monitor.traceEvent('job_lsmc_bloodbag', {
+                        target_source: GetPlayerServerId(NetworkGetPlayerIndexFromPed(entity)),
+                        position: GetEntityCoords(entity) as Vector3,
+                    });
                 },
                 item: 'empty_bloodbag',
             },
             {
                 label: 'Donner le diplôme de secourisme',
-                color: JobType.LSMC,
                 job: JobType.LSMC,
-                icon: 'c:ems/rescuer.png',
+                icon: 'ems/rescuer',
+                category: 'society',
                 canInteract: async entity => {
-                    if (!this.playerService.isOnDuty()) {
-                        return false;
-                    }
                     const target = GetPlayerServerId(NetworkGetPlayerIndexFromPed(entity));
                     const hasRescuerLicense = await emitRpcCache<number>(
                         RpcServerEvent.POLICE_LICENSE_HAS_RECUER,
@@ -345,9 +313,8 @@ export class LSMCInteractionProvider {
                     return !hasRescuerLicense;
                 },
                 action: async entity => {
-                    const completed = await this.policeLicenceProvider.playLicenceAnimation(
-                        'Enregistrement du diplôme...'
-                    );
+                    const completed =
+                        await this.policeLicenceProvider.playLicenceAnimation('Enregistrement du diplôme...');
                     if (!completed) {
                         return;
                     }
@@ -361,13 +328,10 @@ export class LSMCInteractionProvider {
             },
             {
                 label: 'Retirer le diplôme de secourisme',
-                color: JobType.LSMC,
                 job: JobType.LSMC,
-                icon: 'c:ems/notrescuer.png',
+                icon: 'ems/notrescuer',
+                category: 'society',
                 canInteract: async entity => {
-                    if (!this.playerService.isOnDuty()) {
-                        return false;
-                    }
                     const target = GetPlayerServerId(NetworkGetPlayerIndexFromPed(entity));
                     const hasRescuerLicense = await emitRpcCache<number>(
                         RpcServerEvent.POLICE_LICENSE_HAS_RECUER,
@@ -376,9 +340,8 @@ export class LSMCInteractionProvider {
                     return !!hasRescuerLicense;
                 },
                 action: async entity => {
-                    const completed = await this.policeLicenceProvider.playLicenceAnimation(
-                        'Suppression du diplôme...'
-                    );
+                    const completed =
+                        await this.policeLicenceProvider.playLicenceAnimation('Suppression du diplôme...');
                     if (!completed) {
                         return;
                     }
@@ -392,15 +355,9 @@ export class LSMCInteractionProvider {
             },
             {
                 label: 'Plâtre',
-                color: JobType.LSMC,
                 job: JobType.LSMC,
-                icon: 'c:ems/platre.png',
-                canInteract: () => {
-                    if (!this.playerService.isOnDuty()) {
-                        return false;
-                    }
-                    return true;
-                },
+                icon: 'ems/platre',
+                category: 'society',
                 action: async entity => {
                     const playerServerId = GetPlayerServerId(NetworkGetPlayerIndexFromPed(entity));
                     const data = await emitRpc<PlasterLocation[]>(RpcServerEvent.LSMC_PLAYER_PLASTER, playerServerId);
@@ -413,14 +370,13 @@ export class LSMCInteractionProvider {
             },
             {
                 label: 'Naloxone',
-                color: JobType.LSMC,
                 job: JobType.LSMC,
-                icon: 'c:ems/naloxone.png',
-                canInteract: () => {
-                    if (!this.playerService.isOnDuty()) {
-                        return false;
-                    }
-                    return true;
+                icon: 'ems/naloxone',
+                category: 'society',
+                canInteract: entity => {
+                    const target = GetPlayerServerId(NetworkGetPlayerIndexFromPed(entity));
+
+                    return !this.playerListStateService.isDead(target);
                 },
                 action: async entity => {
                     const playerServerId = GetPlayerServerId(NetworkGetPlayerIndexFromPed(entity));
@@ -430,14 +386,10 @@ export class LSMCInteractionProvider {
             },
             {
                 label: 'Morphine',
-                color: JobType.LSMC,
-                icon: 'c:ems/morphine.png',
+                icon: 'ems/morphine',
                 job: JobType.LSMC,
+                category: 'society',
                 canInteract: entity => {
-                    if (!this.playerService.isOnDuty()) {
-                        return false;
-                    }
-
                     const target = GetPlayerServerId(NetworkGetPlayerIndexFromPed(entity));
 
                     return !this.playerListStateService.isDead(target);
@@ -460,10 +412,9 @@ export class LSMCInteractionProvider {
             [
                 {
                     label: "S'entrainer aux soins",
-                    color: JobType.LSMC,
-                    icon: 'c:ems/heal.png',
+                    icon: 'ems/heal',
                     job: JobType.LSMC,
-                    canInteract: () => this.playerService.isOnDuty(),
+                    category: 'society',
                     action: () => {
                         this.progressService.progress(
                             'heal_training',
@@ -473,7 +424,6 @@ export class LSMCInteractionProvider {
                                 task: 'CODE_HUMAN_MEDIC_TEND_TO_DEAD',
                             },
                             {
-                                useAnimationService: true,
                                 disableMovement: true,
                                 disableCarMovement: true,
                                 disableMouse: false,
@@ -484,10 +434,9 @@ export class LSMCInteractionProvider {
                 },
                 {
                     label: "S'entrainer aux piqûres",
-                    color: JobType.LSMC,
-                    icon: 'c:ems/morphine.png',
+                    icon: 'ems/morphine',
                     job: JobType.LSMC,
-                    canInteract: () => this.playerService.isOnDuty(),
+                    category: 'society',
                     action: () => {
                         this.progressService.progress(
                             'shooting_training',
@@ -502,7 +451,6 @@ export class LSMCInteractionProvider {
                                 playbackRate: 0.4,
                             },
                             {
-                                useAnimationService: true,
                                 firstProp: {
                                     model: 'prop_syringe_01',
                                     bone: 28422,
@@ -515,10 +463,9 @@ export class LSMCInteractionProvider {
                 },
                 {
                     label: "S'entrainer à la chirurgie",
-                    color: JobType.LSMC,
-                    icon: 'c:ems/greffer.png',
+                    icon: 'ems/greffer',
                     job: JobType.LSMC,
-                    canInteract: () => this.playerService.isOnDuty(),
+                    category: 'society',
                     action: () => {
                         this.progressService.progress(
                             'Soigner',
@@ -529,7 +476,6 @@ export class LSMCInteractionProvider {
                                 name: 'fixing_a_ped',
                             },
                             {
-                                useAnimationService: true,
                                 disableMovement: true,
                                 disableCarMovement: true,
                             }

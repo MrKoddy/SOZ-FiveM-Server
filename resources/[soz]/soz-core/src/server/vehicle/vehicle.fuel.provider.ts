@@ -1,10 +1,12 @@
-import { getDefaultVehicleCondition, VehicleClassFuelStorageMultiplier } from '@public/shared/vehicle/vehicle';
+import { getVehicleMaxFuelStorage } from '@public/shared/vehicle/vehicle';
 
 import { OnEvent } from '../../core/decorators/event';
 import { Inject } from '../../core/decorators/injectable';
 import { Provider } from '../../core/decorators/provider';
 import { ClientEvent, ServerEvent } from '../../shared/event';
+import { Feature } from '../../shared/features';
 import { PrismaService } from '../database/prisma.service';
+import { FeatureProvider } from '../feature/feature.provider';
 import { LockService } from '../lock.service';
 import { Notifier } from '../notifier';
 import { PlayerMoneyService } from '../player/player.money.service';
@@ -39,6 +41,9 @@ export class VehicleFuelProvider {
     @Inject(VehicleRepository)
     private vehicleRepository: VehicleRepository;
 
+    @Inject(FeatureProvider)
+    private featureProvider: FeatureProvider;
+
     private currentFilling = new Set<number>();
 
     @OnEvent(ServerEvent.VEHICLE_FUEL_START)
@@ -59,11 +64,8 @@ export class VehicleFuelProvider {
         try {
             const vehicle = NetworkGetEntityFromNetworkId(vehicleNetworkId);
             const vehDef = await this.vehicleRepository.findByHash(GetEntityModel(vehicle));
-            const storageMultiplier = VehicleClassFuelStorageMultiplier[vehDef?.requiredLicence] || 1.0;
             const vehicleState = this.vehicleStateService.getVehicleState(vehicleNetworkId);
-            const fuelToFill = Math.floor(
-                getDefaultVehicleCondition().fuelLevel * storageMultiplier - vehicleState.condition.fuelLevel
-            );
+            const fuelToFill = Math.floor(getVehicleMaxFuelStorage(vehDef) - vehicleState.condition.fuelLevel);
 
             const [reservedFuel, station, maxFuelMoney] = await this.lockService.lock(
                 `fuel_station_${stationId}`,
@@ -83,16 +85,18 @@ export class VehicleFuelProvider {
                         reservedFuelTx = 0;
                     }
 
-                    await this.prismaService.fuel_storage.update({
-                        where: {
-                            id: station.id,
-                        },
-                        data: {
-                            stock: {
-                                decrement: reservedFuelTx,
+                    if (!this.featureProvider.isFeatureEnabled(Feature.WhatIfFirstEpisode)) {
+                        await this.prismaService.fuel_storage.update({
+                            where: {
+                                id: station.id,
                             },
-                        },
-                    });
+                            data: {
+                                stock: {
+                                    decrement: reservedFuelTx,
+                                },
+                            },
+                        });
+                    }
 
                     return [reservedFuel, station, maxFuelForMoney];
                 },
@@ -117,8 +121,6 @@ export class VehicleFuelProvider {
 
             const duration = Math.max(reservedFuel * 600, 5000);
 
-            TriggerClientEvent(ClientEvent.VEHICLE_FUEL_START, source, duration, reservedFuel, station.price);
-
             const { progress } = await this.progressService.progress(
                 source,
                 'filling_vehicle',
@@ -134,7 +136,18 @@ export class VehicleFuelProvider {
                     },
                 },
                 {
-                    useAnimationService: true,
+                    units: [
+                        {
+                            unit: 'L',
+                            start: 0,
+                            end: reservedFuel,
+                        },
+                        {
+                            unit: '$',
+                            start: 0,
+                            end: reservedFuel * station.price,
+                        },
+                    ],
                 }
             );
 

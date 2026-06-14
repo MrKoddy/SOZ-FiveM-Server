@@ -28,39 +28,21 @@ export class OilCraftProvider {
             },
             [
                 {
-                    icon: 'c:fuel/pistolet.png',
-                    color: 'oil',
+                    icon: 'fuel/pistolet',
                     label: 'Carburant conditionné',
                     job: JobType.Oil,
                     blackoutGlobal: true,
                     blackoutJob: JobType.Oil,
-                    canInteract: () => {
-                        const player = this.playerService.getPlayer();
-
-                        if (!player) {
-                            return false;
-                        }
-
-                        return player.job.onduty;
-                    },
+                    category: 'society',
                     action: this.craftOil.bind(this),
                 },
                 {
-                    icon: 'c:fuel/pistolet.png',
-                    color: 'oil',
+                    icon: 'fuel/pistolet',
                     label: 'Kérosène conditionné',
                     job: JobType.Oil,
                     blackoutGlobal: true,
                     blackoutJob: JobType.Oil,
-                    canInteract: () => {
-                        const player = this.playerService.getPlayer();
-
-                        if (!player) {
-                            return false;
-                        }
-
-                        return player.job.onduty;
-                    },
+                    category: 'society',
                     action: this.craftKerosene.bind(this),
                 },
             ]
@@ -78,39 +60,21 @@ export class OilCraftProvider {
             },
             [
                 {
-                    icon: 'c:fuel/pistolet.png',
-                    color: 'oil',
+                    icon: 'fuel/pistolet',
                     label: 'Bidon d’essence',
                     job: JobType.Oil,
                     blackoutGlobal: true,
                     blackoutJob: JobType.Oil,
-                    canInteract: () => {
-                        const player = this.playerService.getPlayer();
-
-                        if (!player) {
-                            return false;
-                        }
-
-                        return player.job.onduty;
-                    },
+                    category: 'society',
                     action: this.craftOilJerryCan.bind(this),
                 },
                 {
-                    icon: 'c:fuel/pistolet.png',
-                    color: 'oil',
+                    icon: 'fuel/pistolet',
                     label: 'Bidon de kérosène',
                     job: JobType.Oil,
                     blackoutGlobal: true,
                     blackoutJob: JobType.Oil,
-                    canInteract: () => {
-                        const player = this.playerService.getPlayer();
-
-                        if (!player) {
-                            return false;
-                        }
-
-                        return player.job.onduty;
-                    },
+                    category: 'society',
                     action: this.craftKeroseneJerryCan.bind(this),
                 },
             ]

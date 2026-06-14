@@ -1,14 +1,15 @@
 import { ClientEvent } from '@public/shared/event/client';
 
 import { Job, JobPermission, JobPermissionData, JobType } from '../job';
-import { BoxZone } from '../polyzone/box.zone';
+import { BoxZone, Zone } from '../polyzone/box.zone';
 
 const BasePermissions: Partial<Record<JobPermission, JobPermissionData>> = {
     [JobPermission.Enrollment]: { label: 'Gestion des recrutements' },
     [JobPermission.ManageGrade]: { label: 'Gestion des grades' },
     [JobPermission.SocietyBankAccount]: { label: 'Accès au compte société' },
     [JobPermission.SocietyBankInvoices]: { label: 'Accès aux outils de facturation société' },
-    [JobPermission.SocietyPrivateStorage]: { label: 'Accès aux stockages société privés' },
+    [JobPermission.SocietyPrivateStorage]: { label: 'Accès au stockage patron' },
+    [JobPermission.SocietyGeneralStorage]: { label: 'Accès aux stockages standards' },
     [JobPermission.SocietyMoneyStorage]: { label: 'Accès au coffre-fort de société' },
     [JobPermission.SocietyDealershipVehicle]: { label: 'Accès aux concessionnaires de véhicules' },
     [JobPermission.SocietyTakeOutPound]: { label: 'Sortir les véhicules de la fourrière' },
@@ -20,9 +21,42 @@ const BasePermissions: Partial<Record<JobPermission, JobPermissionData>> = {
     },
     [JobPermission.SocietyPublicPort]: { label: 'Ranger/sortir les véhicules des ports publics' },
     [JobPermission.SocietyPrivatePort]: { label: 'Ranger/sortir les véhicules des ports privés' },
-    [JobPermission.SocietyViewCompanyPanel]: { label: 'Accès au panel entreprise' },
     [JobPermission.SocietyShop]: { label: 'Accès aux magasins de société' },
     [JobPermission.OnDutyView]: { label: 'Voir les employé(e)s en service' },
+    [JobPermission.SocietyViewCompanyPanel]: { label: 'Accès au panel patron' },
+};
+
+const CompanyPanelPermissions: Partial<Record<JobPermission, JobPermissionData>> = {
+    [JobPermission.NewCompanyPanelAccess]: { label: 'Accès au panel entreprise' },
+    [JobPermission.EmployeesListRead]: { label: 'Accès aux données employés sur le panel entreprise' },
+    [JobPermission.EmployeesListWrite]: { label: 'Editer les données employés sur le panel entreprise' },
+    [JobPermission.PricingRead]: { label: 'Accès aux devis sur le panel entreprise' },
+    [JobPermission.PricingManage]: { label: 'Gestion des données des devis sur le panel entreprise' },
+    [JobPermission.ReadDocumentation]: { label: 'Lecture de la documentation sur le panel entreprise' },
+    [JobPermission.WriteDocumentation]: { label: 'Edition de la documentation sur le panel entreprise' },
+    [JobPermission.ManageDocumentation]: { label: 'Gestion de la documentation sur le panel entreprise' },
+    [JobPermission.AssignCertification]: { label: 'Assigner des formations sur le panel entreprise' },
+    [JobPermission.ManageCertification]: { label: 'Gérer les formations sur le panel entreprise' },
+    [JobPermission.ManageRoster]: { label: 'Gérer les photos dans les effectifs panel entreprise' },
+};
+
+const PolicePermissions: Partial<Record<JobPermission, JobPermissionData>> = {
+    [JobPermission.CriminalRecord]: { label: 'Accès aux casiers judiciaires' },
+    [JobPermission.VehicleRegistrar]: { label: 'Accès au registre des véhicules' },
+    [JobPermission.VehicleTransfert]: { label: 'Accès aux transferts de véhicules' },
+    [JobPermission.Investigation]: { label: 'Accès aux enquêtes' },
+    [JobPermission.ManageInvestigation]: { label: 'Gérer les enquêtes' },
+    [JobPermission.AssignCertification]: { label: 'Assigner des certifications aux agents' },
+    [JobPermission.ManageCertification]: { label: 'Gérer les certifications' },
+    [JobPermission.ManageRoster]: { label: 'Gérer les photos/matricules dans les effectifs panel' },
+    [JobPermission.FDOFedPound]: { label: 'Mise en fourrière fédérale' },
+};
+
+const NewsPermissions: Partial<Record<JobPermission, JobPermissionData>> = {
+    [JobPermission.NewsManageArticle]: { label: 'Gérer les articles sur le panel' },
+    [JobPermission.NewsManageBillboards]: { label: 'Gérer les panneaux sur le panel' },
+    [JobPermission.NewsCreateBillboard]: { label: 'Poser/Détruire les panneaux dynamiques' },
+    [JobPermission.NewsUpdateBillboard]: { label: 'Modifier les panneaux dynamiques' },
 };
 
 export const JobRegistry: Record<JobType, Omit<Job, 'id'>> = {
@@ -72,23 +106,25 @@ export const JobRegistry: Record<JobType, Omit<Job, 'id'>> = {
         canInvoice: true,
         permissions: {
             ...BasePermissions,
-            [JobPermission.CriminalRecord]: { label: 'Accès aux casiers judiciaires' },
-            [JobPermission.VehicleRegistrar]: { label: 'Accès au registre des véhicules' },
-            [JobPermission.Investigation]: { label: 'Accès aux enquêtes' },
-            [JobPermission.ManageInvestigation]: { label: 'Gérer les enquêtes' },
-            [JobPermission.AssignCertification]: { label: 'Assigner des certifications aux agents' },
-            [JobPermission.ManageCertification]: { label: 'Gérer les certifications' },
-            [JobPermission.ManageRoster]: { label: 'Gérer les photos/matricules dans les effectifs panel' },
-            [JobPermission.FDOFedPound]: { label: 'Mise en fourrière fédérale' },
+            ...PolicePermissions,
         },
         bossZones: [
             {
-                center: [626.23, -24.0, 90.51],
-                length: 16.2,
-                width: 16.4,
-                heading: 340,
-                minZ: 89.51,
-                maxZ: 92.51,
+                center: [466.47, -975.26, 35.94],
+                length: 8.8,
+                width: 11.0,
+                heading: 87.9,
+                minZ: 34.94,
+                maxZ: 36.94,
+            },
+            // MIRROR PARK
+            {
+                center: [1147.86, -466.25, 72.62],
+                length: 28.2,
+                width: 33.6,
+                heading: 166.7,
+                minZ: 71.62,
+                maxZ: 73.62,
             },
         ],
         phone: '555-LSPD',
@@ -101,14 +137,7 @@ export const JobRegistry: Record<JobType, Omit<Job, 'id'>> = {
         canInvoice: true,
         permissions: {
             ...BasePermissions,
-            [JobPermission.CriminalRecord]: { label: 'Accès aux casiers judiciaires' },
-            [JobPermission.VehicleRegistrar]: { label: 'Accès au registre des véhicules' },
-            [JobPermission.Investigation]: { label: 'Accès aux enquêtes' },
-            [JobPermission.ManageInvestigation]: { label: 'Gérer les enquêtes' },
-            [JobPermission.AssignCertification]: { label: 'Assigner des certifications aux agents' },
-            [JobPermission.ManageCertification]: { label: 'Gérer les certifications' },
-            [JobPermission.ManageRoster]: { label: 'Gérer les photos/matricules dans les effectifs panel' },
-            [JobPermission.FDOFedPound]: { label: 'Mise en fourrière fédérale' },
+            ...PolicePermissions,
         },
         bossZones: [
             {
@@ -118,6 +147,15 @@ export const JobRegistry: Record<JobType, Omit<Job, 'id'>> = {
                 heading: 30,
                 minZ: 37.07,
                 maxZ: 41.01,
+            },
+            // MIRROR PARK
+            {
+                center: [1147.86, -466.25, 72.62],
+                length: 28.2,
+                width: 33.6,
+                heading: 166.7,
+                minZ: 71.62,
+                maxZ: 73.62,
             },
         ],
         phone: '555-BCSO',
@@ -130,14 +168,7 @@ export const JobRegistry: Record<JobType, Omit<Job, 'id'>> = {
         canInvoice: true,
         permissions: {
             ...BasePermissions,
-            [JobPermission.CriminalRecord]: { label: 'Accès aux casiers judiciaires' },
-            [JobPermission.VehicleRegistrar]: { label: 'Accès au registre des véhicules' },
-            [JobPermission.Investigation]: { label: 'Accès aux enquêtes' },
-            [JobPermission.ManageInvestigation]: { label: 'Gérer les enquêtes' },
-            [JobPermission.AssignCertification]: { label: 'Assigner des certifications aux agents' },
-            [JobPermission.ManageCertification]: { label: 'Gérer les certifications' },
-            [JobPermission.ManageRoster]: { label: 'Gérer les photos/matricules dans les effectifs panel' },
-            [JobPermission.FDOFedPound]: { label: 'Mise en fourrière fédérale' },
+            ...PolicePermissions,
         },
         bossZones: [
             {
@@ -159,21 +190,32 @@ export const JobRegistry: Record<JobType, Omit<Job, 'id'>> = {
         canInvoice: true,
         permissions: {
             ...BasePermissions,
-            [JobPermission.ManageRoster]: { label: 'Gérer les photos/matricules dans les effectifs panel' },
-            [JobPermission.AssignCertification]: { label: 'Assigner des certifications aux médecins' },
-            [JobPermission.ManageCertification]: { label: 'Gérer les certifications' },
             [JobPermission.MedicalPatientAccess]: { label: 'Accéder aux dossiers patients panel' },
             [JobPermission.MedicalPatientEdit]: { label: 'Editer les dossiers patients panel' },
             [JobPermission.MedicalPatientDelete]: { label: 'Supprimer les dossiers patients panel' },
+            [JobPermission.MedicalPatientHistoryAccess]: { label: 'Accéder à la liste des interventions panel' },
             [JobPermission.MedicalPatientHistoryEdit]: { label: 'Créer / Editer une intervention panel' },
             [JobPermission.MedicalPatientHistoryDelete]: { label: 'Supprimer une intervention panel' },
-            [JobPermission.MedicalPatientHistoryAccess]: { label: 'Accéder à la liste des interventions panel' },
+            [JobPermission.ManageRoster]: { label: 'Gérer les photos/matricules dans les effectifs panel' },
+            [JobPermission.AssignCertification]: { label: 'Assigner des certifications aux médecins' },
+            [JobPermission.ManageCertification]: { label: 'Gérer les certifications' },
+            [JobPermission.EmployeesListRead]: { label: 'Accès aux fiches médecins sur le panel médical' },
+            [JobPermission.EmployeesListWrite]: { label: 'Editer les fiches médecins sur le panel médical' },
+            [JobPermission.ReadDocumentation]: { label: 'Lecture de la documentation sur le panel médical' },
+            [JobPermission.WriteDocumentation]: { label: 'Edition de la documentation sur le panel médical' },
+            [JobPermission.ManageDocumentation]: { label: 'Gestion de la documentation sur le panel médical' },
+            [JobPermission.MedicalPsyConsultAccess]: { label: 'Vision sur les consultations psy sur le panel médical' },
         },
         bossZones: [
             new BoxZone([383.87, -1411.63, 37.99], 21.0, 25.6, {
                 heading: 50.09,
                 minZ: 36.99,
                 maxZ: 38.99,
+            }),
+            new BoxZone([1825.73, 3675.86, 38.28], 4.4, 7.4, {
+                heading: 27.32,
+                minZ: 37.28,
+                maxZ: 39.28,
             }),
         ],
         phone: '555-LSMC',
@@ -186,6 +228,7 @@ export const JobRegistry: Record<JobType, Omit<Job, 'id'>> = {
         canInvoice: true,
         permissions: {
             ...BasePermissions,
+            ...CompanyPanelPermissions,
         },
         bossZones: [
             {
@@ -208,8 +251,9 @@ export const JobRegistry: Record<JobType, Omit<Job, 'id'>> = {
         canInvoice: true,
         permissions: {
             ...BasePermissions,
-            [JobPermission.FoodHarvest]: { label: 'Récolter des ingrédients' },
-            [JobPermission.FoodCraft]: { label: 'Cuisiner' },
+            [JobPermission.Harvest]: { label: 'Récolter des ingrédients' },
+            [JobPermission.Craft]: { label: 'Cuisiner' },
+            ...CompanyPanelPermissions,
         },
         resell: {
             coords: [-57.01, -2448.4, 7.24, 145.77],
@@ -219,13 +263,12 @@ export const JobRegistry: Record<JobType, Omit<Job, 'id'>> = {
         },
         bossZones: [
             {
-                center: [-1872.41, 2060.3, 141.0],
-                length: 5.0,
-                width: 15.2,
-                heading: 340,
-                minZ: 140.0,
-                maxZ: 144.0,
-                debugPoly: false,
+                center: [-1874.49, 2055.03, 154.49],
+                length: 6.0,
+                width: 5.8,
+                heading: 159.29,
+                minZ: 153.49,
+                maxZ: 155.49,
             },
         ],
         phone: '555-MARIUS',
@@ -239,8 +282,8 @@ export const JobRegistry: Record<JobType, Omit<Job, 'id'>> = {
         canInvoice: true,
         permissions: {
             ...BasePermissions,
-            [JobPermission.NewsManageArticle]: { label: 'Gérer les articles sur le panel' },
-            [JobPermission.NewsManageBillboards]: { label: 'Gérer les panneaux sur le panel' },
+            ...NewsPermissions,
+            ...CompanyPanelPermissions,
         },
         bossZones: [
             {
@@ -262,8 +305,8 @@ export const JobRegistry: Record<JobType, Omit<Job, 'id'>> = {
         canInvoice: true,
         permissions: {
             ...BasePermissions,
-            [JobPermission.NewsManageArticle]: { label: 'Gérer les articles sur le panel' },
-            [JobPermission.NewsManageBillboards]: { label: 'Gérer les panneaux sur le panel' },
+            ...NewsPermissions,
+            ...CompanyPanelPermissions,
         },
         bossZones: [
             { center: [-1054.43, -232.09, 44.02], length: 6.2, width: 5.8, heading: 116.65, minZ: 43.02, maxZ: 45.02 },
@@ -278,6 +321,7 @@ export const JobRegistry: Record<JobType, Omit<Job, 'id'>> = {
         canInvoice: true,
         permissions: {
             ...BasePermissions,
+            ...CompanyPanelPermissions,
         },
         bossZones: [
             {
@@ -287,7 +331,6 @@ export const JobRegistry: Record<JobType, Omit<Job, 'id'>> = {
                 heading: 355,
                 minZ: 32.01,
                 maxZ: 36.01,
-                debugPoly: false,
             },
         ],
         phone: '555-BLUEBIRD',
@@ -302,6 +345,7 @@ export const JobRegistry: Record<JobType, Omit<Job, 'id'>> = {
         permissions: {
             ...BasePermissions,
             [JobPermission.FuelerChangePrice]: { label: 'Changer le prix des stations publiques' },
+            ...CompanyPanelPermissions,
         },
         bossZones: [
             {
@@ -311,7 +355,6 @@ export const JobRegistry: Record<JobType, Omit<Job, 'id'>> = {
                 heading: 315,
                 minZ: 39.61,
                 maxZ: 42.61,
-                debugPoly: false,
             },
         ],
         phone: '555-MTP',
@@ -329,6 +372,8 @@ export const JobRegistry: Record<JobType, Omit<Job, 'id'>> = {
             [JobPermission.CashTransfer_CollectBags]: { label: "Collecte sacs d'argent" },
             [JobPermission.CashTransfer_ResaleBags]: { label: "Déposer sacs d'argent" },
             [JobPermission.CashTransfer_FillIn]: { label: 'Remplir banque / ATM' },
+            [JobPermission.CashTransfer_AccountAccess]: { label: 'Accès aux coffres sécurisés des sociétés' },
+            ...CompanyPanelPermissions,
         },
         bossZones: [
             {
@@ -338,7 +383,6 @@ export const JobRegistry: Record<JobType, Omit<Job, 'id'>> = {
                 heading: 25,
                 minZ: 45.02,
                 maxZ: 49.02,
-                debugPoly: false,
             },
         ],
         phone: '555-STONK',
@@ -351,9 +395,10 @@ export const JobRegistry: Record<JobType, Omit<Job, 'id'>> = {
         permissions: {
             ...BasePermissions,
             [JobPermission.BennysEstimate]: { label: 'Estimer les véhicules' },
-            [JobPermission.BennysOrder]: { label: "Commander un véhicule d'essai" },
+            [JobPermission.Order]: { label: "Commander un véhicule d'essai" },
             [JobPermission.BennysResell]: { label: 'Revendre un véhicule' },
             [JobPermission.BennysPitStopPrice]: { label: 'Changer le prix du Pit Stop' },
+            ...CompanyPanelPermissions,
         },
         bossZones: [
             {
@@ -363,7 +408,6 @@ export const JobRegistry: Record<JobType, Omit<Job, 'id'>> = {
                 heading: 0,
                 minZ: 33.89,
                 maxZ: 37.89,
-                debugPoly: false,
             },
             new BoxZone([1908.1, 3086.76, 51.75], 18.4, 9.2, {
                 heading: 61.21,
@@ -381,7 +425,8 @@ export const JobRegistry: Record<JobType, Omit<Job, 'id'>> = {
         canInvoice: true,
         permissions: {
             ...BasePermissions,
-            [JobPermission.UpwOrder]: { label: 'Commander des véhicules éléctriques' },
+            [JobPermission.Order]: { label: 'Commander des véhicules éléctriques' },
+            ...CompanyPanelPermissions,
         },
         bossZones: [
             {
@@ -391,7 +436,6 @@ export const JobRegistry: Record<JobType, Omit<Job, 'id'>> = {
                 heading: 4,
                 minZ: 46.76,
                 maxZ: 50.76,
-                debugPoly: false,
             },
         ],
         phone: '555-UPW',
@@ -401,10 +445,11 @@ export const JobRegistry: Record<JobType, Omit<Job, 'id'>> = {
     [JobType.Pawl]: {
         label: 'Pipe And Wooden Leg',
         platePrefix: 'PAWL',
-        menuCallback: 'pawl:client:OpenSocietyMenu',
+        menuCallback: ClientEvent.PAWL_OPEN_SOCIETY_MENU,
         canInvoice: true,
         permissions: {
             ...BasePermissions,
+            ...CompanyPanelPermissions,
         },
         resell: {
             primary: {
@@ -423,7 +468,6 @@ export const JobRegistry: Record<JobType, Omit<Job, 'id'>> = {
                 heading: 341,
                 minZ: 75.37,
                 maxZ: 79.37,
-                debugPoly: false,
             },
         ],
         phone: '555-PAWL',
@@ -437,9 +481,10 @@ export const JobRegistry: Record<JobType, Omit<Job, 'id'>> = {
         canInvoice: true,
         permissions: {
             ...BasePermissions,
-            [JobPermission.BaunHarvest]: { label: 'Récolter des ingrédients' },
-            [JobPermission.BaunRestock]: { label: 'Réapprovisionner le matériel' },
-            [JobPermission.BaunCraft]: { label: 'Fabriquer un cocktail' },
+            [JobPermission.Harvest]: { label: 'Récolter des ingrédients' },
+            [JobPermission.Restock]: { label: 'Réapprovisionner le matériel' },
+            [JobPermission.Craft]: { label: 'Fabriquer un cocktail' },
+            ...CompanyPanelPermissions,
         },
         bossZones: [
             {
@@ -470,9 +515,10 @@ export const JobRegistry: Record<JobType, Omit<Job, 'id'>> = {
         canInvoice: true,
         permissions: {
             ...BasePermissions,
-            [JobPermission.FfsHarvest]: { label: 'Récolter des matériaux' },
-            [JobPermission.FfsRestock]: { label: "Réapprovisionner l'atelier" },
-            [JobPermission.FfsCraft]: { label: 'Coudre un vêtement' },
+            [JobPermission.Harvest]: { label: 'Récolter des matériaux' },
+            [JobPermission.Restock]: { label: "Réapprovisionner l'atelier" },
+            [JobPermission.Craft]: { label: 'Coudre un vêtement' },
+            ...CompanyPanelPermissions,
         },
         bossZones: [
             {
@@ -498,10 +544,12 @@ export const JobRegistry: Record<JobType, Omit<Job, 'id'>> = {
             [JobPermission.Investigation]: { label: 'Accès aux enquêtes' },
             [JobPermission.ManageInvestigation]: { label: 'Gérer les enquêtes' },
             [JobPermission.MdrViewCitizenData]: { label: 'Accès aux casiers judiciaires' },
+            [JobPermission.MdrEditCitizenData]: { label: 'Suppression entrée du casier judiciaire' },
             [JobPermission.InvestigationLawyer]: { label: 'Avocat dans les enquêtes' },
             [JobPermission.InvestigationProsecutor]: { label: 'Prosecutor dans les enquètes' },
             [JobPermission.MdrViewOtherJobs]: { label: 'Accès aux infos des entreprises' },
             [JobPermission.MdrMarkedMoneyCleaning]: { label: 'Accès à la réhabilitation des billets' },
+            [JobPermission.ManageRoster]: { label: 'Gérer les photos/matricules dans les effectifs panel' },
         },
         bossZones: [
             {
@@ -526,6 +574,10 @@ export const JobRegistry: Record<JobType, Omit<Job, 'id'>> = {
             [JobPermission.GouvUpdateTax]: { label: 'Mettre à jour les taxes' },
             [JobPermission.GouvManageRadar]: { label: 'Permet de gérer les radars' },
             [JobPermission.GouvManageFine]: { label: 'Ajouter, mettre à jour et supprimer les amendes' },
+            [JobPermission.VehicleRegistrar]: { label: 'Accès au registre des véhicules sur le panel' },
+            [JobPermission.VehicleTransfert]: { label: 'Accès aux transferts de véhicules sur le panel' },
+            [JobPermission.MdrViewCitizenData]: { label: 'Accès aux casiers judiciaires' },
+            [JobPermission.Craft]: { label: 'Permet de signer des papiers officiels' },
         },
         bossZones: [
             {
@@ -547,13 +599,7 @@ export const JobRegistry: Record<JobType, Omit<Job, 'id'>> = {
         menuCallback: ClientEvent.JOBS_POLICE_OPEN_SOCIETY_MENU,
         permissions: {
             ...BasePermissions,
-            [JobPermission.CriminalRecord]: { label: 'Accès aux casiers judiciaires' },
-            [JobPermission.VehicleRegistrar]: { label: 'Accès au registre des véhicules' },
-            [JobPermission.Investigation]: { label: 'Accès aux enquêtes' },
-            [JobPermission.ManageInvestigation]: { label: 'Gérer les enquêtes' },
-            [JobPermission.AssignCertification]: { label: 'Assigner des certifications aux agents' },
-            [JobPermission.ManageCertification]: { label: 'Gérer les certifications' },
-            [JobPermission.FDOFedPound]: { label: 'Mise en fourrière fédérale' },
+            ...PolicePermissions,
         },
         bossZones: [
             {
@@ -563,6 +609,15 @@ export const JobRegistry: Record<JobType, Omit<Job, 'id'>> = {
                 heading: 90.0,
                 minZ: 33.68,
                 maxZ: 35.68,
+            },
+            // MIRROR PARK
+            {
+                center: [1147.86, -466.25, 72.62],
+                length: 28.2,
+                width: 33.6,
+                heading: 166.7,
+                minZ: 71.62,
+                maxZ: 73.62,
             },
         ],
         canInvoice: true,
@@ -575,6 +630,7 @@ export const JobRegistry: Record<JobType, Omit<Job, 'id'>> = {
         menuCallback: ClientEvent.JOBS_FDF_OPEN_SOCIETY_MENU,
         permissions: {
             ...BasePermissions,
+            ...CompanyPanelPermissions,
         },
         bossZones: [
             {
@@ -597,6 +653,7 @@ export const JobRegistry: Record<JobType, Omit<Job, 'id'>> = {
         menuCallback: ClientEvent.JOBS_DMC_OPEN_SOCIETY_MENU,
         permissions: {
             ...BasePermissions,
+            ...CompanyPanelPermissions,
         },
         bossZones: [
             {
@@ -613,7 +670,8 @@ export const JobRegistry: Record<JobType, Omit<Job, 'id'>> = {
         canReceiveSocietyInvoice: true,
         resell: {
             primary: {
-                coords: [-132.7, -2383.92, 6.0, 174.18],
+                //coords: [-132.7, -2383.92, 6.0, 174.18],
+                coords: [-334.31, -1314.83, 31.4, 87.04],
                 ZoneName: 'Resell:LSPort:Dmc',
                 SourceAccount: 'farm_dmc',
                 TargetAccount: 'safe_dmc',
@@ -622,4 +680,36 @@ export const JobRegistry: Record<JobType, Omit<Job, 'id'>> = {
         },
         taxCollectAccounts: ['dmc', 'safe_dmc'],
     },
+    [JobType.Casino]: {
+        label: 'Diamond Casino',
+        platePrefix: 'DIAM',
+        permissions: BasePermissions,
+        bossZones: [
+            {
+                center: [958.25, 58.3, 75.44],
+                length: 10.6,
+                width: 9.2,
+                heading: 149.4,
+                minZ: 74.44,
+                maxZ: 77.44,
+            },
+        ],
+        canInvoice: true,
+        phone: '555-DIAMOND',
+        canReceiveSocietyInvoice: true,
+        taxCollectAccounts: ['casino', 'safe_casino'],
+    },
+};
+
+export const JobBossZoneWhatIf: Partial<Record<JobType, Zone[]>> = {
+    [JobType.SASP]: [
+        {
+            center: [626.23, -24.0, 90.51],
+            length: 16.2,
+            width: 16.4,
+            heading: 340,
+            minZ: 89.51,
+            maxZ: 92.51,
+        },
+    ],
 };

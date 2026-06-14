@@ -1,17 +1,21 @@
+import { SozRole } from '@core/permissions';
 import { Property } from '@public/shared/housing/housing';
-import { ZoneTyped } from '@public/shared/polyzone/box.zone';
+import { ApartementTiers } from '@public/shared/housing/housing';
 import { SenateParty } from '@public/shared/senate';
 
 export type HousingUpgradesMenuData = {
-    currentTier: number;
+    apartmentId: number;
+    propertyId: number;
+    currentTier: ApartementTiers;
     hasParking: boolean;
     apartmentPrice: number;
-    enableParking: boolean;
+    isApartmentTrailer: boolean;
 };
 
 export type AdminMapperMenuData = {
+    permission: SozRole;
     properties: Property[];
-    zones: ZoneTyped[];
     showInterior: boolean;
+    showPortal: boolean;
     parties: SenateParty[];
 };

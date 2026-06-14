@@ -16,6 +16,7 @@ type OpenMenuConfig = {
     useMouse?: boolean;
     subMenuId?: string;
     position?: MenuPosition;
+    originMenuType?: MenuType;
 };
 
 @Provider()
@@ -27,6 +28,9 @@ export class NuiMenu {
 
     public openMenu<K extends keyof MenuTypeMap>(menuType: K, data?: MenuTypeMap[K], config?: OpenMenuConfig) {
         this.dispatcher.setMenuOpen(menuType);
+        this.dispatcher.dispatch('inventory', 'SetOpen', false);
+        this.dispatcher.dispatch('inventory', 'UpdateInventory', { configuration: null, items: [], id: null });
+
         exports['menuv'].SendNUIMessage({ action: 'KEY_CLOSE_ALL' });
 
         this.menuPosition = config?.position || null;
@@ -35,6 +39,7 @@ export class NuiMenu {
             data,
             useMouse: config?.useMouse || false,
             subMenuId: config?.subMenuId,
+            originMenuType: config?.originMenuType,
         });
     }
 
@@ -62,13 +67,14 @@ export class NuiMenu {
         }
     }
 
-    public closeAll(skipCloseEvent = true) {
+    public closeAll(skipCloseEvent = false) {
         exports['menuv'].SendNUIMessage({ action: 'KEY_CLOSE_ALL' });
+        this.dispatcher.dispatch('bank', 'CloseInterface');
         this.closeMenu(skipCloseEvent);
     }
 
     @OnEvent(ClientEvent.CORE_CLOSE_MENU)
-    public closeMenu(skipCloseEvent = true) {
+    public closeMenu(skipCloseEvent = false) {
         if (this.getOpened() === null) {
             return;
         }
@@ -80,5 +86,9 @@ export class NuiMenu {
 
     getOpened(): MenuType | null {
         return this.dispatcher.getMenuOpened();
+    }
+
+    goBack() {
+        this.dispatcher.dispatch('menu', 'Backspace');
     }
 }

@@ -1,31 +1,59 @@
-import { Injectable } from '../../core/decorators/injectable';
+import { Inject, Injectable } from '@core/decorators/injectable';
+import { wait } from '@core/utils';
+import { PhoneSimCardCalls } from '@public/client/phone/phone.simcard.calls';
+import { PhoneState } from '@public/client/phone/phone.state';
+import { VoicePhoneProvider } from '@public/client/voip/voice/voice.phone.provider';
+import { ClientEvent } from '@public/shared/event/client';
 
 @Injectable()
 export class PhoneService {
+    @Inject(PhoneState)
+    private readonly phoneState: PhoneState;
+
+    @Inject(VoicePhoneProvider)
+    private readonly voicePhoneProvider: VoicePhoneProvider;
+
+    @Inject(PhoneSimCardCalls)
+    private readonly phoneSimCardCalls: PhoneSimCardCalls;
+
     private disabledReasons = new Set<string>();
 
     isPhoneVisible(): boolean {
-        return exports['soz-phone'].isPhoneVisible();
+        return this.phoneState.isPhoneOpen();
+    }
+
+    hasAnActiveCall(): boolean {
+        return this.voicePhoneProvider.hasActiveCall();
     }
 
     setPhoneFocus(status: boolean): void {
-        exports['soz-phone'].setPhoneFocus(status);
+        this.phoneState.setPhoneFocus(status);
     }
 
     stopPhoneCall(): void {
-        exports['soz-phone'].stopPhoneCall();
+        if (!this.phoneState.isInCall()) return;
+
+        this.phoneSimCardCalls.onCallEnd(this.phoneState.getCurrentCall()?.transmitter);
     }
 
     setPhoneDisabled(reason: string, value: boolean): void {
         if (value) {
             this.disabledReasons.add(reason);
-            exports['soz-phone'].stopPhoneCall();
-            exports['soz-phone'].setPhoneDisabled(value);
+            this.stopPhoneCall();
+            this.phoneState.setPhoneDisabled(value);
         } else {
             this.disabledReasons.delete(reason);
             if (this.disabledReasons.size == 0) {
-                exports['soz-phone'].setPhoneDisabled(value);
+                this.phoneState.setPhoneDisabled(value);
             }
         }
+    }
+
+    public async hidePhone() {
+        this.phoneState.setPhoneFrontCameraEnabled(false);
+        this.phoneState.setPhoneFlashlightEnabled(false);
+        this.phoneState.setPhoneOpen(false);
+        TriggerEvent(ClientEvent.PHONE_IS_INSIDE_INPUT, { insideInput: false });
+        await wait(200);
     }
 }

@@ -1,14 +1,16 @@
 import { Provider } from '@core/decorators/provider';
+import { GangProvider } from '@private/server/gang/gang.provider';
 import { Inject } from '@public/core/decorators/injectable';
 import { Rpc } from '@public/core/decorators/rpc';
-import { Crafts, CraftsList } from '@public/shared/craft/craft';
-import { isFeatureEnabled } from '@public/shared/features';
-import { InventoryItemMetadata } from '@public/shared/item';
+import { CraftCategory, CraftRecipe, Crafts, CraftsList } from '@public/shared/craft/craft';
 import { toVector3Object, Vector3 } from '@public/shared/polyzone/vector';
 import { getRandomKeyWeighted } from '@public/shared/random';
 import { RpcServerEvent } from '@public/shared/rpc';
 
-import { InventoryManager } from '../inventory/inventory.manager';
+import { ADD_ERROR_MESSAGE, InventoryItemMetadata } from '../../shared/inventory';
+import { FeatureProvider } from '../feature/feature.provider';
+import { Inventory } from '../inventory/inventory';
+import { InventoryFactory } from '../inventory/inventory.factory';
 import { ItemService } from '../item/item.service';
 import { Monitor } from '../monitor/monitor';
 import { Notifier } from '../notifier';
@@ -20,8 +22,8 @@ export class CraftProvider {
     @Inject(Notifier)
     private notifier: Notifier;
 
-    @Inject(InventoryManager)
-    private inventoryManager: InventoryManager;
+    @Inject(InventoryFactory)
+    private inventoryFactory: InventoryFactory;
 
     @Inject(ItemService)
     private itemService: ItemService;
@@ -35,28 +37,47 @@ export class CraftProvider {
     @Inject(ProgressService)
     private progressService: ProgressService;
 
+    @Inject(GangProvider)
+    private gangProvider: GangProvider;
+
+    @Inject(FeatureProvider)
+    private featureProvider: FeatureProvider;
+
+    private async getCrafts(source: number, type: string): Promise<Record<string, CraftCategory>> {
+        if (type == 'gang') {
+            return await this.gangProvider.getGangRecipes(source);
+        }
+
+        return Crafts[type];
+    }
+
     @Rpc(RpcServerEvent.CRAFT_GET_RECIPES)
     public async getTransformRecipes(source: number, type: string, cancelled?: boolean): Promise<CraftsList> {
-        const crafts = { ...Crafts[type] };
+        const crafts = { ...(await this.getCrafts(source, type)) };
+        const inventory = await this.inventoryFactory.getPlayerInventory(source);
+
+        if (!inventory) {
+            return;
+        }
+
         for (const category of Object.keys(crafts)) {
             const categoryList = crafts[category];
 
-            if (categoryList.feature && !isFeatureEnabled(categoryList.feature)) {
+            if (categoryList.feature && !this.featureProvider.isFeatureEnabled(categoryList.feature)) {
                 delete crafts[category];
                 continue;
             }
 
-            for (const recipe of Object.values(categoryList.recipes)) {
+            for (const [output, recipe] of Object.entries(categoryList.recipes)) {
+                if (recipe.feature && !this.featureProvider.isFeatureEnabled(recipe.feature)) {
+                    delete categoryList.recipes[output];
+                    continue;
+                }
                 recipe.canCraft = true;
 
                 for (const [inputItem, input] of Object.entries(recipe.inputs)) {
-                    input.check = this.inventoryManager.hasEnoughItem(
-                        source,
-                        inputItem,
-                        input.count,
-                        true,
-                        input.metadata
-                    );
+                    input.checkAmount = inventory.getItemCount(inputItem, false, input.metadata, true);
+                    input.check = input.checkAmount >= input.count;
                     recipe.canCraft = recipe.canCraft && input.check;
                 }
             }
@@ -69,25 +90,9 @@ export class CraftProvider {
         };
     }
 
-    @Rpc(RpcServerEvent.CRAFT_DO_RECIPES)
-    public async doCraft(source: number, itemId: string, type: string, category: string): Promise<CraftsList> {
-        const crafts = Crafts[type];
-        const recipe = crafts[category].recipes[itemId];
-        const item = this.itemService.getItem(itemId);
-        const player = this.playerService.getPlayer(source);
-
-        if (!player) {
-            return;
-        }
-
-        if (!recipe) {
-            this.notifier.error(source, `Aucune recette associée pour créer "${item.label}".`);
-            return await this.getTransformRecipes(source, type, true);
-        }
-
+    private async checkCraft(source: number, inventory: Inventory, itemId: string, recipe: CraftRecipe) {
         if (
-            !this.inventoryManager.canSwapItems(
-                source,
+            !inventory.canSwapItems(
                 Object.entries(recipe.inputs).map(([name, input]) => {
                     return {
                         name: name,
@@ -104,23 +109,49 @@ export class CraftProvider {
                 ]
             )
         ) {
-            this.notifier.notify(source, "Vous n'avez pas assez de place dans votre inventaire", 'error');
-            return await this.getTransformRecipes(source, type, true);
+            this.notifier.notify(source, ADD_ERROR_MESSAGE['not_enough_space'], 'error');
+            return false;
         }
 
         for (const requiredItemId of Object.keys(recipe.inputs)) {
             const input = recipe.inputs[requiredItemId];
 
-            if (!this.inventoryManager.hasEnoughItem(source, requiredItemId, input.count, true, input.metadata)) {
+            if (!inventory.hasEnoughItem(requiredItemId, input.count, true, input.metadata, true)) {
                 const requiredItem = this.itemService.getItem(requiredItemId);
+                const item = this.itemService.getItem(itemId);
 
                 this.notifier.error(
                     source,
                     `Vous n'avez pas assez de ${requiredItem.label} pour créer "${item.label}".`
                 );
 
-                return await this.getTransformRecipes(source, type, true);
+                return false;
             }
+        }
+
+        return true;
+    }
+
+    @Rpc(RpcServerEvent.CRAFT_DO_RECIPES)
+    public async doCraft(source: number, craftId: string, type: string, category: string): Promise<CraftsList> {
+        const crafts = await this.getCrafts(source, type);
+        const recipe = crafts[category].recipes[craftId];
+        const item = this.itemService.getItem(recipe.outputItem ?? craftId);
+        const player = this.playerService.getPlayer(source);
+
+        if (!player) {
+            return;
+        }
+
+        if (!recipe) {
+            this.notifier.error(source, `Aucune recette associée pour créer "${item.label}".`);
+            return await this.getTransformRecipes(source, type, true);
+        }
+
+        const inventory = await this.inventoryFactory.getPlayerInventory(source);
+
+        if (!(await this.checkCraft(source, inventory, item.name, recipe))) {
+            return await this.getTransformRecipes(source, type, true);
         }
 
         const { completed } = await this.progressService.progress(
@@ -135,18 +166,20 @@ export class CraftProvider {
                     repeat: true,
                 },
             },
-            {
-                useAnimationService: true,
-            }
+            {}
         );
 
         if (!completed) {
             return await this.getTransformRecipes(source, type, true);
         }
 
+        if (!(await this.checkCraft(source, inventory, item.name, recipe))) {
+            return await this.getTransformRecipes(source, type, true);
+        }
+
         for (const requiredItemId of Object.keys(recipe.inputs)) {
             const input = recipe.inputs[requiredItemId];
-            this.inventoryManager.removeNotExpiredItem(source, requiredItemId, input.count, input.metadata);
+            inventory.remove(requiredItemId, input.count, false, input.metadata, true);
         }
 
         const metadata: InventoryItemMetadata = {};
@@ -162,24 +195,20 @@ export class CraftProvider {
             metadata.label = rewardName;
         }
 
-        this.inventoryManager.addItemToInventory(source, itemId, recipe.amount, metadata);
+        const amount = recipe.amount;
+        inventory.add(item.name, amount, metadata);
 
-        this.notifier.notify(source, `Vous avez confectionné ~y~${recipe.amount}~s~ ~g~${item.label}~s~.`, 'success');
+        this.notifier.notify(source, `Vous avez confectionné ~y~${amount}~s~ ~g~${item.label}~s~.`, 'success');
 
-        this.monitor.publish(
-            crafts[category].event,
-            {
-                item_id: itemId,
-                player_source: source,
-            },
-            {
-                item_label: item.label,
-                quantity: recipe.amount,
-                position: toVector3Object(GetEntityCoords(GetPlayerPed(source)) as Vector3),
-                type: type,
-                category: category,
-            }
-        );
+        this.monitor.traceEvent(crafts[category].event, {
+            item_id: item.name,
+            player_source: source,
+            item_label: item.label,
+            amount: amount,
+            position: toVector3Object(GetEntityCoords(GetPlayerPed(source)) as Vector3),
+            type: type,
+            category: category,
+        });
 
         return await this.getTransformRecipes(source, type);
     }

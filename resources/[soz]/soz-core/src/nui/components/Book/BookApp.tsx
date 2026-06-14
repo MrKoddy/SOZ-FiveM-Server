@@ -1,3 +1,5 @@
+import { useAssetPath } from '@public/nui/hook/assets';
+import { useBackspace } from '@public/nui/hook/control';
 import { useState } from 'react';
 import { TransformComponent, TransformWrapper } from 'react-zoom-pan-pinch';
 
@@ -5,9 +7,10 @@ import { Book } from '../../../shared/book';
 import { useNuiEvent, useNuiFocus } from '../../hook/nui';
 
 export const BookApp = () => {
+    const { getPath } = useAssetPath();
+
     const [book, setBook] = useState<Book | null>(null);
     const [imageIndex, setImageIndex] = useState(0);
-
     useNuiFocus(book !== null, book !== null, false);
 
     useNuiEvent('book', 'Show', setBook);
@@ -16,12 +19,18 @@ export const BookApp = () => {
         setImageIndex(0);
     });
 
+    useBackspace(() => {
+        if (book) {
+            setBook(null);
+        }
+    });
+
     if (!book) {
         return null;
     }
 
     return (
-        <div className="absolute w-full h-full">
+        <div className="absolute w-full h-full z-40">
             <div className="flex flex-col justify-around h-full w-full">
                 <div className="flex justify-center align-center">
                     <TransformWrapper limitToBounds={true} centerOnInit={true}>
@@ -31,7 +40,7 @@ export const BookApp = () => {
                                 className="flex justify-center align-center items-center"
                             >
                                 <img
-                                    src={`/public/images/book/${book.images[imageIndex]}`}
+                                    src={getPath(`images/book/${book.images[imageIndex]}`)}
                                     alt={imageIndex.toString()}
                                     style={{
                                         height: '90vh',

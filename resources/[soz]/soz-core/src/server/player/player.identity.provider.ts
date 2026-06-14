@@ -4,17 +4,14 @@ import { OnEvent } from '../../core/decorators/event';
 import { Inject } from '../../core/decorators/injectable';
 import { Provider } from '../../core/decorators/provider';
 import { ClientEvent, ServerEvent } from '../../shared/event';
+import { InventoryCard } from '../../shared/inventory';
 import { CardType } from '../../shared/nui/card';
-import { BankService } from '../bank/bank.service';
 import { PlayerService } from './player.service';
 
 @Provider()
 export class PlayerIdentityProvider {
     @Inject(PlayerService)
     private playerService: PlayerService;
-
-    @Inject(BankService)
-    private bankService: BankService;
 
     @OnEvent(ServerEvent.PLAYER_SHOW_IDENTITY)
     public showIdentity(source, type: CardType, targets: number[], player: PlayerData, accountId?: string) {
@@ -33,9 +30,7 @@ export class PlayerIdentityProvider {
             return;
         }
 
-        const accountId = await this.bankService.getAccountid(player.citizenid);
-
-        const cards = [
+        const cards: InventoryCard[] = [
             {
                 type: 'identity',
                 label: "Carte d'identité",
@@ -55,10 +50,28 @@ export class PlayerIdentityProvider {
                 type: 'bank',
                 label: 'Carte bancaire',
                 description: 'Votre carte bancaire STONK personnelle.',
-                iban: accountId,
+                iban: player.charinfo.account,
             },
         ];
 
-        TriggerClientEvent('inventory:client:openPlayerWalletInventory', source, cards);
+        if (player.metadata.casino_vip_premium_subscription_expire_at > Date.now()) {
+            cards.push({
+                type: 'casino_premium',
+                label: 'VIP Premium',
+                description: 'Votre carte VIP Premium',
+                expiration: player.metadata.casino_vip_premium_subscription_expire_at,
+                point: player.metadata.casino_vip_point ?? 0,
+            });
+        } else if (player.metadata.casino_vip_standard_subscription_expire_at > Date.now()) {
+            cards.push({
+                type: 'casino_standard',
+                label: 'VIP Basique',
+                description: 'Votre carte VIP Basique',
+                expiration: player.metadata.casino_vip_standard_subscription_expire_at,
+                point: player.metadata.casino_vip_point ?? 0,
+            });
+        }
+
+        TriggerClientEvent(ClientEvent.INVENTORY_OPEN_WALLET, source, cards);
     }
 }

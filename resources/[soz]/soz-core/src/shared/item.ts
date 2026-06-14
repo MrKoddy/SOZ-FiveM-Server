@@ -1,10 +1,4 @@
-import { DrugContractInfo } from '@private/shared/drugs';
-import { MissiveType } from '@private/shared/missive';
-
-import { DamageServerData } from './job/lsmc';
-import { FakeId, PlayerCharInfo, PlayerJob, PlayerMetadata } from './player';
-import { WeaponComponentType } from './weapons/attachment';
-import { WeaponMk2TintColor, WeaponTintColor } from './weapons/tint';
+import { InventoryItemMetadata } from '@public/shared/inventory';
 
 export type ItemType =
     | 'item'
@@ -28,7 +22,21 @@ export type ItemType =
     | 'fishing_garbage'
     | 'outfit'
     | 'tool'
-    | 'metal';
+    | 'evidence'
+    | 'metal'
+    | 'fishing_rod'
+    | 'fishing_bait'
+    | 'crate'
+    | 'drug_pot'
+    | 'energy'
+    | 'veh_biz_piece'
+    | 'smuggling_export'
+    | 'smuggling_convoy_export'
+    | 'smuggling_ore'
+    | 'smuggling_electronic'
+    | 'zkea_crate'
+    | 'card'
+    | 'apparel';
 
 type BaseItem = {
     name: string;
@@ -39,6 +47,32 @@ type BaseItem = {
     unique: boolean;
     useable: boolean;
     carrybox: string;
+    carrybox_allow_sprint?: boolean;
+    maxplates?: number;
+    expiresIn?: number;
+    durability?: number;
+    storageItemType?: ItemType;
+    storageItemWeight?: number;
+    storageItemMandatoryMetadata?: keyof InventoryItemMetadata;
+    onlyone?: boolean;
+    illustrator?: Record<string, string> | string;
+    canShow?: boolean;
+    throwable?: boolean;
+    openStorageLabel?: string;
+    resellPrice?: number | number[];
+    resellZone?: string;
+    resellItemTierMultiplier?: number[];
+    drug_pot?: {
+        target: string;
+        ingredient: string;
+        nbIngredient: number;
+    };
+    maxStack?: number;
+    notSearchable?: boolean;
+    notGiveable?: boolean;
+    canEngrave?: boolean;
+    packItem?: string;
+    packQuantity?: number;
 };
 
 export type Nutrition = {
@@ -55,11 +89,11 @@ export type Nutrition = {
 };
 
 export type WeaponItem = BaseItem & {
-    type: 'item';
+    type: 'weapon';
 };
 
 export type AmmoItem = BaseItem & {
-    type: 'item';
+    type: 'weapon_ammo';
 };
 
 export type CommonItem = BaseItem & {
@@ -119,7 +153,7 @@ export type FishItem = BaseItem & {
     type: 'fish';
     fishing_area: Array<string>;
     fishing_weather: Array<string>;
-    fish_generation: 'classic' | 'halloween' | 'christmas' | 'dlc_fish_1';
+    fish_generation: 'classic' | 'halloween' | 'christmas' | 'dlc_fish_1' | 'summer' | 'vampire' | 'winter';
     fishing_period: Array<string>;
     min_weight: number;
     max_weight: number;
@@ -149,6 +183,27 @@ export type GarmentItem = BaseItem & {
 
 export type OutfitItem = BaseItem & {
     type: 'outfit';
+};
+
+export type CrateItem = BaseItem & {
+    type: 'crate';
+};
+
+export type CardItem = BaseItem & {
+    type: 'card';
+};
+
+export type EvidenceItem = BaseItem & {
+    type: 'evidence';
+};
+
+export type SmugglingElectronic = BaseItem & {
+    type: 'smuggling_electronic';
+};
+
+export type Apparel = BaseItem & {
+    type: 'apparel';
+    slot: number;
 };
 
 type AnimationItem = {
@@ -190,97 +245,13 @@ export type DrugItem = BaseItem & {
     nutrition: Nutrition;
 };
 
-export type MealMetadata = {
-    name: string;
-    metadata: InventoryItemMetadata;
-    amount: number;
-    label: string;
-};
-
-export type EvidenceMetadata = {
-    type: string;
-    generalInfo: string;
-    quantity?: number;
-    zone?: string;
-    support?: string;
-    isAnalyzed?: boolean;
-    dateAnalyzed?: string;
-};
-
-export type MedicalMetadata = {
-    damages: DamageServerData[];
-    patient: {
-        charinfo: PlayerCharInfo;
-        job: PlayerJob;
-        metadata: PlayerMetadata;
-        hash: number;
+export type DrugPotItem = BaseItem & {
+    type: 'drug_pot';
+    drug_pot: {
+        target: string;
+        ingredient: string;
+        nbIngredient: number;
     };
-    date: number;
-};
-
-export type InventoryItemMetadata = {
-    label?: string;
-    type?: string;
-    expiration?: string;
-    creation?: string;
-    player?: number;
-    // Weapom
-    serial?: string;
-    health?: number;
-    maxHealth?: number;
-    ammo?: number;
-    tint?: WeaponTintColor | WeaponMk2TintColor;
-    missiveType?: MissiveType;
-    missiveChoice1?: number;
-    missiveChoice2?: number;
-    missiveChoice3?: number;
-    attachments?: Record<WeaponComponentType, string | null>;
-    tier?: number;
-    crafted?: boolean;
-    id?: string;
-    model?: string;
-    crateElements?: MealMetadata[];
-    // Fishing
-    weight?: number;
-    length?: number;
-    bait?: any;
-    fuel?: number;
-    drugContract?: DrugContractInfo;
-    fakeIdData?: FakeId;
-    // Weapon certificate (DMC)
-    craftCertificate?: string;
-    serializedDetectiveBoard?: any;
-    originalDetectiveBoard?: boolean;
-    photosInDetectiveBoard?: string[];
-    photoUrl?: string;
-    evidenceInfos?: EvidenceMetadata;
-};
-
-export type Inventory = {
-    id: string;
-    label: string;
-    type: string;
-    slots: number;
-    weight: number;
-    maxWeight: number;
-    owner: number;
-    items: InventoryItem[];
-    changed: boolean;
-    users: number[];
-    time: number;
-};
-
-export type InventoryItem = {
-    name: string;
-    label: string;
-    description: string;
-    weight: number;
-    slot: number;
-    useable: boolean;
-    unique: boolean;
-    type: ItemType;
-    amount: number;
-    metadata?: InventoryItemMetadata;
 };
 
 export type Item =
@@ -307,4 +278,10 @@ export type Item =
     | FishItem
     | FishingGarbageItem
     | ToolItem
-    | MetalItem;
+    | MetalItem
+    | CrateItem
+    | DrugPotItem
+    | CardItem
+    | EvidenceItem
+    | SmugglingElectronic
+    | Apparel;

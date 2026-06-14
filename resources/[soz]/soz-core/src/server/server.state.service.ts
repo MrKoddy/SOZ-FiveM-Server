@@ -1,4 +1,5 @@
-import { Injectable } from '../core/decorators/injectable';
+import { Injectable } from '@core/decorators/injectable';
+
 import { PlayerData } from '../shared/player';
 
 @Injectable()
@@ -16,6 +17,18 @@ export class ServerStateService {
 
     public getPlayer(source: number): PlayerData | null {
         return this.connectedPlayers[source] || null;
+    }
+
+    public getPlayerByCitizenId(citizenId: string): PlayerData | null {
+        return Object.values(this.connectedPlayers).find(player => player.citizenid === citizenId) || null;
+    }
+
+    public getPlayerByPhoneNumber(phoneNumber: string): PlayerData | null {
+        return Object.values(this.connectedPlayers).find(player => player.charinfo.phone === phoneNumber) || null;
+    }
+
+    public getPlayersByJob(job: string): PlayerData[] {
+        return Object.values(this.connectedPlayers).filter(player => player.job.id === job);
     }
 
     public updatePlayer(player: PlayerData) {

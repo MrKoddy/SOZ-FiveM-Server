@@ -3,6 +3,7 @@ import { Inject } from '@core/decorators/injectable';
 import { Provider } from '@core/decorators/provider';
 import { AnimationService } from '@public/client/animation/animation.service';
 import { BlipFactory } from '@public/client/blip';
+import { FeatureProvider } from '@public/client/feature/feature.provider';
 import { Notifier } from '@public/client/notifier';
 import { NuiMenu } from '@public/client/nui/nui.menu';
 import { PlayerService } from '@public/client/player/player.service';
@@ -13,7 +14,8 @@ import { TargetFactory } from '@public/client/target/target.factory';
 import { VehicleLockProvider } from '@public/client/vehicle/vehicle.lock.provider';
 import { wait } from '@public/core/utils';
 import { ClientEvent, ServerEvent } from '@public/shared/event';
-import { JobType } from '@public/shared/job';
+import { Feature } from '@public/shared/features';
+import { FDO_LSMC } from '@public/shared/job';
 import { MenuType } from '@public/shared/nui/menu';
 import { Vector3 } from '@public/shared/polyzone/vector';
 import { SEATS_CONFIG } from '@public/shared/vehicle/vehicle';
@@ -73,6 +75,11 @@ const lsmcBeds: LSMCBed[] = [
         offset: [-0.1, 0.4, -0.7],
         rotation: 5,
     },
+    {
+        model: GetHashKey('cube_mppd_medbed'),
+        offset: [0.05, 0.2, 0.5],
+        rotation: 5,
+    },
 ];
 
 @Provider()
@@ -113,6 +120,9 @@ export class LSMCProvider {
     @Inject(PolicePlayerProvider)
     private policePlayerProvider: PolicePlayerProvider;
 
+    @Inject(FeatureProvider)
+    private featureProvider: FeatureProvider;
+
     @Once()
     public onStart() {
         this.blipFactory.create('LSMC', {
@@ -122,26 +132,30 @@ export class LSMCProvider {
             scale: 1.01,
         });
 
-        this.blipFactory.create('LSMC', {
-            name: 'Los Santos Medical Center',
-            coords: { x: 1828.51, y: 3673.4, z: 34.28 },
-            sprite: 61,
-            scale: 1.01,
-        });
+        if (!this.featureProvider.isFeatureEnabled(Feature.WhatIfFirstEpisode)) {
+            this.blipFactory.create('LSMC2', {
+                name: 'Los Santos Medical Center',
+                coords: { x: 1828.51, y: 3673.4, z: 34.28 },
+                sprite: 61,
+                scale: 1.01,
+            });
+        }
 
         this.targetFactory.createForModel(
             lsmcBeds.map(bed => bed.model),
             [
                 {
-                    icon: 'fas fa-bed',
+                    icon: 'ems/bed',
                     label: "S'allonger sur le lit",
+                    category: 'citizen',
                     action: async entity => {
                         this.onBed(entity);
                     },
                 },
                 {
-                    icon: 'c:ems/stretcher.png',
+                    icon: 'ems/stretcher',
                     label: 'Allonger sur le lit',
+                    category: 'citizen',
                     canInteract: () => {
                         const state = this.playerService.getState();
                         return state.isEscorting;
@@ -162,17 +176,18 @@ export class LSMCProvider {
             [
                 {
                     label: 'Extraire le mort',
-                    icon: 'c:ems/sortir.png',
-                    job: {
-                        [JobType.LSMC]: 0,
-                        [JobType.LSPD]: 0,
-                        [JobType.BCSO]: 0,
-                        [JobType.LSCS]: 0,
-                        [JobType.SASP]: 0,
-                        [JobType.FBI]: 0,
-                    },
+                    icon: 'ems/sortir',
+                    category: 'society',
                     canInteract: entity => {
-                        if (!this.playerService.isOnDuty()) {
+                        const player = this.playerService.getPlayer();
+                        if (!player) {
+                            return false;
+                        }
+
+                        if (
+                            !FDO_LSMC.includes(player.job.id) &&
+                            !this.featureProvider.isFeatureEnabled(Feature.WhatIfFirstEpisode)
+                        ) {
                             return false;
                         }
 
@@ -193,8 +208,11 @@ export class LSMCProvider {
                                       GetEntityBoneIndexByName(entity, seat.doorBone)
                                   ) as Vector3)
                                 : seat && seat.seatBone
-                                ? GetWorldPositionOfEntityBone(entity, GetEntityBoneIndexByName(entity, seat.seatBone))
-                                : GetEntityCoords(ped);
+                                  ? GetWorldPositionOfEntityBone(
+                                        entity,
+                                        GetEntityBoneIndexByName(entity, seat.seatBone)
+                                    )
+                                  : GetEntityCoords(ped);
 
                         await this.animationService.walkToCoordsAvoidObstacles(targetPedCoords as Vector3, 10000);
                         TaskTurnPedToFaceEntity(playerPed, entity, 1000);
@@ -212,9 +230,7 @@ export class LSMCProvider {
                                 {
                                     task: 'world_human_welding',
                                 },
-                                {
-                                    useAnimationService: true,
-                                }
+                                {}
                             );
 
                             if (!completed) {
@@ -242,7 +258,8 @@ export class LSMCProvider {
                 },
                 {
                     label: 'Faire monter',
-                    icon: 'c:ems/sortir.png',
+                    icon: 'ems/sortir',
+                    category: 'society',
                     canInteract: entity => {
                         if (!this.vehicleLockProvider.isVehOpen(entity)) {
                             return false;
@@ -285,17 +302,20 @@ export class LSMCProvider {
         SetEntityHeading(player, heading);
         SetPedCoordsKeepVehicle(player, coords[0], coords[1], coords[2] + 0.1);
 
-        this.animationService.playAnimation({
-            base: {
-                dictionary: 'anim@gangops@morgue@table@',
-                name: 'body_search',
-                blendInSpeed: 8.0,
-                blendOutSpeed: 2.0,
-                options: {
-                    repeat: true,
+        this.animationService.playAnimation(
+            {
+                base: {
+                    dictionary: 'anim@gangops@morgue@table@',
+                    name: 'body_search',
+                    blendInSpeed: 8.0,
+                    blendOutSpeed: 2.0,
+                    options: {
+                        repeat: true,
+                    },
                 },
             },
-        });
+            { useFreeCam: true }
+        );
     }
 
     @OnEvent(ClientEvent.LSMC_VEH_PUT_ON)
@@ -341,9 +361,7 @@ export class LSMCProvider {
             return;
         }
 
-        this.nuiMenu.openMenu(MenuType.LsmcJobMenu, {
-            onDuty: this.playerService.isOnDuty(),
-        });
+        this.nuiMenu.openMenu(MenuType.LsmcJobMenu, {});
     }
 
     @OnEvent(ClientEvent.LSMC_HEAL)

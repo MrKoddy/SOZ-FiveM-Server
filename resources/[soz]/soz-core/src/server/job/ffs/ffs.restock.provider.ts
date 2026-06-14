@@ -1,28 +1,35 @@
 import { Prisma } from '@prisma/client';
+import { InventoryFactory } from '@public/server/inventory/inventory.factory';
+import { ItemService } from '@public/server/item/item.service';
 import { ClothingShopRepository } from '@public/server/repository/cloth.shop.repository';
 import { PlayerPedHash } from '@public/shared/player';
 
+import { ShopBrand } from '../../../config/shops';
 import { Once, OnceStep, OnEvent } from '../../../core/decorators/event';
 import { Inject } from '../../../core/decorators/injectable';
 import { Provider } from '../../../core/decorators/provider';
 import { Logger } from '../../../core/logger';
 import { ServerEvent } from '../../../shared/event';
+import { isInventoryItemExpired } from '../../../shared/inventory';
 import { FfsConfig, Garment, LuxuryGarment } from '../../../shared/job/ffs';
 import { toVector3Object, Vector3 } from '../../../shared/polyzone/vector';
-import { ClothingBrand, ClothingShopItem } from '../../../shared/shop';
+import { ClothingShopItem } from '../../../shared/shop';
+import { BankService } from '../../bank/bank.service';
 import { PrismaService } from '../../database/prisma.service';
-import { InventoryManager } from '../../inventory/inventory.manager';
 import { Monitor } from '../../monitor/monitor';
 import { Notifier } from '../../notifier';
 import { ProgressService } from '../../player/progress.service';
 
 @Provider()
 export class FightForStyleRestockProvider {
-    @Inject(InventoryManager)
-    private inventoryManager: InventoryManager;
+    @Inject(InventoryFactory)
+    private inventoryFactory: InventoryFactory;
 
     @Inject(PrismaService)
     private prismaService: PrismaService;
+
+    @Inject(BankService)
+    private bankService: BankService;
 
     @Inject(ProgressService)
     private progressService: ProgressService;
@@ -39,10 +46,15 @@ export class FightForStyleRestockProvider {
     @Inject(ClothingShopRepository)
     private clothingShopRepository: ClothingShopRepository;
 
+    @Inject(ItemService)
+    private itemService: ItemService;
+
     @Once(OnceStep.DatabaseConnected)
     public async onOnceStart() {
         await this.prismaService.$queryRaw(
-            Prisma.sql`UPDATE shop_content SET shop_content.stock = CEIL(shop_content.stock * 0.95) WHERE shop_content.shop_id IN (1, 2, 3)`
+            Prisma.sql`UPDATE shop_content
+                       SET shop_content.stock = CEIL(shop_content.stock * 0.95)
+                       WHERE shop_content.shop_id IN (1, 2, 3) and shop_content.stock > 0`
         );
     }
 
@@ -77,54 +89,62 @@ export class FightForStyleRestockProvider {
     }
 
     @OnEvent(ServerEvent.FFS_RESTOCK)
-    public async onRestock(source: number, brand: ClothingBrand, garment: Garment | LuxuryGarment) {
-        const item = this.inventoryManager.getFirstItemInventory(source, garment);
+    public async onRestock(source: number, brand: ShopBrand, garment: Garment | LuxuryGarment) {
+        const inventory = await this.inventoryFactory.getPlayerInventory(source);
 
-        if (!item) {
+        if (!inventory) {
+            return;
+        }
+
+        const inventoryItem = inventory.findItem(item => item.name == garment && !isInventoryItemExpired(item));
+
+        if (!inventoryItem) {
             return;
         }
 
         this.notifier.notify(source, 'Vous ~g~commencez~s~ à restocker le magasin de vêtements', 'success');
-        const { completed } = await this.progressService.progress(source, 'restock', 'Restockage', 2000 * item.amount, {
-            name: 'base',
-            dictionary: 'amb@prop_human_bum_bin@base',
-            flags: 1,
-        });
+        const { completed } = await this.progressService.progress(
+            source,
+            'restock',
+            'Restockage',
+            2000 * inventoryItem.amount,
+            {
+                name: 'base',
+                dictionary: 'amb@prop_human_bum_bin@base',
+                flags: 1,
+            }
+        );
 
         if (!completed) {
             return;
         }
 
-        this.inventoryManager.removeItemFromInventory(source, garment, item.amount);
+        if (!inventory.removeAtSlot(inventoryItem.slot, inventoryItem.amount)) {
+            return;
+        }
 
         // Restock shops
-        await this.restockLoop(brand, garment, item.amount);
+        await this.restockLoop(brand, garment, inventoryItem.amount);
 
-        const totalAmount = item.amount * FfsConfig.restock.getRewardFromDeliveredGarment(garment);
-        TriggerEvent(ServerEvent.BANKING_TRANSFER_MONEY, 'farm_ffs', 'safe_ffs', totalAmount);
+        const totalAmount = inventoryItem.amount * FfsConfig.restock.getRewardFromDeliveredGarment(garment);
+        await this.bankService.transferFarmMoney(source, 'farm_ffs', 'safe_ffs', totalAmount);
 
-        this.monitor.publish(
-            'job_ffs_restock',
-            {
-                item_id: item.metadata.id,
-                player_source: source,
-            },
-            {
-                item_label: item.label,
-                quantity: item.amount,
-                position: toVector3Object(GetEntityCoords(GetPlayerPed(source)) as Vector3),
-            }
-        );
+        this.monitor.traceEvent('job_ffs_restock', {
+            item_id: inventoryItem.metadata.id,
+            player_source: source,
+            amount: inventoryItem.amount,
+            position: toVector3Object(GetEntityCoords(GetPlayerPed(source)) as Vector3),
+        });
 
         this.notifier.notify(source, 'Vous avez ~r~terminé~s~ de restocker le magasin de vêtements.', 'success');
     }
 
-    public async restockLoop(brand: ClothingBrand, garment: Garment | LuxuryGarment, amount: number) {
+    public async restockLoop(brand: ShopBrand, garment: Garment | LuxuryGarment, amount: number) {
         const sexes = [PlayerPedHash.Male, PlayerPedHash.Female];
         const category = this.garmentToCategory(garment);
 
         if (category == -1) {
-            this.logger.error('Invalid category for item ', garment);
+            this.logger.error(`Invalid category for item ${garment}`);
             return;
         }
 

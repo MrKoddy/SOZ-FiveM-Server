@@ -2,7 +2,7 @@ import { OnNuiEvent } from '../../core/decorators/event';
 import { Inject } from '../../core/decorators/injectable';
 import { Provider } from '../../core/decorators/provider';
 import { emitRpc } from '../../core/rpc';
-import { AdminPlayer, FullAdminPlayer } from '../../shared/admin/admin';
+import { AdminPlayer, LightAdminPlayer } from '../../shared/admin/admin';
 import { NuiEvent } from '../../shared/event';
 import { Vector3 } from '../../shared/polyzone/vector';
 import { RpcServerEvent } from '../../shared/rpc';
@@ -141,6 +141,7 @@ export class AdminMenuInteractiveProvider {
         if (!value) {
             for (const value of this.multiplayerTags.values()) {
                 SetMpGamerTagVisibility(value, 0, false);
+                SetMpGamerTagVisibility(value, 2, false);
                 RemoveMpGamerTag(value);
             }
             clearInterval(this.intervalHandlers.displayPlayerNames);
@@ -166,7 +167,7 @@ export class AdminMenuInteractiveProvider {
         }
 
         this.intervalHandlers.displayPlayersOnMap = setInterval(async () => {
-            const players = await emitRpc<FullAdminPlayer[]>(RpcServerEvent.ADMIN_GET_FULL_PLAYERS);
+            const players = await emitRpc<LightAdminPlayer[]>(RpcServerEvent.ADMIN_GET_LIGHT_PLAYERS);
 
             this.playerBlips.forEach((BlipValue, BlipKey) => {
                 if (!players.some(player => player.citizenId === BlipKey)) {
@@ -192,6 +193,7 @@ export class AdminMenuInteractiveProvider {
                         showHeading: true,
                         sprite: 1,
                         category: 7,
+                        group: 'admin',
                     });
 
                     this.playerBlips.set(player.citizenId, createdBlip);
@@ -213,24 +215,26 @@ export class AdminMenuInteractiveProvider {
             if (player.id == GetPlayerServerId(playerId)) {
                 return;
             }
-            this.multiplayerTags.set(player.citizenId, GetPlayerFromServerId(player.id));
+
+            const localPlayerPed = GetPlayerFromServerId(player.id);
+            this.multiplayerTags.set(player.citizenId, localPlayerPed);
 
             let name = player.rpFullName;
             if (withDetails) {
-                name += ` | ${player.name} | ${player.id}`;
+                name += ` | ${player.name} | ${player.id} | plaques: ${player.armorPlates}`;
             }
-            CreateMpGamerTagWithCrewColor(
-                this.multiplayerTags.get(player.citizenId),
-                name,
-                false,
-                false,
-                '',
-                0,
-                0,
-                0,
-                0
-            );
-            SetMpGamerTagVisibility(this.multiplayerTags.get(player.citizenId), 0, true);
+            CreateMpGamerTagWithCrewColor(localPlayerPed, name, false, false, '', 0, 0, 0, 0);
+            if (withDetails) {
+                SetMpGamerTagName(localPlayerPed, name); // Force update for plates
+            }
+            SetMpGamerTagVisibility(localPlayerPed, 0, true);
+
+            if (withDetails) {
+                SetMpGamerTagVisibility(localPlayerPed, 2, true);
+                SetMpGamerTagAlpha(localPlayerPed, 2, 255);
+            } else {
+                SetMpGamerTagVisibility(localPlayerPed, 2, false);
+            }
         });
     }
 }

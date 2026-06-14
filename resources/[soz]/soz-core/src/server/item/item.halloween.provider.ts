@@ -4,18 +4,17 @@ import { Provider } from '@public/core/decorators/provider';
 import { ItemService } from '@public/server/item/item.service';
 import { ProgressService } from '@public/server/player/progress.service';
 import { ClientEvent } from '@public/shared/event';
-import { InventoryItem, Item } from '@public/shared/item';
+import { Item } from '@public/shared/item';
 import { DeguisementMapping } from '@public/shared/story/halloween2022';
 
-import { InventoryManager } from '../inventory/inventory.manager';
+import { InventoryItem } from '../../shared/inventory';
+import { Inventory } from '../inventory/inventory';
+import { Notifier } from '../notifier';
 import { PlayerAppearanceService } from '../player/player.appearance.service';
 import { PlayerService } from '../player/player.service';
 
 @Provider()
 export class ItemHalloweenProvider {
-    @Inject(InventoryManager)
-    private inventoryManager: InventoryManager;
-
     @Inject(ItemService)
     private item: ItemService;
 
@@ -28,7 +27,10 @@ export class ItemHalloweenProvider {
     @Inject(PlayerService)
     private playerService: PlayerService;
 
-    private async useDeguisement(source: number, item: Item, inventoryItem: InventoryItem) {
+    @Inject(Notifier)
+    private notifier: Notifier;
+
+    private async useDeguisement(source: number, item: Item, inventoryItem: InventoryItem, inventory: Inventory) {
         const progress = await this.progressService.progress(
             source,
             'switch_clothes',
@@ -43,7 +45,6 @@ export class ItemHalloweenProvider {
                 },
             },
             {
-                useAnimationService: true,
                 disableCombat: true,
                 disableMovement: true,
                 canCancel: false,
@@ -54,7 +55,7 @@ export class ItemHalloweenProvider {
             return;
         }
 
-        this.inventoryManager.removeInventoryItem(source, inventoryItem);
+        inventory.removeAtSlot(inventoryItem.slot, 1);
         TriggerClientEvent(ClientEvent.HALLOWEEN_DEGUISEMENT_USE, source, item.name);
     }
 
@@ -73,7 +74,6 @@ export class ItemHalloweenProvider {
                 },
             },
             {
-                useAnimationService: true,
                 disableCombat: true,
                 disableMovement: true,
                 canCancel: false,
@@ -95,6 +95,10 @@ export class ItemHalloweenProvider {
         TriggerClientEvent(ClientEvent.HALLOWEEN_DEMON_ANALISYS, source);
     }
 
+    private async useBloodCup(source: number) {
+        this.notifier.notify(source, "~r~Tu as vraiment cru que c'était la vraie ?~s~", 'error');
+    }
+
     @Once()
     public onStart() {
         for (const item of Object.keys(DeguisementMapping)) {
@@ -103,5 +107,6 @@ export class ItemHalloweenProvider {
 
         this.item.setItemUseCallback('halloween_brain_knife', this.useHalloweenHat.bind(this));
         this.item.setItemUseCallback('halloween_demon_analysis', this.useDeamonAnalisys.bind(this));
+        this.item.setItemUseCallback('halloween_blood_cup_66', this.useBloodCup.bind(this));
     }
 }

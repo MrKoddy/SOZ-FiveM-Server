@@ -44,37 +44,24 @@ export class GouvRadarProvider {
         this.targetFactory.createForModel(RADAR_MODEL, [
             {
                 label: 'Définir la vitesse',
-                icon: 'fas fa-bolt',
+                icon: 'global/bolt',
                 job: JobType.Gouv,
                 blackoutJob: JobType.Gouv,
                 blackoutGlobal: true,
-                canInteract: entity => {
-                    const player = this.playerService.getPlayer();
-
-                    if (!player || !player.job.onduty) {
-                        return false;
-                    }
-                    if (!this.jobService.hasPermission(JobType.Gouv, JobPermission.GouvManageRadar)) {
-                        return false;
-                    }
-
-                    return this.getRadarId(entity) !== null;
-                },
+                category: 'society',
+                canInteract: entity =>
+                    this.jobService.hasPermission(JobType.Gouv, JobPermission.GouvManageRadar) &&
+                    this.getRadarId(entity) !== null,
                 action: this.setRadarSpeed.bind(this),
             },
             {
                 label: 'Désactiver le radar',
-                icon: 'fas fa-toggle-off',
+                icon: 'global/toggle-off',
                 job: JobType.Gouv,
                 blackoutJob: JobType.Gouv,
                 blackoutGlobal: true,
+                category: 'society',
                 canInteract: entity => {
-                    const player = this.playerService.getPlayer();
-
-                    if (!player || !player.job.onduty) {
-                        return false;
-                    }
-
                     if (!this.jobService.hasPermission(JobType.Gouv, JobPermission.GouvManageRadar)) {
                         return false;
                     }
@@ -99,17 +86,12 @@ export class GouvRadarProvider {
             },
             {
                 label: 'Activer le radar',
-                icon: 'fas fa-toggle-on',
+                icon: 'global/toggle-on',
                 job: JobType.Gouv,
                 blackoutJob: JobType.Gouv,
                 blackoutGlobal: true,
+                category: 'society',
                 canInteract: entity => {
-                    const player = this.playerService.getPlayer();
-
-                    if (!player || !player.job.onduty) {
-                        return false;
-                    }
-
                     if (!this.jobService.hasPermission(JobType.Gouv, JobPermission.GouvManageRadar)) {
                         return false;
                     }
@@ -134,17 +116,12 @@ export class GouvRadarProvider {
             },
             {
                 label: 'Supprimer',
-                icon: 'fas fa-trash',
+                icon: 'global/trash',
                 job: JobType.Gouv,
                 blackoutJob: JobType.Gouv,
                 blackoutGlobal: true,
+                category: 'society',
                 canInteract: entity => {
-                    const player = this.playerService.getPlayer();
-
-                    if (!player || !player.job.onduty) {
-                        return false;
-                    }
-
                     if (!this.jobService.hasPermission(JobType.Gouv, JobPermission.GouvManageRadar)) {
                         return false;
                     }
@@ -152,6 +129,22 @@ export class GouvRadarProvider {
                     return this.getRadarId(entity) !== null;
                 },
                 action: this.removeRadar.bind(this),
+            },
+            {
+                label: 'Statistiques',
+                icon: 'gouv/graph',
+                job: JobType.Gouv,
+                blackoutJob: JobType.Gouv,
+                blackoutGlobal: true,
+                category: 'society',
+                canInteract: entity => {
+                    if (!this.jobService.hasPermission(JobType.Gouv, JobPermission.GouvManageRadar)) {
+                        return false;
+                    }
+
+                    return this.getRadarId(entity) !== null;
+                },
+                action: this.statsRadar.bind(this),
             },
         ]);
     }
@@ -169,6 +162,8 @@ export class GouvRadarProvider {
             },
             snapToGround: true,
             collision: true,
+            onlyZRotation: true,
+            allowScale: false,
             context: JobType.Gouv,
         });
 
@@ -219,6 +214,16 @@ export class GouvRadarProvider {
         }
 
         TriggerServerEvent(ServerEvent.GOUV_RADAR_SET_DISABLED, radarId, disabled);
+    }
+
+    private statsRadar(entity: number) {
+        const radarId = this.getRadarId(entity);
+
+        if (radarId === null) {
+            return;
+        }
+
+        TriggerServerEvent(ServerEvent.GOUV_RADAR_STATS, radarId);
     }
 
     private getRadarId(entity: number) {

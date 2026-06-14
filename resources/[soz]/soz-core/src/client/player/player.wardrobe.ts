@@ -1,15 +1,26 @@
-import { OnEvent, OnNuiEvent } from '@core/decorators/event';
+import { OnNuiEvent } from '@core/decorators/event';
 import { Inject } from '@core/decorators/injectable';
 import { Provider } from '@core/decorators/provider';
 import { AnimationService } from '@public/client/animation/animation.service';
+import { Command } from '@public/core/decorators/command';
 import { Animation } from '@public/shared/animation';
+import { RankOutfit } from '@public/shared/job/police';
 
-import { ClothConfig, Outfit, WardrobeConfig, WardRobeElements } from '../../shared/cloth';
-import { ClientEvent, NuiEvent, ServerEvent } from '../../shared/event';
+import {
+    ClothConfig,
+    Component,
+    Outfit,
+    WardrobeConfig,
+    WardRobeElementConfigs,
+    WardRobeElements,
+} from '../../shared/cloth';
+import { NuiEvent } from '../../shared/event';
 import { MenuType } from '../../shared/nui/menu';
 import { Vector3 } from '../../shared/polyzone/vector';
 import { ProgressResult } from '../../shared/progress';
+import { ClipboardService } from '../clipboard.service';
 import { ClothingService } from '../clothing/clothing.service';
+import { Notifier } from '../notifier';
 import { NuiMenu } from '../nui/nui.menu';
 import { ProgressService } from '../progress.service';
 import { PlayerService } from './player.service';
@@ -30,11 +41,17 @@ export class PlayerWardrobe {
     @Inject(ProgressService)
     private progressService: ProgressService;
 
+    @Inject(AnimationService)
+    private animationService: AnimationService;
+
     @Inject(ClothingService)
     private clothingService: ClothingService;
 
-    @Inject(AnimationService)
-    private animationService: AnimationService;
+    @Inject(ClipboardService)
+    private clipboard: ClipboardService;
+
+    @Inject(Notifier)
+    private notifier: Notifier;
 
     private customOutfit: Outfit;
 
@@ -43,7 +60,7 @@ export class PlayerWardrobe {
     public async selectOutfit(
         config: WardrobeConfig,
         nullLabel?: string,
-        customLabel?: string
+        allowCustom?: boolean
     ): Promise<OutfitSelection | null> {
         const model = GetEntityModel(PlayerPedId());
         const wardrobe = config[model];
@@ -61,7 +78,7 @@ export class PlayerWardrobe {
             {
                 wardrobe,
                 allowNullLabel: nullLabel,
-                allowCustom: customLabel,
+                allowCustom,
             },
             {
                 position: {
@@ -94,18 +111,12 @@ export class PlayerWardrobe {
                 disableMouse: false,
                 disableCombat: true,
                 canCancel: canCancel,
-                useAnimationService: true,
             }
         );
     }
 
-    @OnEvent(ClientEvent.PLAYER_SET_JOB_OUTFIT)
-    public async onSetJobOutfit(outfit: Outfit, merge: boolean) {
-        TriggerServerEvent(ServerEvent.CHARACTER_SET_JOB_CLOTHES, outfit, merge);
-    }
-
-    public async setClothConfig(key: keyof ClothConfig['Config'], value: boolean) {
-        if (this.playerService.getState().isInHub) {
+    public async setClothConfig(key: keyof ClothConfig['Config'], value: boolean, skipAnimation = false) {
+        if (this.playerService.getState().isInHub || this.playerService.getState().isInGameHub) {
             return;
         }
 
@@ -166,7 +177,9 @@ export class PlayerWardrobe {
             return;
         }
 
-        await this.animationService.playAnimation(animation);
+        if (!skipAnimation) {
+            await this.animationService.playAnimation(animation);
+        }
 
         TriggerServerEvent('soz-character:server:UpdateClothConfig', key, value);
     }
@@ -198,10 +211,18 @@ export class PlayerWardrobe {
     }
 
     @OnNuiEvent(NuiEvent.WardrobeElementSelect)
-    public async onWardrobeElementSelect({ outfit, wardRobeElementId }: { outfit: Outfit; wardRobeElementId: number }) {
+    public async onWardrobeElementSelect({
+        outfit,
+        wardRobeElementId,
+    }: {
+        outfit: Outfit;
+        wardRobeElementId: WardRobeElements;
+    }) {
         if (!outfit) {
             return;
         }
+
+        const player = this.playerService.getPlayer();
 
         if (!this.customOutfit) {
             this.customOutfit = {
@@ -210,17 +231,56 @@ export class PlayerWardrobe {
             };
         }
 
-        const wardRobeElement = WardRobeElements[wardRobeElementId];
-
-        if (wardRobeElement.componentId) {
-            wardRobeElement.componentId.forEach(element => {
-                this.customOutfit.Components[element] = outfit.Components[element];
-            });
+        if (WardRobeElementConfigs[wardRobeElementId].componentId) {
+            for (const comp of WardRobeElementConfigs[wardRobeElementId].componentId) {
+                if (outfit.Components && outfit.Components[comp]) {
+                    this.customOutfit.Components[comp] = outfit.Components[comp];
+                } else {
+                    delete this.customOutfit.Components[comp];
+                }
+            }
         }
-        if (wardRobeElement.propId) {
-            wardRobeElement.propId.forEach(element => {
-                this.customOutfit.Props[element] = outfit.Props[element];
-            });
+        if (WardRobeElementConfigs[wardRobeElementId].propId) {
+            for (const prop of WardRobeElementConfigs[wardRobeElementId].propId) {
+                if (outfit.Props && outfit.Props[prop]) {
+                    this.customOutfit.Props[prop] = outfit.Props[prop];
+                } else {
+                    delete this.customOutfit.Props[prop];
+                }
+            }
+        }
+
+        if (outfit.GlovesID != null) {
+            this.customOutfit.GlovesID = outfit.GlovesID;
+        } else if (WardRobeElementConfigs[wardRobeElementId].componentId?.includes(Component.Torso)) {
+            delete this.customOutfit.GlovesID;
+        }
+
+        const model = GetEntityModel(PlayerPedId());
+        if (
+            RankOutfit[player.job.id] &&
+            RankOutfit[player.job.id][model] &&
+            WardRobeElementConfigs[wardRobeElementId].componentId?.includes(Component.Decals) &&
+            !(outfit.Components && outfit.Components[Component.Decals])
+        ) {
+            if (
+                outfit.rankType &&
+                RankOutfit[player.job.id][model][outfit.rankType] &&
+                RankOutfit[player.job.id][model][outfit.rankType][player.job.grade]
+            ) {
+                this.customOutfit.Components[Component.Decals] = {
+                    Drawable: RankOutfit[player.job.id][model][outfit.rankType][player.job.grade][0],
+                    Texture: RankOutfit[player.job.id][model][outfit.rankType][player.job.grade][1],
+                    Palette: 0,
+                    Collection: 'soz_bcso',
+                };
+            } else {
+                this.customOutfit.Components[Component.Decals] = {
+                    Drawable: 0,
+                    Texture: 0,
+                    Palette: 0,
+                };
+            }
         }
 
         this.playerService.setTempClothes(this.customOutfit);
@@ -238,5 +298,11 @@ export class PlayerWardrobe {
         this.currentOutfitResolve = null;
 
         return;
+    }
+
+    @Command('dump_vet')
+    public dump_vet() {
+        this.clipboard.copy(this.clothingService.getClothSet());
+        this.notifier.notify('Tenue copiée dans le presse-papier');
     }
 }

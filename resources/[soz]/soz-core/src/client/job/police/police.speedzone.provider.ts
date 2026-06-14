@@ -2,26 +2,24 @@ import { ObjectProvider } from '@public/client/object/object.provider';
 import { getProperGroundPositionForObject } from '@public/client/object/object.utils';
 import { PlayerService } from '@public/client/player/player.service';
 import { ProgressService } from '@public/client/progress.service';
-import { TargetFactory } from '@public/client/target/target.factory';
 import { Once, OnceStep, OnEvent } from '@public/core/decorators/event';
 import { Inject } from '@public/core/decorators/injectable';
 import { Provider } from '@public/core/decorators/provider';
+import { BlipType } from '@public/shared/blip';
 import { ClientEvent, ServerEvent } from '@public/shared/event';
-import { FDO, JobType } from '@public/shared/job';
+import { ALL_FDO_JOB_TARGETS, FDO } from '@public/shared/job';
 import { Vector3, Vector4 } from '@public/shared/polyzone/vector';
 
 import { BlipFactory } from '../../blip';
+import { InteractionOffsetProvider } from '../../quick-interaction/interaction.offset.provider';
+import { InteractionProvider } from '../../quick-interaction/interaction.provider';
 
-const jobsTarget = { [JobType.BCSO]: 0, [JobType.FBI]: 0, [JobType.SASP]: 0, [JobType.LSPD]: 0, [JobType.LSCS]: 0 };
 const roadSignModel = GetHashKey('prop_trafficdiv_02');
 
 @Provider()
 export class PoliceSpeedZoneProvider {
     @Inject(ProgressService)
     private progressService: ProgressService;
-
-    @Inject(TargetFactory)
-    private targetFactory: TargetFactory;
 
     @Inject(PlayerService)
     private playerService: PlayerService;
@@ -32,18 +30,20 @@ export class PoliceSpeedZoneProvider {
     @Inject(BlipFactory)
     private blipFactory: BlipFactory;
 
+    @Inject(InteractionProvider)
+    private interactionProvider: InteractionProvider;
+
+    @Inject(InteractionOffsetProvider)
+    private interactionOffsetProvider: InteractionOffsetProvider;
+
     private speedZone: { [id: string]: { position: Vector4; radius: number; speed: number; zoneId: number } } = {};
 
     @Once(OnceStep.Start)
     public async onStart() {
-        this.targetFactory.createForModel(roadSignModel, [
+        this.interactionProvider.createInteractionForModels(
+            roadSignModel,
             {
                 label: 'Démonter',
-                icon: 'c:jobs/demonter.png',
-                job: jobsTarget,
-                canInteract: () => {
-                    return this.playerService.isOnDuty();
-                },
                 action: async (entity: number) => {
                     const id = this.objectProvider.getIdFromEntity(entity);
                     const { completed } = await this.progressService.progress(
@@ -72,8 +72,13 @@ export class PoliceSpeedZoneProvider {
 
                     TriggerServerEvent(ServerEvent.POLICE_REMOVE_SPEEDZONE, id);
                 },
+                job: ALL_FDO_JOB_TARGETS,
             },
-        ]);
+            undefined,
+            0.8,
+            1.2
+        );
+        this.interactionOffsetProvider.setModelOffset(roadSignModel, [0, 0, 1.0]);
 
         TriggerServerEvent(ServerEvent.POLICE_INIT_SPEEDZONE);
     }
@@ -132,21 +137,19 @@ export class PoliceSpeedZoneProvider {
                     ...zones[k],
                     zoneId,
                 };
-                this.blipFactory.createAreaBlip(
-                    k,
-                    {
-                        name: k,
-                        coords: {
-                            x: zones[k].position[0],
-                            y: zones[k].position[1],
-                            z: zones[k].position[2],
-                        },
-                        radius: zones[k].radius,
+                this.blipFactory.create(k, {
+                    name: k,
+                    coords: {
+                        x: zones[k].position[0],
+                        y: zones[k].position[1],
+                        z: zones[k].position[2],
                     },
-                    1,
-                    4,
-                    shouldDisplayBlip
-                );
+                    radius: zones[k].radius,
+                    color: 1,
+                    sprite: 4,
+                    type: BlipType.Radius,
+                    hidden: !shouldDisplayBlip,
+                });
             }
         });
 

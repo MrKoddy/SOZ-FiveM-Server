@@ -5,9 +5,11 @@ import { Once, OnceStep } from '@public/core/decorators/event';
 import { Inject } from '@public/core/decorators/injectable';
 import { Provider } from '@public/core/decorators/provider';
 import { ServerEvent } from '@public/shared/event';
-import { Feature, isFeatureEnabled } from '@public/shared/features';
+import { Feature } from '@public/shared/features';
 import { JobType } from '@public/shared/job';
 import { DMC_FIELDS_ZONES, DMC_HALLOWEEN_FIELDS_ZONES } from '@public/shared/job/dmc';
+
+import { FeatureProvider } from '../../feature/feature.provider';
 
 @Provider()
 export class DmcHarvestProvider {
@@ -20,10 +22,13 @@ export class DmcHarvestProvider {
     @Inject(WeaponService)
     private weaponService: WeaponService;
 
+    @Inject(FeatureProvider)
+    private featureProvider: FeatureProvider;
+
     @Once(OnceStep.PlayerLoaded)
     public setupDMCFields() {
         let fields = DMC_FIELDS_ZONES;
-        if (isFeatureEnabled(Feature.Halloween)) {
+        if (this.featureProvider.isFeatureEnabled(Feature.Halloween)) {
             fields = { ...DMC_FIELDS_ZONES, ...DMC_HALLOWEEN_FIELDS_ZONES };
         }
 
@@ -44,12 +49,11 @@ export class DmcHarvestProvider {
                     [
                         {
                             label: 'Miner',
-                            icon: 'c:dmc/pickaxe.png',
-                            color: 'dmc',
+                            icon: 'dmc/pickaxe',
                             job: JobType.DMC,
+                            category: 'society',
                             canInteract: () => {
                                 return (
-                                    this.playerService.isOnDuty() &&
                                     this.weaponService.getCurrentWeapon() &&
                                     this.weaponService.getCurrentWeapon().name === 'weapon_pickaxe'
                                 );

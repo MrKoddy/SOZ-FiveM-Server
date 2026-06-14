@@ -1,28 +1,35 @@
 import { FunctionComponent } from 'react';
 
-import { ColdOverlay } from './ColdIcon';
+import { DamageOverlay } from './DamageOverlay';
 import { DebugVoip } from './DebugVoip';
-import { Minimap } from './Minimap';
+import { InstructionalOverlay } from './InstructionalOverlay';
 import { NewsBanner } from './NewsBanner';
 import { Notifications } from './Notifications';
-import { PlayerNeeds } from './PlayerNeeds';
-import { SpeedoMeter } from './SpeedoMeter';
+import { PetManagement } from './PetManagement';
 import { TwitchNewsOverlay } from './TwitchNewsOverlay';
-import { VoiceIndicator } from './VoiceIndicator';
+import { VehicleInterface } from './VehicleInterface';
+import { WatchInterface } from './WatchInterface';
+import { WeaponInterface } from './WeaponInterface';
+import { WeatherOverlay } from './WeatherIcon';
 import { ZombieOverlay } from './ZombieIcon';
 
 export const HudApp: FunctionComponent = () => {
     return (
-        <main className="absolute h-full w-full">
+        <main className="absolute inset-0 h-full w-full overflow-hidden">
+            <WatchInterface />
+            <VehicleInterface />
+            <WeaponInterface />
+
+            <InstructionalOverlay />
+            <DamageOverlay />
+
             <Notifications />
             <NewsBanner />
-            <Minimap />
-            <VoiceIndicator />
-            <PlayerNeeds />
-            <SpeedoMeter />
             <TwitchNewsOverlay />
+            <PetManagement />
+
             <ZombieOverlay />
-            <ColdOverlay />
+            <WeatherOverlay />
             <DebugVoip />
         </main>
     );

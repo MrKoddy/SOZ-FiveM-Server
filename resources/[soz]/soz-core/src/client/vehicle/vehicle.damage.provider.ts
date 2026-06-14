@@ -31,7 +31,7 @@ const VEHICLE_CLASS_DAMAGE_MULTIPLIER: Record<VehicleClass, number> = {
     [VehicleClass.SUVs]: 0.8,
     [VehicleClass.Coupes]: 0.76,
     [VehicleClass.Muscle]: 0.8,
-    [VehicleClass.SportsClassics]: 0.76,
+    [VehicleClass.Sportsclassics]: 0.76,
     [VehicleClass.Sports]: 0.76,
     [VehicleClass.Super]: 0.76,
     [VehicleClass.Motorcycles]: 0.216,
@@ -48,6 +48,7 @@ const VEHICLE_CLASS_DAMAGE_MULTIPLIER: Record<VehicleClass, number> = {
     [VehicleClass.Military]: 0.536,
     [VehicleClass.Commercial]: 0.344,
     [VehicleClass.Trains]: 0.8,
+    [VehicleClass.OpenWheel]: 0.8,
 };
 
 @Provider()
@@ -59,6 +60,7 @@ export class VehicleDamageProvider {
 
     private adminNoStall = false;
     private upsideDown = false;
+    private nos = false;
 
     @Tick(0)
     public async preventVehicleFlip() {
@@ -111,16 +113,19 @@ export class VehicleDamageProvider {
         if (!this.currentVehicleStatus) {
             return;
         }
+        let torqueMod = 1.0;
 
         if (this.currentVehicleStatus.engineHealth < ENGINE_MIN_HEALTH + 1.0) {
-            SetVehicleCheatPowerIncrease(this.currentVehicleStatus.vehicle, 0.05);
+            torqueMod = 0.05;
         } else if (this.currentVehicleStatus.engineHealth < 500.0) {
-            const power = this.currentVehicleStatus.engineHealth / 500.0;
-
-            SetVehicleCheatPowerIncrease(this.currentVehicleStatus.vehicle, power);
-        } else {
-            SetVehicleCheatPowerIncrease(this.currentVehicleStatus.vehicle, 1.0);
+            torqueMod = this.currentVehicleStatus.engineHealth / 500.0;
         }
+
+        if (this.nos) {
+            torqueMod *= 2.5;
+        }
+
+        SetVehicleCheatPowerIncrease(this.currentVehicleStatus.vehicle, torqueMod);
     }
 
     @Tick(50)
@@ -286,5 +291,13 @@ export class VehicleDamageProvider {
 
     public getAdminNoStall(): boolean {
         return this.adminNoStall;
+    }
+
+    public setNos(value: boolean) {
+        this.nos = value;
+    }
+
+    public getNos(): boolean {
+        return this.nos;
     }
 }
